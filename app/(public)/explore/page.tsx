@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -189,6 +189,7 @@ function CustomerExplorePageContent({
   initialQuery,
 }: CustomerExplorePageProps = {}) {
   const { user, accessToken } = useAuthStore();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlQ = searchParams?.get("q") || searchParams?.get("query") || searchParams?.get("search") || initialQuery || "";
   const rawType = (searchParams?.get("type") as any) || initialType || "all";
@@ -405,7 +406,7 @@ function CustomerExplorePageContent({
   }, [syncUrlParams]);
 
   // Results
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [businesses, setBusinesses] = useState<DiscoveryItem[]>([]);
   const [professionals, setProfessionals] = useState<DiscoveryItem[]>([]);
   const [products, setProducts] = useState<DiscoveryItem[]>([]);
@@ -1875,19 +1876,21 @@ function CustomerExplorePageContent({
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredJobs.map((j) => {
                       const jobUrl = buildJobSeoUrl(j);
-                      const employerHref = j.business_slug
-                        ? `/business/${j.business_slug}`
-                        : j.institution_slug
+                      const employerHref = j.institution_slug
                         ? `/institutes/${j.institution_slug}`
-                        : j.business_id
-                        ? `/business/${j.business_id}`
+                        : j.business_slug
+                        ? `/business/${j.business_slug}`
                         : j.institution_id
                         ? `/institutes/${j.institution_id}`
+                        : j.business_id
+                        ? `/business/${j.business_id}`
                         : null;
+                      const employerName = j.company_name || j.institution_name;
                       return (
                         <Card
                           key={j.id}
-                          className="relative rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card group"
+                          onClick={() => router.push(jobUrl)}
+                          className="relative rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card group cursor-pointer"
                         >
                           {/* Full card backdrop link directly to job detail page */}
                           <Link
@@ -1905,20 +1908,22 @@ function CustomerExplorePageContent({
                                   </Badge>
                                 )}
                                 <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-                                  {j.title || j.name}
+                                  <Link href={jobUrl} className="pointer-events-auto hover:text-primary">
+                                    {j.title || j.name}
+                                  </Link>
                                 </h3>
-                                {j.company_name && (
+                                {employerName && (
                                   employerHref ? (
                                     <Link
                                       href={employerHref}
                                       onClick={(e) => e.stopPropagation()}
                                       className="text-xs text-muted-foreground font-semibold mt-0.5 hover:text-primary hover:underline truncate block transition-colors pointer-events-auto"
                                     >
-                                      {j.company_name}
+                                      {employerName}
                                     </Link>
                                   ) : (
                                     <p className="text-xs text-muted-foreground font-semibold mt-0.5 truncate">
-                                      {j.company_name}
+                                      {employerName}
                                     </p>
                                   )
                                 )}

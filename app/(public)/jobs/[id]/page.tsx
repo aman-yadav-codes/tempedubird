@@ -301,14 +301,14 @@ function JobDetailContent({ jobId }: { jobId: string }) {
                   <div className="mt-2">
                     <Link
                       href={
-                        job.business_slug
-                          ? `/business/${job.business_slug}`
-                          : job.institution_slug
+                        job.institution_slug
                           ? `/institutes/${job.institution_slug}`
-                          : job.business_id
-                          ? `/business/${job.business_id}`
+                          : job.business_slug
+                          ? `/business/${job.business_slug}`
                           : job.institution_id
                           ? `/institutes/${job.institution_id}`
+                          : job.business_id
+                          ? `/business/${job.business_id}`
                           : "#"
                       }
                       className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline hover:text-primary/80 transition-colors"

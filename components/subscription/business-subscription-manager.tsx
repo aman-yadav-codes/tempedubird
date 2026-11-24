@@ -38,19 +38,76 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 
+function formatCurrency(amount: number | string | null | undefined, currency?: string | null): string {
+  const num = Number(amount) || 0;
+  const curr = (currency || "INR").trim().toUpperCase();
+  if (curr === "INR") {
+    return `₹${num.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  if (curr === "USD") {
+    return `$${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  if (curr === "ZAR") {
+    return `R ${num.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `${curr} ${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "-";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  } catch {
+    return String(dateStr);
+  }
+}
+
 export function BusinessSubscriptionManager() {
-  const { user } = useAuthStore();
+  const { user, accessToken } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [subData, setSubData] = useState<any>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
+
+  const planCurrency = (subData?.price_unit || "INR").toUpperCase();
+
+  const topupPacks = useMemo(() => {
+    if (planCurrency === "INR") {
+      return [
+        { credits: 100, price: 149, desc: "Best for small promotional bursts" },
+        { credits: 250, price: 299, desc: "Popular top-up for active campaigns" },
+        { credits: 500, price: 499, desc: "Maximum savings for scaling teams" },
+      ];
+    }
+    if (planCurrency === "ZAR") {
+      return [
+        { credits: 100, price: 49, desc: "Best for small promotional bursts" },
+        { credits: 250, price: 99, desc: "Popular top-up for active campaigns" },
+        { credits: 500, price: 179, desc: "Maximum savings for scaling teams" },
+      ];
+    }
+    return [
+      { credits: 100, price: 9, desc: "Best for small promotional bursts" },
+      { credits: 250, price: 19, desc: "Popular top-up for active campaigns" },
+      { credits: 500, price: 35, desc: "Maximum savings for scaling teams" },
+    ];
+  }, [planCurrency]);
 
   // Top-up dialog
   const [topupOpen, setTopupOpen] = useState(false);
   const [selectedTopup, setSelectedTopup] = useState<{ credits: number; price: number }>({
     credits: 100,
-    price: 30,
+    price: 149,
   });
   const [purchasingTopup, setPurchasingTopup] = useState(false);
+
+  // Sync selected top-up default with current plan currency
+  useEffect(() => {
+    if (topupPacks.length > 0) {
+      setSelectedTopup({ credits: topupPacks[0].credits, price: topupPacks[0].price });
+    }
+  }, [topupPacks]);
 
   // Cancel dialog
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -60,9 +117,14 @@ export function BusinessSubscriptionManager() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      const authHeaders: Record<string, string> = {};
+      if (accessToken) {
+        authHeaders["Authorization"] = `Bearer ${accessToken}`;
+      }
+
       const [subRes, invRes] = await Promise.all([
-        fetch("/api/subscriptions/current"),
-        fetch("/api/subscriptions/invoices"),
+        fetch("/api/subscriptions/current", { headers: authHeaders }),
+        fetch("/api/subscriptions/invoices", { headers: authHeaders }),
       ]);
 
       const subJson = await subRes.json();
@@ -80,7 +142,7 @@ export function BusinessSubscriptionManager() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
     loadData();
@@ -90,12 +152,18 @@ export function BusinessSubscriptionManager() {
   const handlePurchaseTopup = async () => {
     setPurchasingTopup(true);
     try {
+      const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) {
+        authHeaders["Authorization"] = `Bearer ${accessToken}`;
+      }
+
       const res = await fetch("/api/subscriptions/topup-credits", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({
           credits: selectedTopup.credits,
           price: selectedTopup.price,
+          currency: planCurrency,
         }),
       });
       const data = await res.json();
@@ -136,21 +204,28 @@ export function BusinessSubscriptionManager() {
   }
 
   const sub = subData || {
-    plan_name: "Starter",
-    tier: "starter",
+    plan_name: "Growth",
+    tier: "growth",
     status: "active",
-    price: 49,
-    price_unit: "USD",
+    price: 999,
+    price_unit: "INR",
     billing_cycle: "monthly",
-    starts_at: "2026-11-01",
-    expires_at: "2026-12-01",
+    starts_at: "2026-11-23",
+    expires_at: "2026-12-23",
     listing_allowance: 100,
-    listings_used: 18,
+    listings_used: 0,
     additional_credits: 0,
     total_allowed: 100,
-    remaining_listings: 82,
-    usage_percentage: 18,
+    remaining_listings: 100,
+    usage_percentage: 0,
     notification_level: 0,
+    features_list: [
+      "1 GB Database Allowance",
+      "10 GB File Storage",
+      "50 GB Monthly Bandwidth",
+      "500 Compute Units",
+      "Local SEO support",
+    ],
   };
 
   const isWarning80 = sub.usage_percentage >= 80 && sub.usage_percentage < 90;
@@ -246,7 +321,7 @@ export function BusinessSubscriptionManager() {
             </div>
             <div className="text-right">
               <div className="text-2xl font-black text-foreground">
-                ${sub.price}
+                {formatCurrency(sub.price, sub.price_unit)}
                 <span className="text-xs font-medium text-muted-foreground">/{sub.billing_cycle === "yearly" ? "yr" : "mo"}</span>
               </div>
               <span className="text-[11px] text-muted-foreground capitalize">
@@ -308,7 +383,7 @@ export function BusinessSubscriptionManager() {
                 </div>
                 <div>
                   <span className="text-muted-foreground text-[11px] block">Current Cycle Started</span>
-                  <span className="font-bold text-foreground">{sub.starts_at || "Nov 1, 2026"}</span>
+                  <span className="font-bold text-foreground">{formatDate(sub.starts_at)}</span>
                 </div>
               </div>
 
@@ -318,7 +393,7 @@ export function BusinessSubscriptionManager() {
                 </div>
                 <div>
                   <span className="text-muted-foreground text-[11px] block">Next Billing / Renewal Date</span>
-                  <span className="font-bold text-foreground">{sub.expires_at || "Dec 1, 2026"}</span>
+                  <span className="font-bold text-foreground">{formatDate(sub.expires_at)}</span>
                 </div>
               </div>
             </div>
@@ -370,14 +445,17 @@ export function BusinessSubscriptionManager() {
             </p>
 
             <ul className="space-y-2.5 text-xs text-muted-foreground">
-              {[
-                "Business Profile & Marketplace Discovery",
-                "Lead Acquisition & Customer Management",
-                "Automated Listing Analytics Tracking",
-                "Sales Pipeline & Inquiry Manager",
-                "Team Member Workflows & Access",
-                "Priority Ecosystem Guidance",
-              ].map((cap, i) => (
+              {(sub.features_list && sub.features_list.length > 0
+                ? sub.features_list
+                : [
+                    "Business Profile & Marketplace Discovery",
+                    "Lead Acquisition & Customer Management",
+                    "Automated Listing Analytics Tracking",
+                    "Sales Pipeline & Inquiry Manager",
+                    "Team Member Workflows & Access",
+                    "Priority Ecosystem Guidance",
+                  ]
+              ).map((cap: string, i: number) => (
                 <li key={i} className="flex items-center gap-2">
                   <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
                   <span className="font-medium text-foreground">{cap}</span>
@@ -438,10 +516,12 @@ export function BusinessSubscriptionManager() {
                       <td className="p-4 font-mono font-bold text-foreground">{inv.invoice_number}</td>
                       <td className="p-4 font-semibold text-foreground">{inv.plan_name}</td>
                       <td className="p-4 text-muted-foreground">
-                        {inv.billing_period_start ? `${inv.billing_period_start} to ${inv.billing_period_end}` : "Instant Top-up"}
+                        {inv.billing_period_start
+                          ? `${formatDate(inv.billing_period_start)} to ${formatDate(inv.billing_period_end)}`
+                          : "Instant Top-up"}
                       </td>
                       <td className="p-4 font-bold text-foreground">
-                        ${inv.amount} {inv.currency}
+                        {formatCurrency(inv.amount, inv.currency)}
                       </td>
                       <td className="p-4">
                         <Badge variant="outline" className="text-[10px] text-emerald-600 bg-emerald-50 border-emerald-200">
@@ -483,11 +563,7 @@ export function BusinessSubscriptionManager() {
             </DialogHeader>
 
             <div className="space-y-3">
-              {[
-                { credits: 100, price: 30, desc: "Best for small promotional bursts" },
-                { credits: 250, price: 70, desc: "Popular top-up for active campaigns" },
-                { credits: 500, price: 120, desc: "Maximum savings for scaling teams" },
-              ].map((pack) => (
+              {topupPacks.map((pack) => (
                 <div
                   key={pack.credits}
                   onClick={() => setSelectedTopup({ credits: pack.credits, price: pack.price })}
@@ -502,7 +578,7 @@ export function BusinessSubscriptionManager() {
                     <span className="text-[11px] text-muted-foreground">{pack.desc}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-base font-black">${pack.price}</span>
+                    <span className="text-base font-black">{formatCurrency(pack.price, planCurrency)}</span>
                     <span className="text-[10px] text-muted-foreground block">one-time</span>
                   </div>
                 </div>
@@ -524,7 +600,9 @@ export function BusinessSubscriptionManager() {
                     <span>Processing Top-up...</span>
                   </>
                 ) : (
-                  <span>Confirm &amp; Add +{selectedTopup.credits} Credits</span>
+                  <span>
+                    Confirm &amp; Add +{selectedTopup.credits} Credits ({formatCurrency(selectedTopup.price, planCurrency)})
+                  </span>
                 )}
               </Button>
             </DialogFooter>

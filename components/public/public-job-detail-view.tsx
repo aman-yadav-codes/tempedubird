@@ -58,14 +58,14 @@ export function PublicJobDetailView({ job, employer }: Props) {
     ? (employer.category_name || employer.category_slug
         ? buildBusinessSeoUrl(employer)
         : `/business/${employer.slug || employer.id}`)
-    : job.business_slug
-    ? `/business/${job.business_slug}`
     : job.institution_slug
     ? `/institutes/${job.institution_slug}`
-    : job.business_id
-    ? `/business/${job.business_id}`
+    : job.business_slug
+    ? `/business/${job.business_slug}`
     : job.institution_id
     ? `/institutes/${job.institution_id}`
+    : job.business_id
+    ? `/business/${job.business_id}`
     : "#";
 
   const handleApplySubmit = async (e: React.FormEvent) => {

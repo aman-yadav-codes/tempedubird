@@ -14,6 +14,38 @@ async function getAuthUserId(req: Request): Promise<number | null> {
         return Number(decoded.userId || decoded.id || decoded.sub);
       }
     }
+
+    const cookieHeader = req.headers.get("cookie") || "";
+    const cookies = Object.fromEntries(
+      cookieHeader
+        .split(";")
+        .map((c) => c.trim().split("="))
+        .filter((pair) => pair.length === 2)
+        .map(([k, v]) => [decodeURIComponent(k.trim()), decodeURIComponent(v.trim())])
+    );
+
+    const cookieToken = cookies["auth_token"] || cookies["token"] || cookies["accessToken"];
+    if (cookieToken) {
+      try {
+        const decoded = jwt.verify(cookieToken, JWT_SECRET) as any;
+        if (decoded && (decoded.userId || decoded.id || decoded.sub)) {
+          return Number(decoded.userId || decoded.id || decoded.sub);
+        }
+      } catch {}
+    }
+
+    const refreshToken = cookies["refresh_token"];
+    if (refreshToken) {
+      try {
+        const sessionRes = await db.query(
+          `SELECT user_id, expires_at FROM sessions WHERE refresh_token = $1 AND expires_at > NOW() LIMIT 1`,
+          [refreshToken]
+        );
+        if (sessionRes.rows[0]?.user_id) {
+          return Number(sessionRes.rows[0].user_id);
+        }
+      } catch {}
+    }
   } catch (err) {
     // ignore
   }
@@ -29,7 +61,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { credits = 100, price = 30.0 } = body;
+    const { credits = 100, price = 149.0, currency } = body;
 
     // Find active subscription
     const subRes = await db.query(
@@ -42,6 +74,7 @@ export async function POST(req: Request) {
     }
 
     const sub = subRes.rows[0];
+    const finalCurrency = currency || sub.price_unit || "INR";
 
     // Add credits to subscription
     const updatedSub = await db.query(
@@ -70,9 +103,9 @@ export async function POST(req: Request) {
       `
       INSERT INTO subscription_invoices (
         subscription_id, user_id, invoice_number, amount, currency, status, plan_name, payment_method
-      ) VALUES ($1, $2, $3, $4, 'USD', 'paid', $5, 'Credit Card')
+      ) VALUES ($1, $2, $3, $4, $5, 'paid', $6, 'Credit Card')
       `,
-      [sub.id, userId, invNum, price, `Listing Data Top-up (+${credits} credits)`]
+      [sub.id, userId, invNum, price, finalCurrency, `Listing Data Top-up (+${credits} credits)`]
     );
 
     return NextResponse.json({
