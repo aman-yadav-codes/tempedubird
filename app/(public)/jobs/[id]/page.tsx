@@ -41,7 +41,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { StaffJobPosting } from "@/lib/queries/jobs";
-import { buildJobSeoUrl, parseDiscoverySeoSlug } from "@/lib/utils/seo-slug";
+import { buildJobSeoUrl, parseDiscoverySeoSlug, KNOWN_CATEGORY_SLUG_LABELS } from "@/lib/utils/seo-slug";
 import CustomerExplorePage from "@/app/(public)/explore/page";
 
 interface JobDetailPageProps {
@@ -51,7 +51,16 @@ interface JobDetailPageProps {
 export default function JobDetailPage({ params }: JobDetailPageProps) {
   const { id } = use(params);
 
-  if (id && (id.startsWith("all-") || id.startsWith("in-") || id.startsWith("job-"))) {
+  const withoutLoc = id && id.includes("-in-") ? id.split("-in-")[0] : id;
+  const isJobCategory = id && (
+    id.startsWith("all-") ||
+    id.startsWith("in-") ||
+    id.startsWith("job-") ||
+    Boolean(KNOWN_CATEGORY_SLUG_LABELS[id]) ||
+    Boolean(withoutLoc && KNOWN_CATEGORY_SLUG_LABELS[withoutLoc])
+  );
+
+  if (isJobCategory) {
     const { categorySlug, categoryName, city } = parseDiscoverySeoSlug(id);
     return <CustomerExplorePage key={`job-${id}`} initialType="job" initialCategory={categorySlug} initialCategoryName={categoryName} initialCity={city} />;
   }

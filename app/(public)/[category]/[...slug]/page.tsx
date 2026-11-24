@@ -11,6 +11,7 @@ import {
   buildJobSeoUrl,
   buildProductSeoUrl,
   buildPropertySeoUrl,
+  KNOWN_CATEGORY_SLUG_LABELS,
 } from "@/lib/utils/seo-slug";
 
 import { PublicBusinessProfileClient } from "@/components/profile/public-business-profile-client";
@@ -21,6 +22,7 @@ import { PublicJobDetailView } from "@/components/public/public-job-detail-view"
 import { PublicProductDetailView } from "@/components/public/public-product-detail-view";
 import { PublicPropertyDetailView } from "@/components/public/public-property-detail-view";
 import { filterListingsByBusinessCategory } from "@/lib/utils/business-vertical-filter";
+import CustomerExplorePage from "@/app/(public)/explore/page";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,50 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
     const { id: rawNumId } = extractIdFromSlug(targetSlug);
     const { id: withoutLocId } = extractIdFromSlug(withoutLocation);
     const numId = rawNumId || withoutLocId || 0;
+
+    // 0a. Check if this path represents a Category Listing or Location Filter route
+    const isLocationFilter = targetSlug.startsWith("in-");
+    const isAllFilter = targetSlug.startsWith("all-");
+    const isCategoryPrefix = targetSlug.startsWith("category-") || targetSlug.startsWith("property-") || targetSlug.startsWith("vehicle-") || targetSlug.startsWith("event-") || targetSlug.startsWith("job-");
+
+    if (isLocationFilter || isAllFilter || isCategoryPrefix) {
+      const cityPart = isLocationFilter ? targetSlug.replace(/^in-/, "") : (targetSlug.includes("-in-") ? targetSlug.split("-in-").pop() : "");
+      return {
+        type: "explore" as const,
+        category: rawCategory,
+        city: cityPart || "",
+      };
+    }
+
+    if (KNOWN_CATEGORY_SLUG_LABELS[targetSlug] || KNOWN_CATEGORY_SLUG_LABELS[withoutLocation]) {
+      const cityPart = targetSlug.includes("-in-") ? targetSlug.split("-in-").pop() : "";
+      return {
+        type: "explore" as const,
+        category: withoutLocation,
+        categoryName: KNOWN_CATEGORY_SLUG_LABELS[withoutLocation] || KNOWN_CATEGORY_SLUG_LABELS[targetSlug],
+        city: cityPart || "",
+      };
+    }
+
+    try {
+      const catCheck = await db.query(
+        `SELECT id, name, slug, category_type FROM categories WHERE slug = $1 OR slug = $2 LIMIT 1`,
+        [withoutLocation, targetSlug]
+      );
+      if (catCheck.rows.length > 0) {
+        const matchedCat = catCheck.rows[0];
+        const cityPart = targetSlug.includes("-in-") ? targetSlug.split("-in-").pop() : "";
+        return {
+          type: "explore" as const,
+          category: matchedCat.slug,
+          categoryName: matchedCat.name,
+          categoryType: matchedCat.category_type || rawCategory,
+          city: cityPart || "",
+        };
+      }
+    } catch (catErr) {
+      console.warn("Category check error:", catErr);
+    }
 
     // 0. Special Handling for institution-admin or ID 5717: Deepak Yadav
     if (
@@ -1258,6 +1304,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
+  if (data.type === "explore") {
+    const rawCat = (data as any).category || "";
+    const catName = (data as any).categoryName || rawCat.replace(/-/g, " ");
+    const city = (data as any).city;
+    const loc = city ? ` in ${city.charAt(0).toUpperCase() + city.slice(1)}` : "";
+    return {
+      title: `${catName}${loc} | 143Panda`,
+      description: `Explore top verified listings for ${catName}${loc}.`,
+    };
+  }
+
   if (data.type === "business") {
     const biz = data.business;
     const locationStr = [biz.locality, biz.city, biz.state].filter(Boolean).join(", ") || "India";
@@ -1379,6 +1436,29 @@ export default async function SeoCategoryProfilePage({ params }: Props) {
 
   if (data.type === "redirect") {
     redirect(data.redirectTo);
+  }
+
+  if (data.type === "explore") {
+    const rawCat = (data as any).category || "";
+    const catType = (data as any).categoryType || (
+      rawCat === "events" || rawCat === "event" ? "event" :
+      rawCat === "vehicles" || rawCat === "vehicle" ? "vehicle" :
+      rawCat === "properties" || rawCat === "property" ? "property" :
+      rawCat === "products" || rawCat === "product" ? "product" :
+      rawCat === "services" || rawCat === "service" ? "service" :
+      rawCat === "jobs" || rawCat === "job" ? "job" :
+      rawCat === "courses" || rawCat === "course" ? "course" :
+      rawCat === "professionals" || rawCat === "professional" ? "professional" : "business"
+    );
+    return (
+      <CustomerExplorePage
+        key={`explore-${rawCat}-${(data as any).city || ""}`}
+        initialType={catType}
+        initialCategory={rawCat}
+        initialCategoryName={(data as any).categoryName}
+        initialCity={(data as any).city}
+      />
+    );
   }
 
   if (data.type === "business") {

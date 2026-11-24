@@ -1,5 +1,5 @@
 import { db } from "@/lib/db/db";
-import { parseDiscoverySeoSlug, extractIdFromSlug } from "@/lib/utils/seo-slug";
+import { parseDiscoverySeoSlug, extractIdFromSlug, KNOWN_CATEGORY_SLUG_LABELS } from "@/lib/utils/seo-slug";
 import CustomerExplorePage from "@/app/(public)/explore/page";
 import { PublicPropertyDetailView } from "@/components/public/public-property-detail-view";
 import type { Metadata } from "next";
@@ -14,9 +14,25 @@ interface Props {
 async function fetchPropertyRecord(idOrSlug: string) {
   try {
     const rawSlug = decodeURIComponent(idOrSlug || "").trim().toLowerCase();
-    if (rawSlug.startsWith("in-") || rawSlug.startsWith("all-") || rawSlug.startsWith("property-")) {
+    if (
+      rawSlug.startsWith("in-") ||
+      rawSlug.startsWith("all-") ||
+      rawSlug.startsWith("property-") ||
+      KNOWN_CATEGORY_SLUG_LABELS[rawSlug] ||
+      KNOWN_CATEGORY_SLUG_LABELS[withoutLocation]
+    ) {
       return null;
     }
+
+    try {
+      const catCheck = await db.query(
+        `SELECT 1 FROM categories WHERE slug = $1 OR slug = $2 LIMIT 1`,
+        [withoutLocation, rawSlug]
+      );
+      if (catCheck.rows.length > 0) {
+        return null;
+      }
+    } catch {}
     let withoutLocation = rawSlug;
     const lastInIndex = rawSlug.lastIndexOf("-in-");
     if (lastInIndex !== -1) {

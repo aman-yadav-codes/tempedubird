@@ -574,32 +574,25 @@ export function PlatformAdminHeader() {
                   <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
                     Explore {item.label}
                   </span>
-                  <Link
-                    href={getNavHref(item)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      router.push(getNavHref(item));
-                    }}
-                    className="text-[10px] text-sky-600 hover:underline font-bold"
-                  >
-                    View All →
-                  </Link>
+                  <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
+                    <Link
+                      href={getNavHref(item)}
+                      className="text-[10px] text-sky-600 hover:underline font-bold cursor-pointer"
+                    >
+                      View All →
+                    </Link>
+                  </DropdownMenuItem>
                 </div>
                 {getItemSubcategories(item).map((sub) => {
                   const navHref = getNavHref(item, sub);
                   return (
                     <DropdownMenuItem
                       key={sub.label}
-                      onSelect={() => router.push(navHref)}
                       asChild
                     >
                       <Link
                         href={navHref}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(navHref);
-                        }}
-                        className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50"
+                        className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50 block w-full"
                       >
                         {sub.label}
                       </Link>
