@@ -14,6 +14,12 @@ interface Props {
 async function fetchEventRecord(idOrSlug: string) {
   try {
     const rawSlug = decodeURIComponent(idOrSlug || "").trim().toLowerCase();
+    let withoutLocation = rawSlug;
+    const lastInIndex = rawSlug.lastIndexOf("-in-");
+    if (lastInIndex !== -1) {
+      withoutLocation = rawSlug.substring(0, lastInIndex);
+    }
+
     if (
       rawSlug.startsWith("in-") ||
       rawSlug.startsWith("all-") ||
@@ -33,11 +39,6 @@ async function fetchEventRecord(idOrSlug: string) {
         return null;
       }
     } catch {}
-    let withoutLocation = rawSlug;
-    const lastInIndex = rawSlug.lastIndexOf("-in-");
-    if (lastInIndex !== -1) {
-      withoutLocation = rawSlug.substring(0, lastInIndex);
-    }
     const { id: rawNumId } = extractIdFromSlug(rawSlug);
     const { id: withoutLocId } = extractIdFromSlug(withoutLocation);
     const numId = rawNumId || withoutLocId || -1;

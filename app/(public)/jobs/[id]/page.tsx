@@ -65,7 +65,7 @@ export default function JobDetailPage({ params }: JobDetailPageProps) {
     return <CustomerExplorePage key={`job-${id}`} initialType="job" initialCategory={categorySlug} initialCategoryName={categoryName} initialCity={city} />;
   }
 
-  return <JobDetailContent jobId={id} />;
+  return <JobDetailContent key={id} jobId={id} />;
 }
 
 function JobDetailContent({ jobId }: { jobId: string }) {
@@ -298,10 +298,26 @@ function JobDetailContent({ jobId }: { jobId: string }) {
                   {job.title}
                 </h1>
                 {job.institution_name && (
-                  <p className="text-sm font-semibold text-primary flex items-center gap-1.5 mt-2">
-                    <Building2 className="size-4 shrink-0" />
-                    <span>{job.institution_name}</span>
-                  </p>
+                  <div className="mt-2">
+                    <Link
+                      href={
+                        job.business_slug
+                          ? `/business/${job.business_slug}`
+                          : job.institution_slug
+                          ? `/institutes/${job.institution_slug}`
+                          : job.business_id
+                          ? `/business/${job.business_id}`
+                          : job.institution_id
+                          ? `/institutes/${job.institution_id}`
+                          : "#"
+                      }
+                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline hover:text-primary/80 transition-colors"
+                      title={`View ${job.institution_name} profile`}
+                    >
+                      <Building2 className="size-4 shrink-0" />
+                      <span>{job.institution_name}</span>
+                    </Link>
+                  </div>
                 )}
               </div>
 

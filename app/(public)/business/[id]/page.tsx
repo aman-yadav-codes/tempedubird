@@ -58,6 +58,17 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
     );
 
     if (bizRes.rows.length === 0) {
+      // Check if it's an institution profile
+      const instCheck = await db.query(
+        `SELECT slug, id FROM institution_profiles WHERE slug = $1 OR id = $2 LIMIT 1`,
+        [idOrSlug, numId || -1]
+      );
+      if (instCheck.rows.length > 0) {
+        return {
+          redirectTo: `/institutes/${instCheck.rows[0].slug || instCheck.rows[0].id}`,
+        };
+      }
+
       // Check if it's a professional profile by mistake
       const profCheck = await db.query(
         `SELECT slug, id FROM professional_profiles WHERE (slug = $1 OR id = $2) AND COALESCE(is_active, TRUE) = TRUE LIMIT 1`,

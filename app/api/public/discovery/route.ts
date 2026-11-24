@@ -1121,6 +1121,8 @@ export async function GET(req: NextRequest) {
               mj.description,
               'Active' AS status,
               mj.created_at,
+              bc.id AS business_id,
+              bc.slug AS business_slug,
               bc.name AS company_name,
               NULL AS company_logo
             FROM master_jobs mj
@@ -1210,10 +1212,18 @@ export async function GET(req: NextRequest) {
             sjp.description,
             sjp.status,
             sjp.created_at,
+            sjp.institution_id,
+            ip.slug AS institution_slug,
+            bp.id AS business_id,
+            bp.slug AS business_slug,
             ip.name AS company_name,
             ip.logo_url AS company_logo
           FROM staff_job_postings sjp
           LEFT JOIN institution_profiles ip ON ip.id = sjp.institution_id
+          LEFT JOIN business_profiles bp ON (
+            bp.institution_profile_id = sjp.institution_id
+            OR (bp.institution_profile_id IS NULL AND bp.id = sjp.institution_id)
+          )
           WHERE ${jConditions.join(" AND ")}
           ORDER BY sjp.id DESC
           LIMIT $${jParams.length + 1} OFFSET $${jParams.length + 2}

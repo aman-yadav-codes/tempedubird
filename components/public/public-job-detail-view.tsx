@@ -60,8 +60,12 @@ export function PublicJobDetailView({ job, employer }: Props) {
         : `/business/${employer.slug || employer.id}`)
     : job.business_slug
     ? `/business/${job.business_slug}`
+    : job.institution_slug
+    ? `/institutes/${job.institution_slug}`
     : job.business_id
     ? `/business/${job.business_id}`
+    : job.institution_id
+    ? `/institutes/${job.institution_id}`
     : "#";
 
   const handleApplySubmit = async (e: React.FormEvent) => {
@@ -143,10 +147,16 @@ export function PublicJobDetailView({ job, employer }: Props) {
                     {job.title || job.name}
                   </h1>
                   <p className="text-sm text-muted-foreground mt-2 flex items-center gap-2">
-                    <Building2 className="size-4 text-primary" />
-                    <span className="font-semibold text-foreground">{employerName}</span>
+                    <Building2 className="size-4 text-primary shrink-0" />
+                    <Link
+                      href={employerUrl}
+                      className="font-semibold text-primary hover:underline transition-colors"
+                      title={`View ${employerName} profile`}
+                    >
+                      {employerName}
+                    </Link>
                     <span>•</span>
-                    <MapPin className="size-3.5 text-primary" />
+                    <MapPin className="size-3.5 text-primary shrink-0" />
                     <span>{jobLocation}</span>
                   </p>
                 </div>

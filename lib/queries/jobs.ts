@@ -4,6 +4,9 @@ export type StaffJobPosting = {
   id: number;
   institution_id: number | null;
   institution_name?: string | null;
+  institution_slug?: string | null;
+  business_id?: number | null;
+  business_slug?: string | null;
   title: string;
   slug?: string | null;
   department: string;
@@ -356,10 +359,17 @@ export async function getJobById(idOrSlug: number | string) {
     SELECT 
       j.*,
       i.name AS institution_name,
+      i.slug AS institution_slug,
+      bp.id AS business_id,
+      bp.slug AS business_slug,
       u.full_name AS created_by_name,
       COALESCE(app_counts.total_apps, 0)::int AS applications_count
     FROM staff_job_postings j
     LEFT JOIN institution_profiles i ON i.id = j.institution_id
+    LEFT JOIN business_profiles bp ON (
+      bp.institution_profile_id = j.institution_id
+      OR (bp.institution_profile_id IS NULL AND bp.id = j.institution_id)
+    )
     LEFT JOIN users u ON u.id = j.created_by
     LEFT JOIN (
       SELECT job_id, COUNT(*)::int AS total_apps
@@ -386,6 +396,9 @@ export async function getJobById(idOrSlug: number | string) {
         mj.id,
         NULL::int AS institution_id,
         COALESCE(bc.name, 'EduBird Business Partner') AS institution_name,
+        NULL::varchar AS institution_slug,
+        bc.id AS business_id,
+        bc.slug AS business_slug,
         mj.title,
         mj.slug,
         mj.department,

@@ -1875,107 +1875,122 @@ function CustomerExplorePageContent({
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredJobs.map((j) => {
                       const jobUrl = buildJobSeoUrl(j);
+                      const employerHref = j.business_slug
+                        ? `/business/${j.business_slug}`
+                        : j.institution_slug
+                        ? `/institutes/${j.institution_slug}`
+                        : j.business_id
+                        ? `/business/${j.business_id}`
+                        : j.institution_id
+                        ? `/institutes/${j.institution_id}`
+                        : null;
                       return (
                         <Card
                           key={j.id}
-                          onClick={() => router.push(jobUrl)}
-                          className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card cursor-pointer group"
+                          className="relative rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card group"
                         >
-                        <CardHeader className="p-4 pb-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              {j.department && (
-                                <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-blue-50 text-blue-700 border-blue-200">
-                                  {j.department}
-                                </Badge>
-                              )}
-                              <Link href={buildJobSeoUrl(j)} className="hover:text-primary transition-colors cursor-pointer block">
-                                <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
+                          {/* Full card backdrop link directly to job detail page */}
+                          <Link
+                            href={jobUrl}
+                            className="absolute inset-0 z-0"
+                            aria-label={`View details for ${j.title || j.name}`}
+                          />
+
+                          <CardHeader className="p-4 pb-2 relative z-10 pointer-events-none">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                {j.department && (
+                                  <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-blue-50 text-blue-700 border-blue-200">
+                                    {j.department}
+                                  </Badge>
+                                )}
+                                <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
                                   {j.title || j.name}
                                 </h3>
-                              </Link>
-                              {j.company_name && (
-                                j.business_slug || j.business_id ? (
-                                  <Link
-                                    href={j.business_slug ? `/business/${j.business_slug}` : `/business/${j.business_id}`}
-                                    className="text-xs text-muted-foreground font-semibold mt-0.5 hover:text-primary hover:underline truncate block transition-colors"
-                                  >
-                                    {j.company_name}
-                                  </Link>
-                                ) : (
-                                  <p className="text-xs text-muted-foreground font-semibold mt-0.5 truncate">
-                                    {j.company_name}
-                                  </p>
-                                )
+                                {j.company_name && (
+                                  employerHref ? (
+                                    <Link
+                                      href={employerHref}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-xs text-muted-foreground font-semibold mt-0.5 hover:text-primary hover:underline truncate block transition-colors pointer-events-auto"
+                                    >
+                                      {j.company_name}
+                                    </Link>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground font-semibold mt-0.5 truncate">
+                                      {j.company_name}
+                                    </p>
+                                  )
+                                )}
+                              </div>
+                              <div className="size-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
+                                <Briefcase className="size-4.5" />
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1 relative z-10 pointer-events-none">
+                            {j.description && (
+                              <p className="text-muted-foreground text-[11px] line-clamp-2">
+                                {j.description}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
+                              {j.location && (
+                                <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                  <MapPin className="size-3 text-primary" />
+                                  {j.location}
+                                </span>
+                              )}
+                              {j.employment_type && (
+                                <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                  {j.employment_type}
+                                </span>
+                              )}
+                              {j.work_mode && (
+                                <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md capitalize">
+                                  {j.work_mode}
+                                </span>
+                              )}
+                              {j.salary_range && (
+                                <span className="flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                                  {j.salary_range}
+                                </span>
                               )}
                             </div>
-                            <div className="size-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
-                              <Briefcase className="size-4.5" />
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
-                          {j.description && (
-                            <p className="text-muted-foreground text-[11px] line-clamp-2">
-                              {j.description}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
-                            {j.location && (
-                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                                <MapPin className="size-3 text-primary" />
-                                {j.location}
-                              </span>
-                            )}
-                            {j.employment_type && (
-                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                                {j.employment_type}
-                              </span>
-                            )}
-                            {j.work_mode && (
-                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md capitalize">
-                                {j.work_mode}
-                              </span>
-                            )}
-                            {j.salary_range && (
-                              <span className="flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                                {j.salary_range}
-                              </span>
-                            )}
-                          </div>
-                        </CardContent>
-                        <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
-                          <Link href={jobUrl} className="flex-1" onClick={(e) => e.stopPropagation()}>
+                          </CardContent>
+                          <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2 relative z-10">
+                            <Link href={jobUrl} className="flex-1" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full text-xs font-semibold cursor-pointer"
+                              >
+                                View Details
+                              </Button>
+                            </Link>
                             <Button
                               size="sm"
-                              variant="outline"
-                              className="w-full text-xs font-semibold cursor-pointer"
+                              variant="default"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEnquiryModalItem(j);
+                                setEnquiryForm({
+                                  name: user?.full_name || "",
+                                  email: user?.email || "",
+                                  phone: user?.phone || "",
+                                  message: `Hi, I would like to apply for the ${j.title || j.name} position. Please review my candidacy.`,
+                                  preferredDate: "",
+                                  preferredTime: "",
+                                });
+                              }}
+                              className="flex-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
                             >
-                              View Details
+                              Apply Now
                             </Button>
-                          </Link>
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => {
-                              setEnquiryModalItem(j);
-                              setEnquiryForm({
-                                name: user?.full_name || "",
-                                email: user?.email || "",
-                                phone: user?.phone || "",
-                                message: `Hi, I would like to apply for the ${j.title || j.name} position. Please review my candidacy.`,
-                                preferredDate: "",
-                                preferredTime: "",
-                              });
-                            }}
-                            className="flex-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
-                          >
-                            Apply Now
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    );
-                  })}
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               )}
