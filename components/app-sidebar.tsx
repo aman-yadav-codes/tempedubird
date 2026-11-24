@@ -440,21 +440,7 @@ const navItems: SidebarItem[] = [
             { title: "Generate Documents", url: "/admin/sales/generate-documents", icon: Sparkles },
         ],
     },
-    {
-        title: "Business Records",
-        url: "/admin/business-records",
-        icon: Boxes,
-        children: [
-            { title: "Operations Hub", url: "/admin/business-records", icon: Sparkles },
-            { title: "Vehicles Inventory", url: "/admin/business-records/vehicles", icon: Car },
-            { title: "Property Listings", url: "/admin/business-records/properties", icon: Building2 },
-            { title: "Restaurant & Menu", url: "/admin/business-records/restaurants", icon: UtensilsCrossed },
-            { title: "Hotel Rooms & Stays", url: "/admin/business-records/hotels", icon: BedDouble },
-            { title: "Events & Tickets", url: "/admin/business-records/events", icon: CalendarDays },
-            { title: "Student Directory", url: "/admin/business-records/education", icon: GraduationCap },
-            { title: "Patient Directory", url: "/admin/business-records/healthcare", icon: HeartPulse },
-        ],
-    },
+
     {
         title: "Master Data",
         url: "/admin/master-data",
