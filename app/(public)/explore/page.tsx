@@ -1370,27 +1370,34 @@ function CustomerExplorePageContent({
                       const isFavorited = favorites.has(favKey);
                       const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${biz.name} ${biz.city || ""}`)}`;
                       const whatsappClean = (biz.whatsapp || biz.phone || "").replace(/[^0-9]/g, "");
+                      const bizUrl = buildBusinessSeoUrl(biz);
 
                       return (
                         <div
                           key={biz.id}
-                          className="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
+                          onClick={() => router.push(bizUrl)}
+                          className="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer"
                         >
                           <div>
                             {/* Top Image Banner with Category Badge */}
                             <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
-                              <img
-                                src={(biz as any).cover_url || biz.logo_url || biz.default_image_url || "/images/hero-deer.jpg"}
-                                alt={biz.name}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
+                              <Link href={bizUrl} className="block w-full h-full">
+                                <img
+                                  src={(biz as any).cover_url || biz.logo_url || biz.default_image_url || "/images/hero-deer.jpg"}
+                                  alt={biz.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                              </Link>
                               <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
                               <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-md text-slate-800 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-slate-200 shadow-xs">
                                 {biz.category_name || biz.business_type || "Business"}
                               </div>
                               <button
                                 type="button"
-                                onClick={() => handleToggleFavorite(biz)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleFavorite(biz);
+                                }}
                                 className={`absolute top-3 right-3 p-1.5 rounded-full backdrop-blur-md transition-colors cursor-pointer ${isFavorited
                                   ? "bg-rose-50 text-rose-600 border border-rose-200"
                                   : "bg-white/80 text-slate-600 hover:text-rose-600 border border-slate-200"
@@ -1513,27 +1520,34 @@ function CustomerExplorePageContent({
                       const isFavorited = favorites.has(favKey);
                       const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${pro.name} ${pro.city || ""}`)}`;
                       const whatsappClean = (pro.whatsapp || pro.phone || "").replace(/[^0-9]/g, "");
+                      const proUrl = buildProfessionalSeoUrl(pro);
 
                       return (
-                        <Card key={pro.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
+                        <Card
+                          key={pro.id}
+                          onClick={() => router.push(proUrl)}
+                          className="rounded-2xl border shadow-xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
+                        >
                           <div>
                             <CardHeader className="pb-3 border-b bg-muted/10">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-start gap-3 min-w-0 flex-1">
-                                  {pro.avatar_url ? (
-                                    <img
-                                      src={pro.avatar_url}
-                                      alt={pro.name}
-                                      className="size-11 rounded-full object-cover border border-border shadow-2xs shrink-0"
-                                    />
-                                  ) : (
-                                    <div className="size-11 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-xs border border-primary/20">
-                                      {pro.name.slice(0, 2).toUpperCase()}
-                                    </div>
-                                  )}
+                                  <Link href={proUrl} className="shrink-0">
+                                    {pro.avatar_url ? (
+                                      <img
+                                        src={pro.avatar_url}
+                                        alt={pro.name}
+                                        className="size-11 rounded-full object-cover border border-border shadow-2xs shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="size-11 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-xs border border-primary/20">
+                                        {pro.name.slice(0, 2).toUpperCase()}
+                                      </div>
+                                    )}
+                                  </Link>
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                      <Link href={buildProfessionalSeoUrl(pro)}>
+                                      <Link href={proUrl}>
                                         <CardTitle className="text-base font-bold text-foreground hover:text-primary transition-colors cursor-pointer truncate">
                                           {pro.name}
                                         </CardTitle>
@@ -1551,7 +1565,10 @@ function CustomerExplorePageContent({
                                 </div>
 
                                 <button
-                                  onClick={() => handleToggleFavorite(pro)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleFavorite(pro);
+                                  }}
                                   className={`p-1.5 rounded-full transition-all cursor-pointer ${isFavorited ? "text-rose-600 bg-rose-50 dark:bg-rose-950/50" : "text-muted-foreground hover:text-rose-600"
                                     }`}
                                   title={isFavorited ? "Remove from favorites" : "Save to favorites"}
@@ -1768,99 +1785,111 @@ function CustomerExplorePageContent({
                   </h2>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredCourses.map((c) => (
-                      <Card key={c.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card">
-                        <CardHeader className="p-4 pb-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              {c.category_name && (
-                                <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-amber-50 text-amber-700 border-amber-200">
-                                  {c.category_name}
-                                </Badge>
-                              )}
-                              <Link href={buildCourseSeoUrl(c)} className="hover:text-primary transition-colors cursor-pointer block">
-                                <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
-                                  {c.name}
-                                </h3>
+                    {filteredCourses.map((c) => {
+                      const courseUrl = buildCourseSeoUrl(c);
+                      return (
+                        <Card
+                          key={c.id}
+                          onClick={() => router.push(courseUrl)}
+                          className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card cursor-pointer group"
+                        >
+                          <CardHeader className="p-4 pb-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                {c.category_name && (
+                                  <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-amber-50 text-amber-700 border-amber-200">
+                                    {c.category_name}
+                                  </Badge>
+                                )}
+                                <Link href={courseUrl} className="group-hover:text-primary transition-colors cursor-pointer block">
+                                  <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
+                                    {c.name}
+                                  </h3>
+                                </Link>
+                                {c.code && (
+                                  <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                                    Code: {c.code}
+                                  </p>
+                                )}
+                              </div>
+                              <Link
+                                href={courseUrl}
+                                className="size-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0 hover:bg-amber-500/20 transition-colors"
+                              >
+                                <BookOpen className="size-4.5" />
                               </Link>
-                              {c.code && (
-                                <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
-                                  Code: {c.code}
-                                </p>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
+                            {c.description && (
+                              <p className="text-muted-foreground text-[11px] line-clamp-2">
+                                {c.description}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
+                              {c.duration_value && (
+                                <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                  <Clock className="size-3 text-primary" />
+                                  {c.duration_value} {c.duration_unit || "Months"}
+                                </span>
+                              )}
+                              {c.university_name && (
+                                <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                  <Building2 className="size-3 text-primary" />
+                                  {c.university_name}
+                                </span>
+                              )}
+                              {c.seats_available !== undefined && (
+                                <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                  {c.seats_available} Seats Available
+                                </span>
                               )}
                             </div>
-                            <div className="size-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
-                              <BookOpen className="size-4.5" />
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
-                          {c.description && (
-                            <p className="text-muted-foreground text-[11px] line-clamp-2">
-                              {c.description}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
-                            {c.duration_value && (
-                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                                <Clock className="size-3 text-primary" />
-                                {c.duration_value} {c.duration_unit || "Months"}
-                              </span>
-                            )}
-                            {c.university_name && (
-                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                                <Building2 className="size-3 text-primary" />
-                                {c.university_name}
-                              </span>
-                            )}
-                            {c.seats_available !== undefined && (
-                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                                {c.seats_available} Seats Available
-                              </span>
-                            )}
-                          </div>
-                        </CardContent>
-                        <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setCheckoutItem({
-                                id: c.id,
-                                name: c.name,
-                                type: "service",
-                                price: Number(c.price || c.fee || c.annual_fee || 5000),
-                                sale_price: Number(c.sale_price || c.discounted_price || c.price || c.fee || 5000),
-                                institution_id: c.institution_id || c.institution_profile_id || null,
-                                provider_name: c.university_name || c.institution_name || "Maa Sharda Institute",
-                              } as any);
-                              setCheckoutOpen(true);
-                            }}
-                            className="flex-1 text-xs font-semibold cursor-pointer border-slate-300 hover:bg-slate-100"
-                          >
-                            Buy Now
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => {
-                              setEnquiryModalItem(c);
-                              setEnquiryForm({
-                                name: user?.full_name || "",
-                                email: user?.email || "",
-                                phone: user?.phone || "",
-                                message: `Hi, I am interested in admission for ${c.name}. Please share details and fee structure.`,
-                                preferredDate: "",
-                                preferredTime: "",
-                              });
-                            }}
-                            className="flex-1 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white"
-                          >
-                            Enquire
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    ))}
+                          </CardContent>
+                          <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCheckoutItem({
+                                  id: c.id,
+                                  name: c.name,
+                                  type: "service",
+                                  price: Number(c.price || c.fee || c.annual_fee || 5000),
+                                  sale_price: Number(c.sale_price || c.discounted_price || c.price || c.fee || 5000),
+                                  institution_id: c.institution_id || c.institution_profile_id || null,
+                                  provider_name: c.university_name || c.institution_name || "Maa Sharda Institute",
+                                } as any);
+                                setCheckoutOpen(true);
+                              }}
+                              className="flex-1 text-xs font-semibold cursor-pointer border-slate-300 hover:bg-slate-100"
+                            >
+                              Buy Now
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEnquiryModalItem(c);
+                                setEnquiryForm({
+                                  name: user?.full_name || "",
+                                  email: user?.email || "",
+                                  phone: user?.phone || "",
+                                  message: `Hi, I am interested in admission for ${c.name}. Please share details and fee structure.`,
+                                  preferredDate: "",
+                                  preferredTime: "",
+                                });
+                              }}
+                              className="flex-1 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white"
+                            >
+                              Enquire
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1890,16 +1919,9 @@ function CustomerExplorePageContent({
                         <Card
                           key={j.id}
                           onClick={() => router.push(jobUrl)}
-                          className="relative rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card group cursor-pointer"
+                          className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card group cursor-pointer"
                         >
-                          {/* Full card backdrop link directly to job detail page */}
-                          <Link
-                            href={jobUrl}
-                            className="absolute inset-0 z-0"
-                            aria-label={`View details for ${j.title || j.name}`}
-                          />
-
-                          <CardHeader className="p-4 pb-2 relative z-10 pointer-events-none">
+                          <CardHeader className="p-4 pb-2">
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
                                 {j.department && (
@@ -1908,7 +1930,7 @@ function CustomerExplorePageContent({
                                   </Badge>
                                 )}
                                 <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-                                  <Link href={jobUrl} className="pointer-events-auto hover:text-primary">
+                                  <Link href={jobUrl} className="hover:text-primary">
                                     {j.title || j.name}
                                   </Link>
                                 </h3>
@@ -1917,7 +1939,7 @@ function CustomerExplorePageContent({
                                     <Link
                                       href={employerHref}
                                       onClick={(e) => e.stopPropagation()}
-                                      className="text-xs text-muted-foreground font-semibold mt-0.5 hover:text-primary hover:underline truncate block transition-colors pointer-events-auto"
+                                      className="text-xs text-muted-foreground font-semibold mt-0.5 hover:text-primary hover:underline truncate block transition-colors"
                                     >
                                       {employerName}
                                     </Link>
@@ -1928,12 +1950,15 @@ function CustomerExplorePageContent({
                                   )
                                 )}
                               </div>
-                              <div className="size-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
+                              <Link
+                                href={jobUrl}
+                                className="size-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0 hover:bg-blue-500/20 transition-colors"
+                              >
                                 <Briefcase className="size-4.5" />
-                              </div>
+                              </Link>
                             </div>
                           </CardHeader>
-                          <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1 relative z-10 pointer-events-none">
+                          <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
                             {j.description && (
                               <p className="text-muted-foreground text-[11px] line-clamp-2">
                                 {j.description}
@@ -1963,7 +1988,7 @@ function CustomerExplorePageContent({
                               )}
                             </div>
                           </CardContent>
-                          <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2 relative z-10">
+                          <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
                             <Link href={jobUrl} className="flex-1" onClick={(e) => e.stopPropagation()}>
                               <Button
                                 size="sm"
@@ -2010,107 +2035,117 @@ function CustomerExplorePageContent({
                     </h2>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredProperties.map((p) => (
-                      <Card key={p.id} className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between">
-                        <div>
-                          <div className="relative h-44 w-full bg-slate-100 overflow-hidden group">
-                            <Link href={`/properties/${p.slug || p.id}`} className="block w-full h-full">
-                              {p.image_url || p.default_image_url ? (
-                                <img
-                                  src={p.image_url || p.default_image_url || ""}
-                                  alt={p.title || p.name}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-emerald-50 text-emerald-600">
-                                  <Home className="size-12 opacity-60" />
-                                </div>
-                              )}
-                            </Link>
-                            <div className="absolute top-2.5 right-2.5 pointer-events-none">
-                              <Badge className="bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5">
-                                {p.rental_amount ? `₹${Number(p.rental_amount).toLocaleString()}/mo` : p.price ? `₹${Number(p.price).toLocaleString()}` : "Price on Request"}
-                              </Badge>
-                            </div>
-                            {p.city && (
-                              <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
-                                <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
-                                  <MapPin className="size-2.5" />
-                                  {p.city}
+                    {filteredProperties.map((p) => {
+                      const propUrl = `/properties/${p.slug || p.id}`;
+                      return (
+                        <Card
+                          key={p.id}
+                          onClick={() => router.push(propUrl)}
+                          className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between cursor-pointer group"
+                        >
+                          <div>
+                            <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
+                              <Link href={propUrl} className="block w-full h-full">
+                                {p.image_url || p.default_image_url ? (
+                                  <img
+                                    src={p.image_url || p.default_image_url || ""}
+                                    alt={p.title || p.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-emerald-50 text-emerald-600">
+                                    <Home className="size-12 opacity-60" />
+                                  </div>
+                                )}
+                              </Link>
+                              <div className="absolute top-2.5 right-2.5 pointer-events-none">
+                                <Badge className="bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5">
+                                  {p.rental_amount ? `₹${Number(p.rental_amount).toLocaleString()}/mo` : p.price ? `₹${Number(p.price).toLocaleString()}` : "Price on Request"}
                                 </Badge>
                               </div>
-                            )}
-                          </div>
-                          <CardContent className="p-4 space-y-2">
-                            <h3 className="font-bold text-slate-900 text-sm line-clamp-1 hover:text-emerald-600 transition-colors">
-                              <Link href={`/properties/${p.slug || p.id}`}>
-                                {p.title || p.name}
-                              </Link>
-                            </h3>
-                            {p.business_name && (
-                              <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                                <Building2 className="size-3 text-slate-400 shrink-0" />
-                                <Link
-                                  href={p.business_slug ? `/business/${p.business_slug}` : p.business_id ? `/business/${p.business_id}` : "#"}
-                                  className="truncate font-medium text-slate-700 hover:text-emerald-600 hover:underline transition-colors"
-                                >
-                                  {p.business_name}
-                                </Link>
-                              </div>
-                            )}
-                            {p.description && (
-                              <p className="text-xs text-slate-600 line-clamp-2">
-                                {p.description}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
-                              {p.bedrooms ? (
-                                <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
-                                  {p.bedrooms} BHK
-                                </span>
-                              ) : null}
-                              {p.built_up_area ? (
-                                <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
-                                  {p.built_up_area} {p.area_unit || "sq ft"}
-                                </span>
-                              ) : null}
-                              {p.address && (
-                                <span className="text-[10px] text-slate-400 truncate max-w-[200px]">
-                                  {p.address}
-                                </span>
+                              {p.city && (
+                                <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
+                                  <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                    <MapPin className="size-2.5" />
+                                    {p.city}
+                                  </Badge>
+                                </div>
                               )}
                             </div>
-                          </CardContent>
-                        </div>
-                        <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
-                          {p.phone && (
-                            <a
-                              href={`tel:${p.phone}`}
-                              className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                            <CardContent className="p-4 space-y-2">
+                              <h3 className="font-bold text-slate-900 text-sm line-clamp-1 group-hover:text-emerald-600 transition-colors">
+                                <Link href={propUrl}>
+                                  {p.title || p.name}
+                                </Link>
+                              </h3>
+                              {p.business_name && (
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                  <Building2 className="size-3 text-slate-400 shrink-0" />
+                                  <Link
+                                    href={p.business_slug ? `/business/${p.business_slug}` : p.business_id ? `/business/${p.business_id}` : "#"}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="truncate font-medium text-slate-700 hover:text-emerald-600 hover:underline transition-colors"
+                                  >
+                                    {p.business_name}
+                                  </Link>
+                                </div>
+                              )}
+                              {p.description && (
+                                <p className="text-xs text-slate-600 line-clamp-2">
+                                  {p.description}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
+                                {p.bedrooms ? (
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                    {p.bedrooms} BHK
+                                  </span>
+                                ) : null}
+                                {p.built_up_area ? (
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                    {p.built_up_area} {p.area_unit || "sq ft"}
+                                  </span>
+                                ) : null}
+                                {p.address && (
+                                  <span className="text-[10px] text-slate-400 truncate max-w-[200px]">
+                                    {p.address}
+                                  </span>
+                                )}
+                              </div>
+                            </CardContent>
+                          </div>
+                          <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
+                            {p.phone && (
+                              <a
+                                href={`tel:${p.phone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                              >
+                                <Phone className="size-3" /> Call
+                              </a>
+                            )}
+                            <Button
+                              size="sm"
+                              className="flex-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEnquiryModalItem(p);
+                                setEnquiryForm({
+                                  name: user?.full_name || "",
+                                  email: user?.email || "",
+                                  phone: user?.phone || "",
+                                  message: `Hi, I am interested in "${p.title || p.name}". Please share more details and arrange a site visit.`,
+                                  preferredDate: "",
+                                  preferredTime: "",
+                                });
+                              }}
                             >
-                              <Phone className="size-3" /> Call
-                            </a>
-                          )}
-                          <Button
-                            size="sm"
-                            className="flex-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
-                            onClick={() => {
-                              setEnquiryModalItem(p);
-                              setEnquiryForm({
-                                name: user?.full_name || "",
-                                email: user?.email || "",
-                                phone: user?.phone || "",
-                                message: `Hi, I am interested in "${p.title || p.name}". Please share more details and arrange a site visit.`,
-                                preferredDate: "",
-                                preferredTime: "",
-                              });
-                            }}
-                          >
-                            Enquire Now
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    ))}
+                              Enquire Now
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -2125,112 +2160,122 @@ function CustomerExplorePageContent({
                     </h2>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredVehicles.map((v) => (
-                      <Card key={v.id} className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between">
-                        <div>
-                          <div className="relative h-44 w-full bg-slate-100 overflow-hidden group">
-                            <Link href={`/vehicles/${v.slug || v.id}`} className="block w-full h-full">
-                              {v.image_url || v.default_image_url ? (
-                                <img
-                                  src={v.image_url || v.default_image_url || ""}
-                                  alt={v.title || v.name}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-blue-50 text-blue-600">
-                                  <Car className="size-12 opacity-60" />
-                                </div>
-                              )}
-                            </Link>
-                            <div className="absolute top-2.5 right-2.5 pointer-events-none">
-                              <Badge className="bg-blue-600 text-white font-bold text-[10px] px-2 py-0.5">
-                                {v.price ? `₹${Number(v.price).toLocaleString()}` : "Price on Request"}
-                              </Badge>
-                            </div>
-                            {v.city && (
-                              <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
-                                <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
-                                  <MapPin className="size-2.5" />
-                                  {v.city}
+                    {filteredVehicles.map((v) => {
+                      const vehUrl = `/vehicles/${v.slug || v.id}`;
+                      return (
+                        <Card
+                          key={v.id}
+                          onClick={() => router.push(vehUrl)}
+                          className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between cursor-pointer group"
+                        >
+                          <div>
+                            <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
+                              <Link href={vehUrl} className="block w-full h-full">
+                                {v.image_url || v.default_image_url ? (
+                                  <img
+                                    src={v.image_url || v.default_image_url || ""}
+                                    alt={v.title || v.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-blue-50 text-blue-600">
+                                    <Car className="size-12 opacity-60" />
+                                  </div>
+                                )}
+                              </Link>
+                              <div className="absolute top-2.5 right-2.5 pointer-events-none">
+                                <Badge className="bg-blue-600 text-white font-bold text-[10px] px-2 py-0.5">
+                                  {v.price ? `₹${Number(v.price).toLocaleString()}` : "Price on Request"}
                                 </Badge>
                               </div>
-                            )}
-                          </div>
-                          <CardContent className="p-4 space-y-2">
-                            <h3 className="font-bold text-slate-900 text-sm line-clamp-1 hover:text-blue-600 transition-colors">
-                              <Link href={`/vehicles/${v.slug || v.id}`}>
-                                {v.title || v.name}
-                              </Link>
-                            </h3>
-                            {v.business_name && (
-                              <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                                <Building2 className="size-3 text-slate-400 shrink-0" />
-                                <Link
-                                  href={v.business_slug ? `/business/${v.business_slug}` : v.business_id ? `/business/${v.business_id}` : "#"}
-                                  className="truncate font-medium text-slate-700 hover:text-blue-600 hover:underline transition-colors"
-                                >
-                                  {v.business_name}
-                                </Link>
-                              </div>
-                            )}
-                            {v.description && (
-                              <p className="text-xs text-slate-600 line-clamp-2">
-                                {v.description}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
-                              {v.manufacturing_year ? (
-                                <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
-                                  {v.manufacturing_year}
-                                </span>
-                              ) : null}
-                              {v.color ? (
-                                <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
-                                  {v.color}
-                                </span>
-                              ) : null}
-                              {v.mileage ? (
-                                <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
-                                  {v.mileage}
-                                </span>
-                              ) : null}
-                              {v.kilometers_driven ? (
-                                <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
-                                  {Number(v.kilometers_driven).toLocaleString()} km
-                                </span>
-                              ) : null}
+                              {v.city && (
+                                <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
+                                  <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                    <MapPin className="size-2.5" />
+                                    {v.city}
+                                  </Badge>
+                                </div>
+                              )}
                             </div>
-                          </CardContent>
-                        </div>
-                        <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
-                          {v.phone && (
-                            <a
-                              href={`tel:${v.phone}`}
-                              className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                            <CardContent className="p-4 space-y-2">
+                              <h3 className="font-bold text-slate-900 text-sm line-clamp-1 group-hover:text-blue-600 transition-colors">
+                                <Link href={vehUrl}>
+                                  {v.title || v.name}
+                                </Link>
+                              </h3>
+                              {v.business_name && (
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                  <Building2 className="size-3 text-slate-400 shrink-0" />
+                                  <Link
+                                    href={v.business_slug ? `/business/${v.business_slug}` : v.business_id ? `/business/${v.business_id}` : "#"}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="truncate font-medium text-slate-700 hover:text-blue-600 hover:underline transition-colors"
+                                  >
+                                    {v.business_name}
+                                  </Link>
+                                </div>
+                              )}
+                              {v.description && (
+                                <p className="text-xs text-slate-600 line-clamp-2">
+                                  {v.description}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
+                                {v.manufacturing_year ? (
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                    {v.manufacturing_year}
+                                  </span>
+                                ) : null}
+                                {v.color ? (
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                    {v.color}
+                                  </span>
+                                ) : null}
+                                {v.mileage ? (
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                    {v.mileage}
+                                  </span>
+                                ) : null}
+                                {v.kilometers_driven ? (
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                    {Number(v.kilometers_driven).toLocaleString()} km
+                                  </span>
+                                ) : null}
+                              </div>
+                            </CardContent>
+                          </div>
+                          <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
+                            {v.phone && (
+                              <a
+                                href={`tel:${v.phone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                              >
+                                <Phone className="size-3" /> Call Dealer
+                              </a>
+                            )}
+                            <Button
+                              size="sm"
+                              className="flex-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEnquiryModalItem(v);
+                                setEnquiryForm({
+                                  name: user?.full_name || "",
+                                  email: user?.email || "",
+                                  phone: user?.phone || "",
+                                  message: `Hi, I am interested in purchasing "${v.title || v.name}". Please share test drive and best price details.`,
+                                  preferredDate: "",
+                                  preferredTime: "",
+                                });
+                              }}
                             >
-                              <Phone className="size-3" /> Call Dealer
-                            </a>
-                          )}
-                          <Button
-                            size="sm"
-                            className="flex-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
-                            onClick={() => {
-                              setEnquiryModalItem(v);
-                              setEnquiryForm({
-                                name: user?.full_name || "",
-                                email: user?.email || "",
-                                phone: user?.phone || "",
-                                message: `Hi, I am interested in purchasing "${v.title || v.name}". Please share test drive and best price details.`,
-                                preferredDate: "",
-                                preferredTime: "",
-                              });
-                            }}
-                          >
-                            Enquire Now
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    ))}
+                              Enquire Now
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -2245,110 +2290,120 @@ function CustomerExplorePageContent({
                     </h2>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredEvents.map((e) => (
-                      <Card key={e.id} className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between">
-                        <div>
-                          <div className="relative h-44 w-full bg-slate-100 overflow-hidden group">
-                            <Link href={`/events/${e.slug || e.id}`} className="block w-full h-full">
-                              {e.image_url || e.default_image_url ? (
-                                <img
-                                  src={e.image_url || e.default_image_url || ""}
-                                  alt={e.title || e.name}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-purple-50 text-purple-600">
-                                  <Calendar className="size-12 opacity-60" />
-                                </div>
-                              )}
-                            </Link>
-                            <div className="absolute top-2.5 right-2.5 pointer-events-none">
-                              <Badge className={e.is_free ? "bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5" : "bg-purple-600 text-white font-bold text-[10px] px-2 py-0.5"}>
-                                {e.is_free ? "Free Entry" : e.price ? `₹${Number(e.price).toLocaleString()}` : "Pass Required"}
-                              </Badge>
-                            </div>
-                            {e.city && (
-                              <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
-                                <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
-                                  <MapPin className="size-2.5" />
-                                  {e.city}
+                    {filteredEvents.map((e) => {
+                      const eventUrl = `/events/${e.slug || e.id}`;
+                      return (
+                        <Card
+                          key={e.id}
+                          onClick={() => router.push(eventUrl)}
+                          className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between cursor-pointer group"
+                        >
+                          <div>
+                            <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
+                              <Link href={eventUrl} className="block w-full h-full">
+                                {e.image_url || e.default_image_url ? (
+                                  <img
+                                    src={e.image_url || e.default_image_url || ""}
+                                    alt={e.title || e.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-purple-50 text-purple-600">
+                                    <Calendar className="size-12 opacity-60" />
+                                  </div>
+                                )}
+                              </Link>
+                              <div className="absolute top-2.5 right-2.5 pointer-events-none">
+                                <Badge className={e.is_free ? "bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5" : "bg-purple-600 text-white font-bold text-[10px] px-2 py-0.5"}>
+                                  {e.is_free ? "Free Entry" : e.price ? `₹${Number(e.price).toLocaleString()}` : "Pass Required"}
                                 </Badge>
                               </div>
-                            )}
-                          </div>
-                          <CardContent className="p-4 space-y-2">
-                            <h3 className="font-bold text-slate-900 text-sm line-clamp-1 hover:text-purple-600 transition-colors">
-                              <Link href={`/events/${e.slug || e.id}`}>
-                                {e.title || e.name}
-                              </Link>
-                            </h3>
-                            {e.venue_name && (
-                              <div className="text-[11px] text-slate-600 flex items-center gap-1 font-medium">
-                                <MapPin className="size-3 text-purple-500 shrink-0" />
-                                <span className="truncate">{e.venue_name}</span>
-                              </div>
-                            )}
-                            {e.business_name && (
-                              <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                                <Building2 className="size-3 text-slate-400 shrink-0" />
-                                <Link
-                                  href={e.business_slug ? `/business/${e.business_slug}` : e.business_id ? `/business/${e.business_id}` : "#"}
-                                  className="truncate font-medium text-slate-700 hover:text-purple-600 hover:underline transition-colors"
-                                >
-                                  {e.business_name}
-                                </Link>
-                              </div>
-                            )}
-                            {e.description && (
-                              <p className="text-xs text-slate-600 line-clamp-2">
-                                {e.description}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
-                              {e.start_date && (
-                                <span className="bg-purple-50 text-purple-700 font-semibold px-2 py-0.5 rounded flex items-center gap-1">
-                                  <Calendar className="size-3" />
-                                  {new Date(e.start_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                                </span>
-                              )}
-                              {e.start_time && (
-                                <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded flex items-center gap-1">
-                                  <Clock className="size-3" />
-                                  {e.start_time}
-                                </span>
+                              {e.city && (
+                                <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
+                                  <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                    <MapPin className="size-2.5" />
+                                    {e.city}
+                                  </Badge>
+                                </div>
                               )}
                             </div>
-                          </CardContent>
-                        </div>
-                        <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
-                          {e.phone && (
-                            <a
-                              href={`tel:${e.phone}`}
-                              className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                            <CardContent className="p-4 space-y-2">
+                              <h3 className="font-bold text-slate-900 text-sm line-clamp-1 group-hover:text-purple-600 transition-colors">
+                                <Link href={eventUrl}>
+                                  {e.title || e.name}
+                                </Link>
+                              </h3>
+                              {e.venue_name && (
+                                <div className="text-[11px] text-slate-600 flex items-center gap-1 font-medium">
+                                  <MapPin className="size-3 text-purple-500 shrink-0" />
+                                  <span className="truncate">{e.venue_name}</span>
+                                </div>
+                              )}
+                              {e.business_name && (
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                  <Building2 className="size-3 text-slate-400 shrink-0" />
+                                  <Link
+                                    href={e.business_slug ? `/business/${e.business_slug}` : e.business_id ? `/business/${e.business_id}` : "#"}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="truncate font-medium text-slate-700 hover:text-purple-600 hover:underline transition-colors"
+                                  >
+                                    {e.business_name}
+                                  </Link>
+                                </div>
+                              )}
+                              {e.description && (
+                                <p className="text-xs text-slate-600 line-clamp-2">
+                                  {e.description}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
+                                {e.start_date && (
+                                  <span className="bg-purple-50 text-purple-700 font-semibold px-2 py-0.5 rounded flex items-center gap-1">
+                                    <Calendar className="size-3" />
+                                    {new Date(e.start_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                  </span>
+                                )}
+                                {e.start_time && (
+                                  <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded flex items-center gap-1">
+                                    <Clock className="size-3" />
+                                    {e.start_time}
+                                  </span>
+                                )}
+                              </div>
+                            </CardContent>
+                          </div>
+                          <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
+                            {e.phone && (
+                              <a
+                                href={`tel:${e.phone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                              >
+                                <Phone className="size-3" /> Contact
+                              </a>
+                            )}
+                            <Button
+                              size="sm"
+                              className="flex-1 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                setEnquiryModalItem(e);
+                                setEnquiryForm({
+                                  name: user?.full_name || "",
+                                  email: user?.email || "",
+                                  phone: user?.phone || "",
+                                  message: `Hi, I would like to register/attend "${e.title || e.name}". Please confirm schedule and booking.`,
+                                  preferredDate: e.start_date || "",
+                                  preferredTime: e.start_time || "",
+                                });
+                              }}
                             >
-                              <Phone className="size-3" /> Contact
-                            </a>
-                          )}
-                          <Button
-                            size="sm"
-                            className="flex-1 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white"
-                            onClick={() => {
-                              setEnquiryModalItem(e);
-                              setEnquiryForm({
-                                name: user?.full_name || "",
-                                email: user?.email || "",
-                                phone: user?.phone || "",
-                                message: `Hi, I would like to register/attend "${e.title || e.name}". Please confirm schedule and booking.`,
-                                preferredDate: e.start_date || "",
-                                preferredTime: e.start_time || "",
-                              });
-                            }}
-                          >
-                            Register / Enquire
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    ))}
+                              Register / Enquire
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               )}

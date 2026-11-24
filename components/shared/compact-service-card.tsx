@@ -121,9 +121,10 @@ export function CompactServiceCard({
       } ${className}`}
     >
       {/* 1. Left Thumbnail Image */}
-      <div
-        onClick={handleThumbnailClick}
-        className="relative size-16 rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-600 shrink-0 overflow-hidden border flex items-center justify-center cursor-pointer group/img"
+      <Link
+        href={serviceDetailUrl}
+        onClick={handleOpenDetails}
+        className="relative size-16 rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-600 shrink-0 overflow-hidden border flex items-center justify-center cursor-pointer group/img block"
         title={`View ${serviceTitle}`}
       >
         {imageUrl ? (
@@ -140,7 +141,7 @@ export function CompactServiceCard({
         {isHighlighted && (
           <span className="absolute top-1 right-1 size-2 rounded-full bg-primary ring-2 ring-background" />
         )}
-      </div>
+      </Link>
 
       {/* 2. Middle Content */}
       <div className="min-w-0 flex-1">

@@ -125,13 +125,12 @@ export function CompactProductCard({
   };
 
   const productSlugOrId = p.slug || p.id;
+  const productDetailUrl = `/products/${productSlugOrId}`;
 
   const handleOpenDetails = (e: React.MouseEvent) => {
-    e.preventDefault();
     if (onOpenDetails) {
+      e.preventDefault();
       onOpenDetails(p);
-    } else {
-      router.push(`/products/${productSlugOrId}`);
     }
   };
 
@@ -150,7 +149,7 @@ export function CompactProductCard({
           if (onOpenDetails) {
             onOpenDetails(p);
           } else {
-            router.push(`/products/${productSlugOrId}`);
+            router.push(productDetailUrl);
           }
         }
       }}
@@ -161,9 +160,10 @@ export function CompactProductCard({
       } ${className}`}
     >
       {/* 1. Left Thumbnail Image */}
-      <div
+      <Link
+        href={productDetailUrl}
         onClick={handleOpenDetails}
-        className="relative size-16 rounded-lg bg-muted shrink-0 overflow-hidden border cursor-pointer group/img"
+        className="relative size-16 rounded-lg bg-muted shrink-0 overflow-hidden border cursor-pointer group/img block"
         title={`View ${productTitle}`}
       >
         <Image
@@ -176,13 +176,13 @@ export function CompactProductCard({
         {isHighlighted && (
           <span className="absolute top-1 right-1 size-2 rounded-full bg-primary ring-2 ring-background" />
         )}
-      </div>
+      </Link>
 
       {/* 2. Middle Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
           <Link
-            href={buildProductSeoUrl({ ...p, seller_info: effectiveBusiness })}
+            href={productDetailUrl}
             onClick={handleOpenDetails}
             className="text-xs font-bold text-foreground truncate hover:text-primary transition-colors cursor-pointer block"
             title={productTitle}
