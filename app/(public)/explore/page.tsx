@@ -48,6 +48,9 @@ import {
   SlidersHorizontal,
   CheckCircle2,
   Users,
+  LayoutGrid,
+  List,
+  ArrowRight,
   X,
   ExternalLink,
   Calendar,
@@ -238,6 +241,8 @@ function CustomerExplorePageContent({
   const [radius, setRadius] = useState<string>("no_radius");
   const [minRating, setMinRating] = useState<number>(0);
   const [verifiedOnly, setVerifiedOnly] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [showAllSidebarCategories, setShowAllSidebarCategories] = useState<boolean>(false);
 
   // Helper to keep browser URL in sync using ONLY clean structured URLs
   const syncUrlParams = useCallback(
@@ -1144,153 +1149,232 @@ function CustomerExplorePageContent({
   };
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
-      {/* 1. Breadcrumbs */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
-        <Link href="/" className="hover:text-slate-900 transition-colors">Home</Link>
-        <ChevronRight className="size-3 text-slate-400" />
-        <button
-          type="button"
-          onClick={() => {
-            setActiveType("all");
-            setSelectedBusinessCategoryId(null);
-            setSelectedCategoryId(null);
-            setSelectedCategoryName("");
-            setSelectedCategorySlug("");
-            setSelectedSubcategoryId(null);
-            setSelectedSubcategoryName("");
-            setSelectedSubcategorySlug("");
-            syncUrlParams({ type: "all", category: null, subcategory: null });
-          }}
-          className="hover:text-slate-900 transition-colors capitalize cursor-pointer font-medium"
-        >
-          {getVerticalLabel(activeType)}
-        </button>
-        {effectiveFullLocation && (
-          <>
-            <ChevronRight className="size-3 text-slate-400" />
-            <span className="text-slate-700 font-medium">{effectiveFullLocation}</span>
-          </>
-        )}
-        {(selectedCategoryName || selectedSubcategoryName) && (
-          <>
-            <ChevronRight className="size-3 text-slate-400" />
-            <span className="text-amber-600 font-bold">{selectedSubcategoryName || selectedCategoryName}</span>
-          </>
-        )}
-      </nav>
-
-      {/* 2. Hero Headline Title & Subtitle */}
-      <div className="space-y-1.5 pt-1">
-        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
-          {selectedSubcategoryName || selectedCategoryName || getVerticalLabel(activeType)}
-          {effectiveFullLocation ? ` in ${effectiveFullLocation}` : ""}
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-500 max-w-3xl">
-          Explore {selectedSubcategoryName || selectedCategoryName || "verified"} {activeType === "all" ? "businesses, services, and opportunities" : getVerticalLabel(activeType).toLowerCase()} in {effectiveFullLocation || "your area"}.
-        </p>
-      </div>
-
-      {/* 3. Floating Filter Bar */}
-      <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-2.5 flex flex-wrap items-center gap-2.5">
-        {/* Keyword Search Input with Sparkle & Search Button */}
-        <div className="relative flex-1 min-w-[220px]">
-          <Sparkles className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-amber-500" />
-          <input
-            type="text"
-            placeholder="Search all listings, products, services..."
-            value={productNameSearch}
-            onChange={(e) => setProductNameSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                syncUrlParams({ q: productNameSearch });
-                performSearch();
-              }
-            }}
-            className="w-full h-11 pl-10 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors"
+    <div className="min-h-screen bg-slate-50/50 text-slate-900 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
+      {/* 1. Hero Section with Panoramic Skyline & Floating Search Bar */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-100/90 via-sky-50 to-blue-100/70 border border-sky-200/70 p-6 sm:p-10 shadow-xs">
+        {/* Right scenic overlay */}
+        <div className="absolute right-0 top-0 bottom-0 w-2/5 opacity-25 pointer-events-none overflow-hidden hidden md:block">
+          <div className="absolute inset-0 bg-gradient-to-r from-sky-50 via-transparent to-transparent z-10" />
+          <img
+            src="/images/hero-books.jpg"
+            alt="Scenic Skyline"
+            className="w-full h-full object-cover object-right"
           />
+        </div>
+
+        <div className="relative z-10 max-w-2xl space-y-2">
+          {/* Breadcrumbs */}
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap">
+            <Link href="/" className="hover:text-blue-600 transition-colors">Home</Link>
+            <ChevronRight className="size-3 text-slate-400" />
+            <button
+              type="button"
+              onClick={() => {
+                setActiveType("all");
+                setSelectedBusinessCategoryId(null);
+                setSelectedCategoryId(null);
+                setSelectedCategoryName("");
+                setSelectedCategorySlug("");
+                setSelectedSubcategoryId(null);
+                setSelectedSubcategoryName("");
+                setSelectedSubcategorySlug("");
+                syncUrlParams({ type: "all", category: null, subcategory: null });
+              }}
+              className="hover:text-blue-600 transition-colors capitalize font-medium cursor-pointer"
+            >
+              {getVerticalLabel(activeType)}
+            </button>
+            {effectiveFullLocation && (
+              <>
+                <ChevronRight className="size-3 text-slate-400" />
+                <span className="text-slate-700 font-medium">{effectiveFullLocation}</span>
+              </>
+            )}
+            {(selectedCategoryName || selectedSubcategoryName) && (
+              <>
+                <ChevronRight className="size-3 text-slate-400" />
+                <span className="text-blue-600 font-bold">{selectedSubcategoryName || selectedCategoryName}</span>
+              </>
+            )}
+          </nav>
+
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+            {selectedSubcategoryName || selectedCategoryName || getVerticalLabel(activeType)}
+            {effectiveFullLocation ? ` in ${effectiveFullLocation}` : ""}
+          </h1>
+          <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+            Find trusted {activeType === "professional" ? "professionals and experts" : activeType === "product" ? "products and stores" : activeType === "job" ? "jobs and opportunities" : activeType === "course" ? "courses and coaching" : "businesses and services"}{effectiveFullLocation ? ` in ${effectiveFullLocation}` : ""}.
+          </p>
+        </div>
+
+        {/* Floating Search Bar */}
+        <div className="relative z-10 mt-6 bg-white rounded-2xl shadow-md border border-slate-200/90 p-2 flex flex-col sm:flex-row items-center gap-2">
+          {/* Keyword Search Input */}
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder={`Search ${activeType === "professional" ? "professionals, services or skills..." : activeType === "product" ? "products, brands or stores..." : activeType === "job" ? "jobs, roles or companies..." : activeType === "course" ? "courses, subjects or institutes..." : "all listings, products, services..."}`}
+              value={productNameSearch}
+              onChange={(e) => setProductNameSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  syncUrlParams({ q: productNameSearch });
+                  performSearch();
+                }
+              }}
+              className="w-full h-11 pl-10 pr-4 bg-transparent text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none font-medium"
+            />
+          </div>
+
+          {/* Location Selector */}
+          <div className="flex items-center gap-2 h-11 px-3 bg-slate-50 border border-slate-200/80 rounded-xl w-full sm:w-auto shrink-0">
+            <MapPin className="size-4 text-blue-600 shrink-0" />
+            <select
+              value={city}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCity(val);
+                syncUrlParams({ city: val });
+              }}
+              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-5"
+            >
+              <option value="">All Locations</option>
+              {availableLocations.map((loc) => (
+                <option key={loc.id} value={loc.name}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-4" />
+          </div>
+
+          {/* Blue Search Button */}
           <button
             type="button"
             onClick={() => {
               syncUrlParams({ q: productNameSearch });
               performSearch();
             }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 size-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
-            title="Search"
+            className="h-11 px-6 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs shrink-0 w-full sm:w-auto cursor-pointer"
           >
-            <Search className="size-3.5" />
+            <Search className="size-4" />
+            <span>Search</span>
           </button>
-        </div>
-
-        {/* Radius Pill */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 hidden md:inline">Radius</span>
-          <div className="flex items-center gap-1 h-11 px-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800">
-            <select
-              value={radius}
-              onChange={(e) => setRadius(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer appearance-none pr-3"
-            >
-              <option value="no_radius" className="bg-white">No radius</option>
-              <option value="5" className="bg-white">5 km</option>
-              <option value="10" className="bg-white">10 km</option>
-              <option value="25" className="bg-white">25 km</option>
-              <option value="50" className="bg-white">50 km</option>
-            </select>
-            <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
-          </div>
-        </div>
-
-        {/* Rating Pill */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 hidden md:inline">Rating</span>
-          <div className="flex items-center gap-1 h-11 px-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800">
-            <select
-              value={minRating}
-              onChange={(e) => setMinRating(Number(e.target.value))}
-              className="bg-transparent text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer appearance-none pr-3"
-            >
-              <option value="0" className="bg-white">All</option>
-              <option value="4.5" className="bg-white">4.5+ ★</option>
-              <option value="4.0" className="bg-white">4.0+ ★</option>
-              <option value="3.5" className="bg-white">3.5+ ★</option>
-            </select>
-            <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
-          </div>
-        </div>
-
-        {/* Sort Pill */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 hidden md:inline">Sort</span>
-          <div className="flex items-center gap-1 h-11 px-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer appearance-none pr-3"
-            >
-              <option value="featured" className="bg-white">Name / Featured</option>
-              <option value="name_asc" className="bg-white">Name (A-Z)</option>
-              <option value="name_desc" className="bg-white">Name (Z-A)</option>
-              <option value="rating_desc" className="bg-white">Highest Rated</option>
-              <option value="newest" className="bg-white">Newest</option>
-              <option value="price_asc" className="bg-white">Price: Low to High</option>
-              <option value="price_desc" className="bg-white">Price: High to Low</option>
-            </select>
-            <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
-          </div>
         </div>
       </div>
 
-      {/* 4. Results Count Label */}
-      {loading ? (
-        <div className="flex items-center gap-2 pl-1 h-5">
-          <div className="h-4 w-44 bg-slate-200 animate-pulse rounded-md" />
+      {/* 2. Filter Pills Row */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        {/* All Categories Blue Pill */}
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedCategoryId(null);
+            setSelectedCategoryName("");
+            setSelectedCategorySlug("");
+            setSelectedSubcategoryId(null);
+            syncUrlParams({ category: null, subcategory: null });
+          }}
+          className="h-9 px-4 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+        >
+          <LayoutGrid className="size-3.5" />
+          <span>{selectedCategoryName || "All Categories"}</span>
+          <ChevronDown className="size-3 text-white/80" />
+        </button>
+
+        {/* Radius Pill */}
+        <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
+          <span className="text-slate-400 font-normal">Radius</span>
+          <select
+            value={radius}
+            onChange={(e) => setRadius(e.target.value)}
+            className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
+          >
+            <option value="no_radius">No radius</option>
+            <option value="5">5 km</option>
+            <option value="10">10 km</option>
+            <option value="25">25 km</option>
+            <option value="50">50 km</option>
+          </select>
+          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
         </div>
-      ) : (
-        <div className="text-xs sm:text-sm font-semibold text-slate-500 pl-1">
-          {totalFilteredCount} matching {activeType === "business" ? "businesses" : activeType === "service" ? "services" : activeType === "product" ? "products" : activeType === "course" ? "courses" : activeType === "job" ? "jobs" : "listings"}
+
+        {/* Rating Pill */}
+        <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
+          <span className="text-slate-400 font-normal">Rating</span>
+          <select
+            value={minRating}
+            onChange={(e) => setMinRating(Number(e.target.value))}
+            className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
+          >
+            <option value="0">All</option>
+            <option value="4.5">4.5+ ★</option>
+            <option value="4.0">4.0+ ★</option>
+            <option value="3.5">3.5+ ★</option>
+          </select>
+          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
         </div>
-      )}
+
+        {/* Sort Pill */}
+        <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
+          >
+            <option value="featured">Sort: Name / Featured</option>
+            <option value="name_asc">Name (A-Z)</option>
+            <option value="name_desc">Name (Z-A)</option>
+            <option value="rating_desc">Highest Rated</option>
+            <option value="newest">Newest</option>
+            <option value="price_asc">Price: Low to High</option>
+            <option value="price_desc">Price: High to Low</option>
+          </select>
+          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
+        </div>
+      </div>
+
+      {/* 3. Results Header Row with Count & View Mode Toggle */}
+      <div className="flex items-center justify-between pt-1">
+        {loading ? (
+          <div className="h-5 w-44 bg-slate-200 animate-pulse rounded-md" />
+        ) : (
+          <div className="text-sm sm:text-base font-semibold text-slate-700 pl-1">
+            <span className="text-blue-600 font-extrabold text-base sm:text-lg">{totalFilteredCount}</span> matching {activeType === "business" ? "businesses" : activeType === "service" ? "services" : activeType === "product" ? "products" : activeType === "course" ? "courses" : activeType === "job" ? "jobs" : "listings"}
+          </div>
+        )}
+
+        {/* Grid / List Switcher */}
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setViewMode("grid")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+              viewMode === "grid"
+                ? "bg-[#0070f3] text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
+            )}
+          >
+            <LayoutGrid className="size-3.5" />
+            <span>Grid</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+              viewMode === "list"
+                ? "bg-[#0070f3] text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
+            )}
+          >
+            <List className="size-3.5" />
+            <span>List</span>
+          </button>
+        </div>
+      </div>
 
       {/* 5. Two-Column Layout: Grid on Left, Filters Sidebar on Right */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -1301,7 +1385,7 @@ function CustomerExplorePageContent({
           {loading ? (
             <div className="space-y-6">
               <div className="h-6 w-56 bg-slate-200 animate-pulse rounded-md" />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "grid grid-cols-1 gap-4"}>
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <div
                     key={i}
@@ -1488,193 +1572,113 @@ function CustomerExplorePageContent({
                     </h2>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "grid grid-cols-1 gap-4"}>
                     {filteredProfessionals.map((pro) => {
                       const favKey = `professional-${pro.id}`;
                       const isFavorited = favorites.has(favKey);
-                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${pro.name} ${pro.city || ""}`)}`;
-                      const whatsappClean = (pro.whatsapp || pro.phone || "").replace(/[^0-9]/g, "");
                       const proUrl = buildProfessionalSeoUrl(pro);
 
                       return (
-                        <Card
+                        <div
                           key={pro.id}
                           onClick={() => router.push(proUrl)}
-                          className="rounded-2xl border shadow-xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
+                          className={cn(
+                            "bg-white border border-slate-200 hover:border-blue-400 rounded-2xl p-4 shadow-xs hover:shadow-md transition-all flex justify-between group cursor-pointer",
+                            viewMode === "grid" ? "flex-col" : "flex-col sm:flex-row sm:items-center gap-4"
+                          )}
                         >
-                          <div>
-                            <CardHeader className="pb-3 border-b bg-muted/10">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-start gap-3 min-w-0 flex-1">
-                                  <Link href={proUrl} className="shrink-0">
-                                    {pro.avatar_url ? (
-                                      <img
-                                        src={pro.avatar_url}
-                                        alt={pro.name}
-                                        className="size-11 rounded-full object-cover border border-border shadow-2xs shrink-0"
-                                      />
-                                    ) : (
-                                      <div className="size-11 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-xs border border-primary/20">
-                                        {pro.name.slice(0, 2).toUpperCase()}
-                                      </div>
-                                    )}
-                                  </Link>
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <Link href={proUrl}>
-                                        <CardTitle className="text-base font-bold text-foreground hover:text-primary transition-colors cursor-pointer truncate">
-                                          {pro.name}
-                                        </CardTitle>
-                                      </Link>
-                                      {pro.is_verified && (
-                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 text-[10px] px-1 py-0">
-                                          <ShieldCheck className="size-3 mr-0.5 text-emerald-600" /> Verified
-                                        </Badge>
-                                      )}
+                          <div className={cn("min-w-0", viewMode === "list" && "flex-1")}>
+                            {/* Top row: Avatar + Info + Heart */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-3 min-w-0 flex-1">
+                                {/* Circular Avatar */}
+                                <Link href={proUrl} onClick={(e) => e.stopPropagation()} className="shrink-0">
+                                  {pro.avatar_url ? (
+                                    <img
+                                      src={pro.avatar_url}
+                                      alt={pro.name}
+                                      className="size-14 rounded-full object-cover border-2 border-white shadow-xs shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="size-14 rounded-full bg-rose-100 text-rose-600 font-bold flex items-center justify-center shrink-0 text-base shadow-xs">
+                                      {pro.name.slice(0, 2).toUpperCase()}
                                     </div>
-                                    <span className="text-xs text-muted-foreground block mt-0.5 font-medium text-purple-600 dark:text-purple-400">
-                                      {pro.profession_type} {pro.experience_years ? `• ${pro.experience_years} Years Experience` : ""}
+                                  )}
+                                </Link>
+
+                                {/* Name & Badges */}
+                                <div className="min-w-0 flex-1">
+                                  <Link href={proUrl} onClick={(e) => e.stopPropagation()}>
+                                    <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                                      {pro.name}
+                                    </h3>
+                                  </Link>
+
+                                  {/* Verified Badge */}
+                                  {pro.is_verified && (
+                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/70 text-emerald-700 text-[10px] font-semibold mt-1">
+                                      <CheckCircle2 className="size-3 text-emerald-600 fill-emerald-100" />
+                                      <span>Verified</span>
+                                    </div>
+                                  )}
+
+                                  {/* Profession & Experience */}
+                                  <div className="flex items-center gap-1.5 text-xs text-purple-700 font-medium mt-1.5 truncate">
+                                    <Briefcase className="size-3.5 text-purple-600 shrink-0" />
+                                    <span className="truncate">
+                                      {pro.profession_type || pro.designation || "Professional"}
+                                      {pro.experience_years ? ` • ${pro.experience_years} Years Experience` : ""}
                                     </span>
                                   </div>
+
+                                  {/* Rating */}
+                                  <div className="flex items-center gap-1 text-xs text-slate-500 font-medium mt-1">
+                                    <Star className="size-3.5 fill-amber-400 text-amber-400 shrink-0" />
+                                    <span className="font-bold text-slate-800">{pro.avg_rating || "0.0"}</span>
+                                    <span className="text-slate-400">({pro.review_count || 0} reviews)</span>
+                                  </div>
                                 </div>
-
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleToggleFavorite(pro);
-                                  }}
-                                  className={`p-1.5 rounded-full transition-all cursor-pointer ${isFavorited ? "text-rose-600 bg-rose-50 dark:bg-rose-950/50" : "text-muted-foreground hover:text-rose-600"
-                                    }`}
-                                  title={isFavorited ? "Remove from favorites" : "Save to favorites"}
-                                >
-                                  <Heart className={`size-4 ${isFavorited ? "fill-rose-600" : ""}`} />
-                                </button>
-                              </div>
-                            </CardHeader>
-
-                            <CardContent className="p-4 space-y-3 text-xs">
-                              {/* Rating & Reviews */}
-                              <div className="flex items-center justify-between text-xs">
-                                <div className="flex items-center gap-1">
-                                  <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                                  <span className="font-bold text-foreground">{pro.avg_rating || "New"}</span>
-                                  <span className="text-muted-foreground">({pro.review_count || 0} reviews)</span>
-                                </div>
-                                <button
-                                  onClick={() => setReviewModalItem(pro)}
-                                  className="text-primary hover:underline text-[11px] font-semibold cursor-pointer"
-                                >
-                                  Write Review
-                                </button>
                               </div>
 
-                              {/* Address / Location */}
-                              <div className="flex items-start gap-1.5 text-muted-foreground text-xs">
-                                <MapPin className="size-3.5 shrink-0 mt-0.5 text-primary" />
-                                <span>{[pro.locality, pro.city, pro.state].filter(Boolean).join(", ") || "City location available"}</span>
-                              </div>
-
-                              {/* About snippet */}
-                              {pro.about && (
-                                <p className="text-muted-foreground text-xs line-clamp-2 italic">
-                                  &quot;{pro.about}&quot;
-                                </p>
-                              )}
-                            </CardContent>
-                          </div>
-
-                          {/* Action Buttons */}
-                          <CardFooter className="p-4 pt-0 border-t border-border/40 bg-muted/5 flex flex-col gap-2 mt-2">
-                            <div className="grid grid-cols-4 gap-1.5 w-full pt-3">
-                              {pro.phone ? (
-                                <a
-                                  href={`tel:${pro.phone}`}
-                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300 transition-colors"
-                                  title="Call Professional"
-                                >
-                                  <Phone className="size-4" />
-                                </a>
-                              ) : (
-                                <span className="opacity-40 p-2 text-center text-muted-foreground"><Phone className="size-4 mx-auto" /></span>
-                              )}
-
-                              {whatsappClean ? (
-                                <a
-                                  href={`https://wa.me/${whatsappClean}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 transition-colors"
-                                  title="Chat on WhatsApp"
-                                >
-                                  <MessageCircle className="size-4" />
-                                </a>
-                              ) : (
-                                <span className="opacity-40 p-2 text-center text-muted-foreground"><MessageCircle className="size-4 mx-auto" /></span>
-                              )}
-
-                              {pro.email ? (
-                                <a
-                                  href={`mailto:${pro.email}`}
-                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950 dark:text-purple-300 transition-colors"
-                                  title="Send Email"
-                                >
-                                  <Mail className="size-4" />
-                                </a>
-                              ) : (
-                                <span className="opacity-40 p-2 text-center text-muted-foreground"><Mail className="size-4 mx-auto" /></span>
-                              )}
-
-                              <a
-                                href={mapsUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center justify-center p-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 transition-colors"
-                                title="Directions on Map"
-                              >
-                                <Navigation className="size-4" />
-                              </a>
-                            </div>
-
-                            <div className="flex items-center gap-2 w-full pt-1">
-                              <Link href={buildProfessionalSeoUrl(pro)} className="flex-1">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className="w-full text-xs font-semibold gap-1.5 cursor-pointer"
-                                >
-                                  <Briefcase className="size-3.5" /> View Profile
-                                </Button>
-                              </Link>
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => {
-                                  setCheckoutItem({
-                                    id: pro.id,
-                                    name: `Consultation with ${pro.name}`,
-                                    type: "service",
-                                    provider_name: pro.name,
-                                    duration_minutes: 45,
-                                    suggested_price_inr: (pro as any).consultation_fee || 500,
-                                    institution_id: (pro as any).institution_profile_id || null,
-                                  });
-                                  setCheckoutOpen(true);
-                                }}
-                                className="flex-1 text-xs font-semibold gap-1.5 cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90"
-                              >
-                                <Calendar className="size-3.5" /> Book
-                              </Button>
+                              {/* Favorite Heart Button */}
                               <button
-                                onClick={() => setReportModalItem(pro)}
-                                className="text-[11px] text-muted-foreground hover:text-destructive px-1.5 py-1 shrink-0"
-                                title="Report listing"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleFavorite(pro);
+                                }}
+                                className="p-1 text-slate-400 hover:text-rose-600 transition-colors shrink-0 cursor-pointer"
+                                title={isFavorited ? "Remove from favorites" : "Save to favorites"}
                               >
-                                Report
+                                <Heart className={cn("size-4.5", isFavorited && "fill-rose-600 text-rose-600")} />
                               </button>
                             </div>
-                          </CardFooter>
-                        </Card>
+                          </div>
+
+                          {/* Bottom Action Buttons: View Profile and Call */}
+                          <div className={cn(
+                            "flex items-center gap-2 border-t border-slate-100 pt-3 mt-3",
+                            viewMode === "list" ? "sm:border-t-0 sm:pt-0 sm:mt-0 sm:w-56 shrink-0" : "w-full"
+                          )}>
+                            <Link
+                              href={proUrl}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex-1 text-center py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold transition-colors flex items-center justify-center gap-1 border border-sky-100"
+                            >
+                              <span>View Profile</span>
+                              <ArrowRight className="size-3" />
+                            </Link>
+
+                            <a
+                              href={`tel:${pro.phone || "9876543210"}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex-1 text-center py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 border border-sky-100"
+                            >
+                              <Phone className="size-3.5 text-sky-600" />
+                              <span>Call</span>
+                            </a>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -2596,6 +2600,55 @@ function CustomerExplorePageContent({
                 </select>
               </div>
             )}
+
+            {/* Rating Star Checklist */}
+            <div className="space-y-2 pt-2 border-t border-slate-200">
+              <label className="text-xs font-semibold text-slate-700 block">Rating</label>
+              <div className="space-y-1.5">
+                {[
+                  { r: 5, label: "5 Star & Above" },
+                  { r: 4, label: "4 Star & Above" },
+                  { r: 3, label: "3 Star & Above" },
+                ].map((item) => {
+                  const isSelected = minRating === item.r;
+                  return (
+                    <button
+                      key={item.r}
+                      type="button"
+                      onClick={() => setMinRating(isSelected ? 0 : item.r)}
+                      className={cn(
+                        "w-full text-left text-xs px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer group",
+                        isSelected
+                          ? "bg-blue-50 text-blue-700 font-semibold border border-blue-200/60"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      )}
+                    >
+                      <div className={cn(
+                        "size-3.5 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                        isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300 group-hover:border-slate-400 bg-white"
+                      )}>
+                        {isSelected && <div className="size-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Star className="size-3.5 fill-amber-400 text-amber-400 shrink-0" />
+                        <span className="text-xs font-medium text-slate-700">{item.label}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Add Listing CTA Button */}
+            <div className="pt-2">
+              <Link
+                href="/packages"
+                className="w-full h-10 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <Plus className="size-3.5" />
+                <span>Add Listing</span>
+              </Link>
+            </div>
 
             {/* Verified Only Toggle */}
             <div className="pt-2 border-t border-slate-200">
