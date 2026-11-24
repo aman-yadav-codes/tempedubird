@@ -459,11 +459,11 @@ export function buildDiscoverySeoUrl({
   const normType = (type || "").toLowerCase().trim();
   let prefix = "/businesses";
   if (normType === "professional" || normType === "professionals") prefix = "/professionals";
-  else if (normType === "product" || normType === "products") prefix = "/products";
+  else if (normType === "product" || normType === "products" || normType === "shopping") prefix = "/products";
   else if (normType === "course" || normType === "courses") prefix = "/courses";
   else if (normType === "job" || normType === "jobs") prefix = "/jobs";
-  else if (normType === "business" || normType === "businesses") prefix = "/businesses";
-  else if (normType === "service" || normType === "services") prefix = "/services";
+  else if (normType === "business" || normType === "businesses" || normType === "category" || normType === "categories") prefix = "/businesses";
+  else if (normType === "service" || normType === "services" || normType === "financial") prefix = "/services";
   else if (normType === "property" || normType === "properties") prefix = "/properties";
   else if (normType === "vehicle" || normType === "vehicles") prefix = "/vehicles";
   else if (normType === "event" || normType === "events") prefix = "/events";

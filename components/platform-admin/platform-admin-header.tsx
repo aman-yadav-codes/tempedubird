@@ -36,6 +36,15 @@ import {
   Building,
   Car,
   Globe,
+  LayoutGrid,
+  ShoppingBag,
+  Landmark,
+  TrendingUp,
+  Utensils,
+  Wrench,
+  Dumbbell,
+  Laptop,
+  Scissors,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -99,31 +108,33 @@ interface SearchResultsState {
   notes: SearchResultItem[];
 }
 
+const BUSINESS_MEGA_CATEGORIES = [
+  { label: "Automotive & Transport", categorySlug: "automotive-and-transport", icon: Car, bgClass: "bg-sky-100", iconClass: "text-sky-600" },
+  { label: "Education & Coaching", categorySlug: "education-and-coaching", icon: GraduationCap, bgClass: "bg-amber-100", iconClass: "text-amber-600" },
+  { label: "Fitness & Sports", categorySlug: "fitness-and-sports", icon: Dumbbell, bgClass: "bg-indigo-100", iconClass: "text-indigo-600" },
+  { label: "Food, Dining & Cafes", categorySlug: "food-dining-and-cafes", icon: Utensils, bgClass: "bg-red-100", iconClass: "text-red-600" },
+  { label: "Healthcare & Medical", categorySlug: "healthcare-and-medical", icon: Shield, bgClass: "bg-rose-100", iconClass: "text-rose-600" },
+  { label: "Home Services & Maintenance", categorySlug: "home-services-and-maintenance", icon: Wrench, bgClass: "bg-teal-100", iconClass: "text-teal-600" },
+  { label: "Hospitality & Events", categorySlug: "hospitality-and-events", icon: Sparkles, bgClass: "bg-purple-100", iconClass: "text-purple-600" },
+  { label: "IT & Digital Agencies", categorySlug: "it-and-digital-agencies", icon: Laptop, bgClass: "bg-violet-100", iconClass: "text-violet-600" },
+  { label: "Professional & Financial Services", categorySlug: "professional-and-financial-services", icon: Landmark, bgClass: "bg-emerald-100", iconClass: "text-emerald-600" },
+  { label: "Real Estate & Construction", categorySlug: "real-estate-and-construction", icon: Building, bgClass: "bg-orange-100", iconClass: "text-orange-600" },
+  { label: "Retail & Shopping", categorySlug: "retail-and-shopping", icon: ShoppingBag, bgClass: "bg-blue-100", iconClass: "text-blue-600" },
+  { label: "Salons & Personal Care", categorySlug: "salons-and-personal-care", icon: Scissors, bgClass: "bg-pink-100", iconClass: "text-pink-600" },
+];
+
 const TOP_NAV_ITEMS = [
   {
-    label: "Business",
+    label: "Categories",
     type: "business",
-    icon: Building2,
-    subcategories: [
-      { label: "All Businesses", categorySlug: "all-businesses" },
-      { label: "Automotive & Transport", categorySlug: "automotive-and-transport" },
-      { label: "Education & Coaching", categorySlug: "education-and-coaching" },
-      { label: "Fitness & Sports", categorySlug: "fitness-and-sports" },
-      { label: "Food, Dining & Cafes", categorySlug: "food-dining-and-cafes" },
-      { label: "Healthcare & Medical", categorySlug: "healthcare-and-medical" },
-      { label: "Home Services & Maintenance", categorySlug: "home-services-and-maintenance" },
-      { label: "Hospitality & Events", categorySlug: "hospitality-and-events" },
-      { label: "IT & Digital Agencies", categorySlug: "it-and-digital-agencies" },
-      { label: "Professional & Financial Services", categorySlug: "professional-and-financial-services" },
-      { label: "Real Estate & Construction", categorySlug: "real-estate-and-construction" },
-      { label: "Retail & Shopping", categorySlug: "retail-and-shopping" },
-      { label: "Salons & Personal Care", categorySlug: "salons-and-personal-care" },
-    ],
+    icon: LayoutGrid,
+    isSpecialCategory: true,
+    subcategories: BUSINESS_MEGA_CATEGORIES,
   },
   {
-    label: "Products",
+    label: "Shopping",
     type: "product",
-    icon: Package,
+    icon: ShoppingBag,
     subcategories: [
       { label: "All Products", categorySlug: "all-products" },
       { label: "Electronics & Gadgets", categorySlug: "electronics-and-gadgets" },
@@ -137,19 +148,15 @@ const TOP_NAV_ITEMS = [
     ],
   },
   {
-    label: "Professionals",
-    type: "professional",
-    icon: UserCheck,
+    label: "Events",
+    type: "event",
+    icon: Calendar,
     subcategories: [
-      { label: "All Professionals", categorySlug: "all-professionals" },
-      { label: "Doctors & Healthcare Specialists", categorySlug: "doctors-and-healthcare-specialists" },
-      { label: "Academic Tutors & Educators", categorySlug: "academic-tutors-and-education-specialists" },
-      { label: "Chartered Accountants & Financial", categorySlug: "chartered-accountants-and-financial-advisors" },
-      { label: "Legal & Law Experts", categorySlug: "legal-law-and-compliance-experts" },
-      { label: "Design, Architecture & Creative", categorySlug: "design-architecture-and-creative-experts" },
-      { label: "Business & Strategy Consultants", categorySlug: "business-strategy-and-management-consultants" },
-      { label: "Fitness & Wellness Trainers", categorySlug: "fitness-wellness-and-sports-trainers" },
-      { label: "Beauty & Styling Artists", categorySlug: "beauty-hair-and-styling-artists" },
+      { label: "All Events", categorySlug: "all-events" },
+      { label: "Corporate & Industry Events", categorySlug: "event-corporate-industry-events" },
+      { label: "Live Entertainment & Cultural Shows", categorySlug: "event-live-entertainment-cultural-shows" },
+      { label: "Sports & Fitness Tournaments", categorySlug: "event-sports-fitness-tournaments" },
+      { label: "Weddings & Social Galas", categorySlug: "event-weddings-social-galas" },
     ],
   },
   {
@@ -167,21 +174,6 @@ const TOP_NAV_ITEMS = [
     ],
   },
   {
-    label: "Jobs",
-    type: "job",
-    icon: Briefcase,
-    subcategories: [
-      { label: "All Job Openings", categorySlug: "all-job-openings" },
-      { label: "Administration & HR", categorySlug: "administration-hr" },
-      { label: "Automotive Engineering & Operations", categorySlug: "job-automotive-engineering-operations" },
-      { label: "Finance & Accounting", categorySlug: "finance-accounting" },
-      { label: "Healthcare & Medical Services", categorySlug: "job-healthcare-medical-services" },
-      { label: "Hospitality & Restaurant Culinary", categorySlug: "job-hospitality-restaurant-culinary" },
-      { label: "Real Estate & Construction", categorySlug: "job-real-estate-construction" },
-      { label: "Retail & Store Operations", categorySlug: "hospitality-retail-store-operations" },
-    ],
-  },
-  {
     label: "Property",
     type: "property",
     icon: Building,
@@ -194,7 +186,7 @@ const TOP_NAV_ITEMS = [
     ],
   },
   {
-    label: "Vehicles",
+    label: "Vehicle",
     type: "vehicle",
     icon: Car,
     subcategories: [
@@ -206,15 +198,16 @@ const TOP_NAV_ITEMS = [
     ],
   },
   {
-    label: "Events",
-    type: "event",
-    icon: Calendar,
+    label: "Financial",
+    type: "service",
+    icon: Landmark,
     subcategories: [
-      { label: "All Events", categorySlug: "all-events" },
-      { label: "Corporate & Industry Events", categorySlug: "event-corporate-industry-events" },
-      { label: "Live Entertainment & Cultural Shows", categorySlug: "event-live-entertainment-cultural-shows" },
-      { label: "Sports & Fitness Tournaments", categorySlug: "event-sports-fitness-tournaments" },
-      { label: "Weddings & Social Galas", categorySlug: "event-weddings-social-galas" },
+      { label: "All Financial Services", categorySlug: "all-financial-services" },
+      { label: "Chartered Accountants & Financial", categorySlug: "chartered-accountants-and-financial-advisors" },
+      { label: "Business Loans & Commercial Finance", categorySlug: "business-loans-financing" },
+      { label: "Insurance & Risk Advisory", categorySlug: "insurance-risk-advisory" },
+      { label: "Investment & Wealth Management", categorySlug: "wealth-investment-management" },
+      { label: "Legal, Tax & Corporate Compliance", categorySlug: "legal-law-and-compliance-experts" },
     ],
   },
 ];
@@ -379,9 +372,12 @@ export function PlatformAdminHeader() {
   }, []);
 
   const getItemSubcategories = (item: (typeof TOP_NAV_ITEMS)[0]) => {
+    if (item.label === "Financial" || (item as any).isSpecialCategory) {
+      return item.subcategories;
+    }
     const fromDb = verticalCategories[item.type];
     if (fromDb && fromDb.length > 0) {
-      const allItem = { label: `All ${item.label}`, categorySlug: `all-${item.type}` };
+      const allItem = { label: `All ${item.label === "Vehicle" ? "Vehicles" : item.label}`, categorySlug: `all-${item.type}` };
       return [allItem, ...fromDb];
     }
     return item.subcategories;
@@ -556,52 +552,129 @@ export function PlatformAdminHeader() {
           </Link>
         </div>
 
-        {/* Center: Top Navigation Menu (Business, Products, Professionals, Courses, Jobs, Property, Events) */}
+        {/* Center: Top Navigation Menu (Categories, Shopping, Events, Courses, Property, Vehicle, Financial) */}
         <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
-          {TOP_NAV_ITEMS.map((item) => (
-            <DropdownMenu key={item.label}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-800 hover:text-sky-600 hover:bg-sky-50/80 transition-colors cursor-pointer outline-none group"
-                >
-                  <span>{item.label}</span>
-                  <ChevronDown className="size-3 text-slate-400 group-hover:text-sky-600 transition-transform group-data-[state=open]:rotate-180" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64 max-h-[420px] overflow-y-auto p-1.5 space-y-0.5 z-50 rounded-xl shadow-xl border-sky-100 scrollbar-thin">
-                <div className="sticky top-0 z-10 px-2.5 py-1.5 mb-1 bg-sky-50/95 backdrop-blur-xs rounded-md flex items-center justify-between border-b border-sky-100 shadow-2xs">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
-                    Explore {item.label}
-                  </span>
-                  <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
-                    <Link
-                      href={getNavHref(item)}
-                      className="text-[10px] text-sky-600 hover:underline font-bold cursor-pointer"
+          {TOP_NAV_ITEMS.map((item) => {
+            if ((item as any).isSpecialCategory) {
+              return (
+                <DropdownMenu key={item.label}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white shadow-xs cursor-pointer outline-none transition-colors group"
                     >
-                      View All →
-                    </Link>
-                  </DropdownMenuItem>
-                </div>
-                {getItemSubcategories(item).map((sub) => {
-                  const navHref = getNavHref(item, sub);
-                  return (
-                    <DropdownMenuItem
-                      key={sub.label}
-                      asChild
-                    >
+                      <LayoutGrid className="size-3.5" />
+                      <span>{item.label}</span>
+                      <ChevronDown className="size-3 text-sky-200 group-hover:text-white transition-transform group-data-[state=open]:rotate-180" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[720px] max-w-[95vw] p-4 z-50 rounded-2xl shadow-2xl border-sky-100 bg-white">
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <div className="size-6 rounded-md bg-sky-100 text-sky-600 flex items-center justify-center">
+                          <LayoutGrid className="size-3.5" />
+                        </div>
+                        <span className="text-sm font-bold text-slate-900">
+                          Business Categories
+                        </span>
+                      </div>
+                      <span className="text-xs text-sky-600 italic font-medium">
+                        Find the right business, faster!
+                      </span>
+                    </div>
+
+                    {/* 3-Column Categories Grid matching mockup */}
+                    <div className="grid grid-cols-3 gap-x-3 gap-y-1">
+                      {BUSINESS_MEGA_CATEGORIES.map((cat) => {
+                        const CatIcon = cat.icon;
+                        const navHref = getNavHref(item, cat);
+                        return (
+                          <DropdownMenuItem key={cat.label} asChild className="p-0 focus:bg-transparent">
+                            <Link
+                              href={navHref}
+                              className="flex items-center justify-between p-2 rounded-xl hover:bg-sky-50 text-slate-700 hover:text-sky-600 transition-colors group cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={`size-6 rounded-md ${cat.bgClass} flex items-center justify-center shrink-0`}>
+                                  <CatIcon className={`size-3 ${cat.iconClass}`} />
+                                </div>
+                                <span className="text-xs font-medium truncate">
+                                  {cat.label}
+                                </span>
+                              </div>
+                              <ChevronRight className="size-3 text-slate-300 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-all shrink-0 ml-1" />
+                            </Link>
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </div>
+
+                    {/* Footer Banner */}
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between bg-sky-50/70 -mx-4 -mb-4 px-4 py-2.5 rounded-b-2xl">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                        <TrendingUp className="size-4 text-sky-600" />
+                        <span>Explore 12 Business Categories to Grow Your Business</span>
+                      </div>
+                      <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
+                        <Link
+                          href={getNavHref(item)}
+                          className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-xs cursor-pointer transition-colors"
+                        >
+                          View All Categories →
+                        </Link>
+                      </DropdownMenuItem>
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            }
+
+            return (
+              <DropdownMenu key={item.label}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-800 hover:text-sky-600 hover:bg-sky-50/80 transition-colors cursor-pointer outline-none group"
+                  >
+                    <span>{item.label}</span>
+                    <ChevronDown className="size-3 text-slate-400 group-hover:text-sky-600 transition-transform group-data-[state=open]:rotate-180" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64 max-h-[420px] overflow-y-auto p-1.5 space-y-0.5 z-50 rounded-xl shadow-xl border-sky-100 scrollbar-thin">
+                  <div className="sticky top-0 z-10 px-2.5 py-1.5 mb-1 bg-sky-50/95 backdrop-blur-xs rounded-md flex items-center justify-between border-b border-sky-100 shadow-2xs">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
+                      Explore {item.label}
+                    </span>
+                    <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
                       <Link
-                        href={navHref}
-                        className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50 block w-full"
+                        href={getNavHref(item)}
+                        className="text-[10px] text-sky-600 hover:underline font-bold cursor-pointer"
                       >
-                        {sub.label}
+                        View All →
                       </Link>
                     </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ))}
+                  </div>
+                  {getItemSubcategories(item).map((sub) => {
+                    const navHref = getNavHref(item, sub);
+                    return (
+                      <DropdownMenuItem
+                        key={sub.label}
+                        asChild
+                      >
+                        <Link
+                          href={navHref}
+                          className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50 block w-full"
+                        >
+                          {sub.label}
+                        </Link>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          })}
         </nav>
 
         {/* Right: + Add Listing, Cart, Country Flag, Location Selector, User Profile */}
