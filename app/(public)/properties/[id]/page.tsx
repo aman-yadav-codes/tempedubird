@@ -115,11 +115,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
-  const { city, categorySlug } = parseDiscoverySeoSlug(rawId);
+  const { city, categorySlug, categoryName } = parseDiscoverySeoSlug(rawId);
   const locationText = city ? ` in ${city.charAt(0).toUpperCase() + city.slice(1)}` : "";
-  const catText = categorySlug ? `${categorySlug.replace(/-/g, " ")} ` : "";
+  const catText = categoryName || (categorySlug ? categorySlug.replace(/-/g, " ") : "Properties & Real Estate");
   return {
-    title: `Explore ${catText}Properties & Real Estate${locationText} | 143Panda`,
+    title: `${catText}${locationText} | 143Panda`,
     description: `Discover verified real estate, commercial plots, and homes${locationText}.`,
   };
 }
@@ -138,7 +138,7 @@ export default async function PropertyAliasOrListingPage({
   }
 
   // 2. Otherwise treat as a category/location filter alias
-  const { categorySlug, city } = parseDiscoverySeoSlug(rawId);
+  const { categorySlug, categoryName, city } = parseDiscoverySeoSlug(rawId);
   const sp = searchParams ? await searchParams : {};
   const query = typeof sp.q === "string" ? sp.q : "";
 
@@ -147,6 +147,7 @@ export default async function PropertyAliasOrListingPage({
       key={`property-${rawId}`}
       initialType="property"
       initialCategory={categorySlug}
+      initialCategoryName={categoryName}
       initialCity={city}
       initialQuery={query}
     />

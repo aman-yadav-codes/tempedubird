@@ -2,6 +2,23 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db/db";
 import { parseDiscoverySeoSlug } from "@/lib/utils/seo-slug";
 import CustomerExplorePage from "@/app/(public)/explore/page";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }> | { id: string };
+}): Promise<Metadata> {
+  const resolved = await params;
+  const rawId = resolved.id;
+  const { categorySlug, categoryName, city } = parseDiscoverySeoSlug(rawId);
+  const locationText = city ? ` in ${city.charAt(0).toUpperCase() + city.slice(1)}` : "";
+  const catText = categoryName || (categorySlug ? categorySlug.replace(/-/g, " ") : "Professionals & Consultants");
+  return {
+    title: `${catText}${locationText} | 143Panda`,
+    description: `Discover verified experts, doctors, tutors, and consultants${locationText}.`,
+  };
+}
 
 export default async function ProfessionalsAliasOrListingPage({
   params,
@@ -34,7 +51,7 @@ export default async function ProfessionalsAliasOrListingPage({
   }
 
   // 2. Otherwise it's a category/location listing SEO URL (e.g. "doctors-and-healthcare-in-varanasi")
-  const { categorySlug, city } = parseDiscoverySeoSlug(rawId);
+  const { categorySlug, categoryName, city } = parseDiscoverySeoSlug(rawId);
   const sp = searchParams ? await searchParams : {};
   const query = typeof sp.q === "string" ? sp.q : "";
 
@@ -42,6 +59,7 @@ export default async function ProfessionalsAliasOrListingPage({
     <CustomerExplorePage
       initialType="professional"
       initialCategory={categorySlug}
+      initialCategoryName={categoryName}
       initialCity={city}
       initialQuery={query}
     />

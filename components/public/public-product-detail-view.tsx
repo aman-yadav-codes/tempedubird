@@ -66,14 +66,11 @@ export function PublicProductDetailView({ product, seller, reviews = [] }: Props
   const storeSlugOrId = effectiveSeller?.slug || effectiveSeller?.id || product.business_slug || product.business_id;
 
   const storeUrl = useMemo(() => {
-    if (effectiveSeller && (effectiveSeller.slug || effectiveSeller.id)) {
-      if (effectiveSeller.category_name || effectiveSeller.category_slug) {
-        return buildBusinessSeoUrl(effectiveSeller);
-      }
-      return `/business/${effectiveSeller.slug || effectiveSeller.id}`;
-    }
     if (storeSlugOrId) {
       return `/business/${storeSlugOrId}`;
+    }
+    if (effectiveSeller && (effectiveSeller.slug || effectiveSeller.id)) {
+      return `/business/${effectiveSeller.slug || effectiveSeller.id}`;
     }
     return "#";
   }, [effectiveSeller, storeSlugOrId]);

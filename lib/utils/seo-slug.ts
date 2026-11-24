@@ -130,9 +130,13 @@ export function buildBusinessSeoUrl(biz: {
   state?: string | null;
   country_code?: string | null;
 }): string {
-  const catSlug = slugify(biz.category_name || biz.category_slug || "services") || "services";
-  const subcatSlug = slugify(biz.subcategory_name || biz.subcategory_slug || "");
   const baseBizSlug = slugify(biz.slug || biz.name || `business-${biz.id}`);
+  const rawCat = biz.category_name || biz.category_slug || "";
+  const catSlug = slugify(rawCat);
+  if (!catSlug || catSlug === "services" || catSlug === "general" || catSlug === "businesses") {
+    return `/business/${baseBizSlug}`;
+  }
+  const subcatSlug = slugify(biz.subcategory_name || biz.subcategory_slug || "");
 
   // Format location: locality, city, state
   const locParts = [biz.locality, biz.city, biz.state].filter(Boolean).map((s) => slugify(s));
@@ -498,12 +502,115 @@ export function buildDiscoverySeoUrl({
   return prefix;
 }
 
+export const KNOWN_CATEGORY_SLUG_LABELS: Record<string, string> = {
+  // Property
+  "all-properties": "Properties & Real Estate",
+  "property-commercial-properties": "Commercial Properties",
+  "property-residential-real-estate": "Residential Real Estate",
+  "property-industrial-warehousing-estates": "Industrial & Warehousing Estates",
+  "property-plots-development-lands": "Plots & Development Lands",
+  "commercial-properties": "Commercial Properties",
+  "residential-real-estate": "Residential Real Estate",
+  "industrial-warehousing-estates": "Industrial & Warehousing Estates",
+  "plots-development-lands": "Plots & Development Lands",
+  // Vehicles
+  "all-vehicles": "Vehicles & Mobility",
+  "vehicle-passenger-cars-suvs": "Passenger Cars & SUVs",
+  "vehicle-commercial-transport-vehicles": "Commercial & Transport Vehicles",
+  "vehicle-two-wheelers-motorcycles": "Two-Wheelers & Motorcycles",
+  "vehicle-luxury-exotic-automobiles": "Luxury & Exotic Automobiles",
+  "passenger-cars-suvs": "Passenger Cars & SUVs",
+  "commercial-transport-vehicles": "Commercial & Transport Vehicles",
+  "two-wheelers-motorcycles": "Two-Wheelers & Motorcycles",
+  "luxury-exotic-automobiles": "Luxury & Exotic Automobiles",
+  // Events
+  "all-events": "Events & Expos",
+  "event-corporate-industry-events": "Corporate & Industry Events",
+  "event-live-entertainment-cultural-shows": "Live Entertainment & Cultural Shows",
+  "event-sports-fitness-tournaments": "Sports & Fitness Tournaments",
+  "event-weddings-social-galas": "Weddings & Social Galas",
+  "corporate-industry-events": "Corporate & Industry Events",
+  "live-entertainment-cultural-shows": "Live Entertainment & Cultural Shows",
+  "sports-fitness-tournaments": "Sports & Fitness Tournaments",
+  "weddings-social-galas": "Weddings & Social Galas",
+  // Professionals
+  "all-professionals": "Professionals & Consultants",
+  "doctors-and-healthcare-specialists": "Doctors & Healthcare Specialists",
+  "academic-tutors-and-education-specialists": "Academic, Tutors & Education Specialists",
+  "chartered-accountants-and-financial-advisors": "Chartered Accountants & Financial Advisors",
+  "legal-law-and-compliance-experts": "Legal & Law Experts",
+  "design-architecture-and-creative-experts": "Design, Architecture & Creative Experts",
+  "business-strategy-and-management-consultants": "Business & Strategy Consultants",
+  "fitness-wellness-and-sports-trainers": "Fitness & Wellness Trainers",
+  "beauty-hair-and-styling-artists": "Beauty & Styling Artists",
+  // Jobs
+  "all-job-openings": "Job Openings & Careers",
+  "administration-hr": "Administration & HR",
+  "job-automotive-engineering-operations": "Automotive Engineering & Operations",
+  "finance-accounting": "Finance & Accounting",
+  "job-healthcare-medical-services": "Healthcare & Medical Services",
+  "job-hospitality-restaurant-culinary": "Hospitality & Restaurant Culinary",
+  "job-real-estate-construction": "Real Estate & Construction",
+  "hospitality-retail-store-operations": "Retail & Store Operations",
+  "automotive-engineering-operations": "Automotive Engineering & Operations",
+  "healthcare-medical-services": "Healthcare & Medical Services",
+  "hospitality-restaurant-culinary": "Hospitality & Restaurant Culinary",
+  "real-estate-construction": "Real Estate & Construction",
+  // Products
+  "all-products": "Products & Merchandise",
+  "electronics-and-gadgets": "Electronics & Gadgets",
+  "automobiles-cars-and-electric-vehicles": "Automobiles, Cars & Electric Vehicles",
+  "building-materials-and-construction-hardware": "Building Materials & Construction",
+  "books-and-study-materials": "Books & Study Materials",
+  "fashion-accessories-and-footwear": "Fashion Accessories & Apparel",
+  "packaged-foods-and-gourmet-groceries": "Bakery & Gourmet Foods",
+  "event-decor-and-celebration-supplies": "Event Supplies & Decor",
+  "kitchenware-and-appliances": "Kitchenware & Appliances",
+  // Businesses
+  "all-businesses": "Local Businesses & Stores",
+  "education-and-coaching": "Education & Coaching",
+  "fitness-and-sports": "Fitness & Sports",
+  "food-dining-and-cafes": "Food, Dining & Cafes",
+  "healthcare-and-medical": "Healthcare & Medical",
+  "home-services-and-maintenance": "Home Services & Maintenance",
+  "hospitality-and-events": "Hospitality & Events",
+  "it-and-digital-agencies": "IT & Digital Agencies",
+  "professional-and-financial-services": "Professional & Financial Services",
+  "real-estate-and-construction": "Real Estate & Construction",
+  "retail-and-shopping": "Retail & Shopping",
+  "salons-and-personal-care": "Salons & Personal Care",
+};
+
+/**
+ * Format any category slug into a clean, human-readable display title.
+ * E.g. "property-commercial-properties" -> "Commercial Properties"
+ * E.g. "academic-tutors-and-education-specialists" -> "Academic, Tutors & Education Specialists"
+ */
+export function formatCategorySlug(slug?: string | null): string {
+  if (!slug) return "";
+  const trimmed = slug.trim().toLowerCase();
+  if (KNOWN_CATEGORY_SLUG_LABELS[trimmed]) {
+    return KNOWN_CATEGORY_SLUG_LABELS[trimmed];
+  }
+  // Strip known vertical prefixes (e.g. property-, vehicle-, event-, job-, etc.)
+  const stripped = trimmed.replace(/^(property|vehicle|event|job|service|product|business)-/, "");
+  if (KNOWN_CATEGORY_SLUG_LABELS[stripped]) {
+    return KNOWN_CATEGORY_SLUG_LABELS[stripped];
+  }
+  // Title-case words and convert "and" to "&"
+  return stripped
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ")
+    .replace(/\bAnd\b/g, "&");
+}
+
 /**
  * Parse structured discovery / listing slug
- * Example: "doctors-and-healthcare-in-varanasi" -> { categorySlug: "doctors-and-healthcare", locationSlug: "varanasi", city: "Varanasi" }
+ * Example: "doctors-and-healthcare-in-varanasi" -> { categorySlug: "doctors-and-healthcare", categoryName: "Doctors & Healthcare Specialists", locationSlug: "varanasi", city: "Varanasi" }
  */
 export function parseDiscoverySeoSlug(slug: string | undefined | null) {
-  if (!slug) return { categorySlug: "", locationSlug: "", city: "" };
+  if (!slug) return { categorySlug: "", categoryName: "", locationSlug: "", city: "" };
   const raw = String(slug).trim();
 
   let categorySlug = raw;
@@ -533,5 +640,7 @@ export function parseDiscoverySeoSlug(slug: string | undefined | null) {
         .join(" ")
     : "";
 
-  return { categorySlug, locationSlug, city: extractCleanCity(city) || city };
+  const categoryName = categorySlug ? formatCategorySlug(categorySlug) : "";
+
+  return { categorySlug, categoryName, locationSlug, city: extractCleanCity(city) || city };
 }

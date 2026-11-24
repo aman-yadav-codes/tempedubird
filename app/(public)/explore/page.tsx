@@ -66,7 +66,7 @@ import { useAuthStore, useCartStore } from "@/store";
 import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { buildBusinessSeoUrl, buildProfessionalSeoUrl, buildCourseSeoUrl, buildJobSeoUrl, buildDiscoverySeoUrl, slugify, extractCleanCity } from "@/lib/utils/seo-slug";
+import { buildBusinessSeoUrl, buildProfessionalSeoUrl, buildCourseSeoUrl, buildJobSeoUrl, buildDiscoverySeoUrl, slugify, extractCleanCity, formatCategorySlug } from "@/lib/utils/seo-slug";
 import { getCatalogCountryMeta } from "@/lib/config/country-config";
 import { OrderCheckoutDialog, CheckoutItem } from "@/components/checkout/order-checkout-dialog";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
@@ -174,6 +174,7 @@ interface DiscoveryItem {
 export interface CustomerExplorePageProps {
   initialType?: string;
   initialCategory?: string;
+  initialCategoryName?: string;
   initialSubcategory?: string;
   initialCity?: string;
   initialQuery?: string;
@@ -182,6 +183,7 @@ export interface CustomerExplorePageProps {
 function CustomerExplorePageContent({
   initialType,
   initialCategory,
+  initialCategoryName,
   initialSubcategory,
   initialCity,
   initialQuery,
@@ -198,7 +200,7 @@ function CustomerExplorePageContent({
   const urlCategoryParam = isAllCat ? "" : rawCatParam;
   const urlSubcategoryParam = searchParams?.get("subcategory") || searchParams?.get("subcategory_slug") || initialSubcategory || "";
   const urlCategory = isAllCat ? null : (searchParams?.get("categoryId") ? Number(searchParams.get("categoryId")) : null);
-  const urlCategoryName = isAllCat ? "" : (searchParams?.get("categoryName") || "");
+  const urlCategoryName = isAllCat ? "" : (searchParams?.get("categoryName") || initialCategoryName || formatCategorySlug(urlCategoryParam) || "");
 
   const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
 
@@ -308,16 +310,18 @@ function CustomerExplorePageContent({
               if (cat.parent_name) setSelectedCategoryName(cat.parent_name);
             } else {
               setSelectedCategoryId(Number(cat.id));
-              setSelectedCategoryName(cat.name || urlCategoryParam);
+              setSelectedCategoryName(cat.name || formatCategorySlug(urlCategoryParam) || urlCategoryParam);
               setSelectedCategorySlug(cat.slug || urlCategoryParam);
             }
           } else {
-            setSelectedCategoryName(urlCategoryParam);
+            const formatted = formatCategorySlug(urlCategoryParam) || urlCategoryParam;
+            setSelectedCategoryName(formatted);
             setSelectedCategorySlug(urlCategoryParam);
           }
         })
         .catch(() => {
-          setSelectedCategoryName(urlCategoryParam);
+          const formatted = formatCategorySlug(urlCategoryParam) || urlCategoryParam;
+          setSelectedCategoryName(formatted);
           setSelectedCategorySlug(urlCategoryParam);
         });
     } else if (urlCategory) {
