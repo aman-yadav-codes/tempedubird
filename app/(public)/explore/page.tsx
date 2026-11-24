@@ -1221,58 +1221,41 @@ function CustomerExplorePageContent({
           </button>
         </div>
 
-        {/* Location Dropdown Pill */}
+        {/* Listing Type Dropdown Pill (Replaces location: Job Vacancy, Professionals, Product & Goods, Course & Education, etc.) */}
         <div className="flex items-center gap-1.5 h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 hover:border-amber-400 hover:bg-amber-50/20 transition-all">
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(new CustomEvent("edubird-open-location-dialog"));
-              }
-            }}
-            className="p-0.5 rounded hover:bg-amber-100/60 transition-colors cursor-pointer"
-            title="Open location selector dialog"
-          >
-            <MapPin className="size-3.5 text-amber-500 shrink-0" />
-          </button>
+          <Layers className="size-3.5 text-amber-500 shrink-0" />
           <select
-            value={city || (userGlobalLocation !== "All Locations" ? userGlobalLocation : "")}
+            value={activeType}
             onChange={(e) => {
-              const val = e.target.value;
-              if (val === "__CUSTOM_LOCATION_MODAL__") {
-                if (typeof window !== "undefined") {
-                  window.dispatchEvent(new CustomEvent("edubird-open-location-dialog"));
-                }
-                return;
-              }
-              if (!val || val === "All Locations") {
-                setCity("");
-                setGlobalLocation("All Locations");
-                syncUrlParams({ city: "" });
-                return;
-              }
-              const clean = extractCleanCity(val) || val;
-              setCity(clean);
-              setGlobalLocation(val);
-              syncUrlParams({ city: clean });
+              const newType = e.target.value as any;
+              setActiveType(newType);
+              setSelectedCategoryId(null);
+              setSelectedCategoryName("");
+              setSelectedCategorySlug("");
+              setSelectedSubcategoryId(null);
+              setSelectedSubcategoryName("");
+              setSelectedSubcategorySlug("");
+              setSelectedBusinessCategoryId(null);
+
+              const locCity = city || extractCleanCity(userGlobalLocation) || null;
+              const newPath = buildDiscoverySeoUrl({
+                type: newType,
+                city: locCity,
+              });
+              const qParam = productNameSearch && productNameSearch.trim() ? `?q=${encodeURIComponent(productNameSearch.trim())}` : "";
+              router.push(`${newPath}${qParam}`);
             }}
             className="bg-transparent text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none cursor-pointer pr-3 appearance-none max-w-[170px] sm:max-w-[220px] truncate"
           >
-            <option value="" className="bg-white text-slate-900">All Locations</option>
-            {/* If currently selected location is active and not already in availableLocations, render it */}
-            {displayLocationText && displayLocationText !== "All Locations" && !availableLocations.some(l => l.name.toLowerCase() === displayLocationText.toLowerCase()) && (
-              <option value={displayLocationText} className="bg-white text-slate-900 font-bold">
-                📍 {displayLocationText}
-              </option>
-            )}
-            {availableLocations.map((loc) => (
-              <option key={loc.id} value={loc.name} className="bg-white text-slate-900">
-                {loc.name}
-              </option>
-            ))}
-            <option value="__CUSTOM_LOCATION_MODAL__" className="bg-amber-50 text-amber-700 font-bold">
-              🔍 Change Location / Worldwide...
-            </option>
+            <option value="job" className="bg-white text-slate-900">Job Vacancy</option>
+            <option value="professional" className="bg-white text-slate-900">Professionals</option>
+            <option value="product" className="bg-white text-slate-900">Product &amp; Goods</option>
+            <option value="course" className="bg-white text-slate-900">Course &amp; Education</option>
+            <option value="business" className="bg-white text-slate-900">Businesses</option>
+            <option value="property" className="bg-white text-slate-900">Property</option>
+            <option value="vehicle" className="bg-white text-slate-900">Vehicle</option>
+            <option value="event" className="bg-white text-slate-900">Events</option>
+            <option value="all" className="bg-white text-slate-900">All Listings</option>
           </select>
           <ChevronDown className="size-3 text-slate-400 pointer-events-none shrink-0" />
         </div>
@@ -2484,40 +2467,7 @@ function CustomerExplorePageContent({
               </button>
             </div>
 
-            {/* 1. Main Business Type Filter (First) */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Building2 className="size-3.5 text-amber-500" />
-                Main Business Type
-              </label>
-              <div className="relative">
-                <select
-                  value={selectedBusinessCategoryId || ""}
-                  onChange={(e) => {
-                    const val = e.target.value ? Number(e.target.value) : null;
-                    setSelectedBusinessCategoryId(val);
-                    setSelectedCategoryId(null);
-                    setSelectedCategoryName("");
-                    setSelectedCategorySlug("");
-                    setSelectedSubcategoryId(null);
-                    setSelectedSubcategoryName("");
-                    setSelectedSubcategorySlug("");
-                    syncUrlParams({ category: null, subcategory: null });
-                  }}
-                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-semibold"
-                >
-                  <option value="">All Business Types ({businessCategories.length})</option>
-                  {businessCategories.map((bc) => (
-                    <option key={bc.id} value={bc.id}>
-                      {bc.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-
-            {/* Particular Category Filter (Cascading based on Main Business Type & Listing Type) */}
+            {/* Category Filter */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
                 <span>
