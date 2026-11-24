@@ -573,7 +573,7 @@ const navItems: SidebarItem[] = [
         icon: Settings,
         children: [
             { title: "General", url: "/admin/settings", icon: Palette },
-            { title: "Packages", url: "/admin/settings/packages", icon: Boxes },
+            { title: "Packages", url: "/workspace/subscription", icon: Boxes },
             { title: "Performance Settings", url: "/admin/settings/performance", icon: Trophy },
             { title: "Controls", url: "/admin/notifications/settings", permissionPath: "/admin/notifications/settings", icon: Settings },
             { title: "Support", url: "/admin/support", icon: LifeBuoy },
@@ -695,6 +695,14 @@ function getActiveSidebarLeaf(
             return;
         }
 
+        if (item.url === "/workspace/subscription") {
+            const normPath = normalizeAdminPath(pathname);
+            if (normPath === "/workspace/subscription" || normPath === "/admin/subscription" || normPath === "/admin/settings/subscription" || normPath === "/admin/settings/packages") {
+                matches.push({ key: item.url, pathLength: 999 });
+            }
+            return;
+        }
+
         if (item.url.startsWith("/admin/categories")) {
             const itemType = item.url.includes("type=")
                 ? item.url.split("type=")[1]?.split("&")[0]
@@ -801,7 +809,10 @@ export function AppSidebar() {
     const router = useRouter();
     const { user, accessToken, clearAuth } = useAuthStore();
     const canonicalPathname = toCanonicalAdminPath(pathname);
-    const roleHref = (url: string) => toRoleRoutePath(url, user);
+    const roleHref = (url: string) => {
+        if (url === "/workspace/subscription") return "/workspace/subscription";
+        return toRoleRoutePath(url, user);
+    };
     const [logoutOpen, setLogoutOpen] = useState(false);
     const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -1308,7 +1319,7 @@ export function AppSidebar() {
                     return [{
                         ...item,
                         children: item.children.filter((child) => {
-                            if (child.url === "/admin/settings/packages") {
+                            if (child.url === "/workspace/subscription" || child.url === "/admin/settings/packages") {
                                 // "we need packages option in setting tab which only business owner can see and those pckages will be created by platform admin only"
                                 const isBusinessOwner = isPlatformAdmin || isInstitutionAdmin ||
                                     Boolean(user?.role_codes?.includes("business_owner")) ||
