@@ -167,7 +167,7 @@ type ActiveTab = "all" | "products" | "services" | "professionals" | "courses" |
 export function TrendingLocationCategories({ location }: TrendingLocationCategoriesProps) {
   const [data, setData] = useState<TrendingCategoriesResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("all");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("businesses");
 
   const effectiveLoc = location?.trim() || "Varanasi";
 
@@ -295,27 +295,27 @@ export function TrendingLocationCategories({ location }: TrendingLocationCategor
           </div>
         </div>
 
-        {/* 5-Vertical Category Filter Tabs */}
+        {/* Category Filter Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar border-b border-border/40">
           <button
             type="button"
-            onClick={() => setActiveTab("all")}
+            onClick={() => setActiveTab("businesses")}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
-              activeTab === "all"
+              activeTab === "businesses"
                 ? "bg-primary text-primary-foreground shadow-xs"
                 : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
             }`}
           >
-            <Layers className="size-3.5" />
-            <span>All Trending</span>
+            <Building2 className="size-3.5" />
+            <span>Business</span>
             <span
               className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                activeTab === "all"
+                activeTab === "businesses"
                   ? "bg-primary-foreground/20 text-primary-foreground"
                   : "bg-muted text-foreground"
               }`}
             >
-              {counts.total}
+              {counts.businesses}
             </span>
           </button>
 
@@ -336,26 +336,6 @@ export function TrendingLocationCategories({ location }: TrendingLocationCategor
               }`}
             >
               {counts.products}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("services")}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
-              activeTab === "services"
-                ? "bg-amber-600 text-white shadow-xs"
-                : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
-            }`}
-          >
-            <Wrench className="size-3.5 text-amber-500" />
-            <span>Services</span>
-            <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                activeTab === "services" ? "bg-white/20 text-white" : "bg-muted text-foreground"
-              }`}
-            >
-              {counts.services}
             </span>
           </button>
 
@@ -416,26 +396,6 @@ export function TrendingLocationCategories({ location }: TrendingLocationCategor
               }`}
             >
               {counts.jobs}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("businesses")}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
-              activeTab === "businesses"
-                ? "bg-indigo-600 text-white shadow-xs"
-                : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60"
-            }`}
-          >
-            <Building2 className="size-3.5 text-indigo-500" />
-            <span>Businesses</span>
-            <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                activeTab === "businesses" ? "bg-white/20 text-white" : "bg-muted text-foreground"
-              }`}
-            >
-              {counts.businesses}
             </span>
           </button>
 
