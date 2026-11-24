@@ -1873,8 +1873,14 @@ function CustomerExplorePageContent({
                   </h2>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredJobs.map((j) => (
-                      <Card key={j.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card">
+                    {filteredJobs.map((j) => {
+                      const jobUrl = buildJobSeoUrl(j);
+                      return (
+                        <Card
+                          key={j.id}
+                          onClick={() => router.push(jobUrl)}
+                          className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card cursor-pointer group"
+                        >
                         <CardHeader className="p-4 pb-2">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
@@ -1939,11 +1945,11 @@ function CustomerExplorePageContent({
                           </div>
                         </CardContent>
                         <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
-                          <Link href={buildJobSeoUrl(j)} className="flex-1">
+                          <Link href={jobUrl} className="flex-1" onClick={(e) => e.stopPropagation()}>
                             <Button
                               size="sm"
                               variant="outline"
-                              className="w-full text-xs font-semibold"
+                              className="w-full text-xs font-semibold cursor-pointer"
                             >
                               View Details
                             </Button>
@@ -1968,7 +1974,8 @@ function CustomerExplorePageContent({
                           </Button>
                         </CardFooter>
                       </Card>
-                    ))}
+                    );
+                  })}
                   </div>
                 </div>
               )}

@@ -595,7 +595,46 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
       };
     }
 
-    // 5. Try finding Job Opening
+    // 5. Try finding Job Opening in staff_job_postings
+    try {
+      const jobRes = await db.query(
+        `SELECT 
+          j.*,
+          i.name AS institution_name,
+          i.slug AS institution_slug,
+          i.city AS institution_city,
+          i.phone AS institution_phone
+        FROM staff_job_postings j
+        LEFT JOIN institution_profiles i ON i.id = j.institution_id
+        WHERE j.slug = $1 
+           OR j.slug = $2 
+           OR (j.id = $3 AND $3 > 0)
+           OR j.slug ILIKE $1 
+           OR j.slug ILIKE $2
+        LIMIT 1`,
+        [targetSlug, withoutLocation, numId || -1]
+      );
+
+      if (jobRes.rows.length > 0) {
+        const jRow = jobRes.rows[0];
+        const employer = {
+          id: jRow.institution_id || 162,
+          name: jRow.institution_name || "EduBird Partner Institution",
+          slug: jRow.institution_slug || "",
+          city: jRow.institution_city || jRow.location || "Varanasi",
+          locality: jRow.location || "Varanasi",
+          phone: jRow.institution_phone || "+91 9876543210",
+        };
+        return {
+          type: "job" as const,
+          job: jRow,
+          employer,
+        };
+      }
+    } catch (jErr) {
+      console.error("Job lookup error in fetchSeoProfileData:", jErr);
+    }
+
     if (
       rawCategory === "jobs" ||
       targetSlug.includes("faculty") ||

@@ -102,10 +102,7 @@ function JobDetailContent({ jobId }: { jobId: string }) {
         return;
       }
       setJob(json.data);
-      const canonicalSeoUrl = buildJobSeoUrl(json.data);
-      if (canonicalSeoUrl && !canonicalSeoUrl.startsWith("/jobs/")) {
-        router.replace(canonicalSeoUrl);
-      } else if (json.data.slug && /^\d+$/.test(id) && json.data.slug !== id) {
+      if (json.data.slug && /^\d+$/.test(id) && json.data.slug !== id) {
         router.replace(`/jobs/${json.data.slug}`);
       }
     } catch {

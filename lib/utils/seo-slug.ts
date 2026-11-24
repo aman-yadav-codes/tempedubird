@@ -278,20 +278,8 @@ export function buildJobSeoUrl(job: {
   location?: string | null;
   city?: string | null;
 }): string {
-  const catSlug = slugify(job.category_name || job.category_slug || job.department || "jobs") || "jobs";
-  const title = job.title || job.name || `job-${job.id}`;
-  const baseSlug = slugify(job.slug || title);
-  const city = job.city || job.location || "varanasi";
-  const locality = job.locality || "";
-  const locParts = [locality, city].filter(Boolean).map((s) => slugify(s));
-  const locSlug = locParts.length > 0 ? locParts.join("-") : "varanasi";
-
-  let itemPart = baseSlug;
-  if (locSlug && !itemPart.includes(locSlug)) {
-    itemPart = `${itemPart}-in-${locSlug}`;
-  }
-
-  return `/${catSlug}/${itemPart}`;
+  const baseSlug = job.slug || slugify(job.title || job.name || `job-${job.id}`);
+  return `/jobs/${baseSlug}`;
 }
 
 /**

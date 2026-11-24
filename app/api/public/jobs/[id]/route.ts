@@ -13,7 +13,8 @@ export async function GET(
     }
 
     const job = await getJobById(id);
-    if (!job || job.status !== "Active") {
+    const statusLower = (job?.status || "").toLowerCase();
+    if (!job || (statusLower !== "active" && statusLower !== "open" && statusLower !== "published" && statusLower !== "")) {
       return NextResponse.json({ error: "Job vacancy not found or no longer active" }, { status: 404 });
     }
 
