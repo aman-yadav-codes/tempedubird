@@ -1,321 +1,252 @@
-"use client";
-
-import React, { useEffect, useState, useMemo } from "react";
-import Image from "next/image";
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import {
-  Briefcase,
-  Store,
-  MapPin,
-  ChevronRight,
-  Clock,
-  Sparkles,
-  Phone,
-  CheckCircle2,
-  Calendar,
-  Layers,
-  ArrowLeft,
-  Share2,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "sonner";
-import { useAuthStore, useCartStore } from "@/store";
-import { isUserStoreOwner } from "@/lib/auth/store-ownership";
-import { buildServiceSeoUrl, parseDiscoverySeoSlug } from "@/lib/utils/seo-slug";
+import { db } from "@/lib/db/db";
+import { parseDiscoverySeoSlug, extractIdFromSlug } from "@/lib/utils/seo-slug";
 import CustomerExplorePage from "@/app/(public)/explore/page";
+import { PublicServiceDetailView } from "@/components/public/public-service-detail-view";
+import type { Metadata } from "next";
 
-export default function ServiceDetailPage() {
-  const params = useParams();
-  const router = useRouter();
-  const serviceId = params?.id as string;
+export const dynamic = "force-dynamic";
 
-  if (serviceId && (serviceId.startsWith("all-") || serviceId.startsWith("in-"))) {
-    const { categorySlug, city } = parseDiscoverySeoSlug(serviceId);
-    return <CustomerExplorePage initialType="service" initialCategory={categorySlug} initialCity={city} />;
+interface Props {
+  params: Promise<{ id: string }> | { id: string };
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+async function fetchServiceRecord(idOrSlug: string) {
+  try {
+    const rawSlug = decodeURIComponent(idOrSlug || "").trim().toLowerCase();
+    if (rawSlug.startsWith("in-") || rawSlug.startsWith("all-") || rawSlug.startsWith("service-")) {
+      return null;
+    }
+    let withoutLocation = rawSlug;
+    const lastInIndex = rawSlug.lastIndexOf("-in-");
+    if (lastInIndex !== -1) {
+      withoutLocation = rawSlug.substring(0, lastInIndex);
+    }
+    const { id: rawNumId } = extractIdFromSlug(rawSlug);
+    const { id: withoutLocId } = extractIdFromSlug(withoutLocation);
+    const numId = rawNumId || withoutLocId || -1;
+
+    // 1. Query services table
+    const serviceRes = await db.query(
+      `SELECT
+        s.id,
+        s.title,
+        s.title AS name,
+        s.slug,
+        s.description,
+        s.image_url,
+        s.image_url AS default_image_url,
+        s.gallery,
+        COALESCE(s.pricing_model, 'fixed_price') AS pricing_model,
+        COALESCE(s.duration_minutes, 60) AS duration_minutes,
+        COALESCE(s.duration_unit, 'minutes') AS duration_unit,
+        COALESCE(s.price, 0) AS price,
+        COALESCE(s.sale_price, s.price, 0) AS sale_price,
+        COALESCE(s.price, 0) AS regular_price,
+        s.service_location,
+        s.business_profile_id,
+        s.professional_profile_id,
+        bp.name AS business_name,
+        bp.slug AS business_slug,
+        bp.logo_url AS business_logo_url,
+        bp.address AS business_address,
+        bp.city AS business_city,
+        bp.locality AS business_locality,
+        bp.state AS business_state,
+        bp.phone AS business_phone,
+        bp.whatsapp AS business_whatsapp,
+        pp.name AS professional_name,
+        pp.slug AS professional_slug,
+        pp.phone AS professional_phone,
+        pp.city AS professional_city,
+        COALESCE(c.name, s.category, 'Services') AS category_name,
+        COALESCE(c.slug, 'services') AS category_slug
+      FROM services s
+      LEFT JOIN categories c ON c.id = s.category_id
+      LEFT JOIN business_profiles bp ON bp.id = s.business_profile_id
+      LEFT JOIN professional_profiles pp ON pp.id = s.professional_profile_id
+      WHERE COALESCE(s.status, 'active') = 'active'
+        AND (
+          s.slug = $1
+          OR s.slug = $2
+          OR (s.id = $3 AND $3 > 0)
+          OR s.slug ILIKE $1
+          OR s.slug ILIKE $2
+        )
+      ORDER BY (CASE WHEN s.slug = $1 THEN 0 WHEN s.slug = $2 THEN 1 ELSE 2 END), s.id DESC
+      LIMIT 1`,
+      [rawSlug, withoutLocation, numId]
+    );
+
+    if (serviceRes.rows.length > 0) {
+      const sRow = serviceRes.rows[0];
+      const isProfessional = Boolean(sRow.professional_profile_id && !sRow.business_profile_id);
+      const provider = isProfessional
+        ? {
+            id: sRow.professional_profile_id,
+            name: sRow.professional_name || "Verified Professional",
+            slug: sRow.professional_slug || "",
+            phone: sRow.professional_phone || "+91 9876543210",
+            city: sRow.professional_city || "Varanasi",
+            locality: "Varanasi",
+            state: "Uttar Pradesh",
+          }
+        : {
+            id: sRow.business_profile_id || 0,
+            name: sRow.business_name || "Verified Service Center",
+            slug: sRow.business_slug || "",
+            phone: sRow.business_phone || "+91 9876543210",
+            whatsapp: sRow.business_whatsapp || sRow.business_phone || "+91 9876543210",
+            city: sRow.business_city || "Varanasi",
+            locality: sRow.business_locality || "Varanasi",
+            state: sRow.business_state || "Uttar Pradesh",
+            address: sRow.business_address || "",
+            logo_url: sRow.business_logo_url || null,
+          };
+      return { service: sRow, provider, providerType: isProfessional ? ("professional" as const) : ("business" as const), reviews: [] };
+    }
+
+    // 2. Query master_services table
+    const msRes = await db.query(
+      `SELECT
+        ms.id,
+        ms.name,
+        ms.name AS title,
+        ms.slug,
+        ms.description,
+        ms.default_image_url,
+        ms.default_image_url AS image_url,
+        COALESCE(ms.pricing_model, 'fixed_price') AS pricing_model,
+        COALESCE(ms.duration_minutes, 60) AS duration_minutes,
+        COALESCE(ms.duration_unit, 'minutes') AS duration_unit,
+        COALESCE(ms.suggested_price, ms.suggested_price_inr, 0) AS price,
+        COALESCE(ms.suggested_price, ms.suggested_price_inr, 0) AS sale_price,
+        COALESCE(ms.suggested_max_price, ms.regular_price, 0) AS regular_price,
+        ms.service_location,
+        ms.business_profile_id,
+        ms.professional_profile_id,
+        bp.name AS business_name,
+        bp.slug AS business_slug,
+        bp.logo_url AS business_logo_url,
+        bp.address AS business_address,
+        bp.city AS business_city,
+        bp.locality AS business_locality,
+        bp.state AS business_state,
+        bp.phone AS business_phone,
+        bp.whatsapp AS business_whatsapp,
+        pp.name AS professional_name,
+        pp.slug AS professional_slug,
+        pp.phone AS professional_phone,
+        pp.city AS professional_city,
+        COALESCE(c.name, 'Services') AS category_name,
+        COALESCE(c.slug, 'services') AS category_slug
+      FROM master_services ms
+      LEFT JOIN categories c ON c.id = COALESCE(ms.main_category_id, ms.category_id)
+      LEFT JOIN business_profiles bp ON bp.id = ms.business_profile_id
+      LEFT JOIN professional_profiles pp ON pp.id = ms.professional_profile_id
+      WHERE COALESCE(ms.is_active, TRUE) = TRUE
+        AND (
+          ms.slug = $1
+          OR ms.slug = $2
+          OR (ms.id = $3 AND $3 > 0)
+          OR ms.slug ILIKE $1
+          OR ms.slug ILIKE $2
+        )
+      ORDER BY (CASE WHEN ms.slug = $1 THEN 0 WHEN ms.slug = $2 THEN 1 ELSE 2 END), ms.id DESC
+      LIMIT 1`,
+      [rawSlug, withoutLocation, numId]
+    );
+
+    if (msRes.rows.length > 0) {
+      const msRow = msRes.rows[0];
+      const isProfessional = Boolean(msRow.professional_profile_id && !msRow.business_profile_id);
+      const provider = isProfessional
+        ? {
+            id: msRow.professional_profile_id,
+            name: msRow.professional_name || "Verified Professional",
+            slug: msRow.professional_slug || "",
+            phone: msRow.professional_phone || "+91 9876543210",
+            city: msRow.professional_city || "Varanasi",
+            locality: "Varanasi",
+            state: "Uttar Pradesh",
+          }
+        : {
+            id: msRow.business_profile_id || 0,
+            name: msRow.business_name || "Verified Service Center",
+            slug: msRow.business_slug || "",
+            phone: msRow.business_phone || "+91 9876543210",
+            whatsapp: msRow.business_whatsapp || msRow.business_phone || "+91 9876543210",
+            city: msRow.business_city || "Varanasi",
+            locality: msRow.business_locality || "Varanasi",
+            state: msRow.business_state || "Uttar Pradesh",
+            address: msRow.business_address || "",
+            logo_url: msRow.business_logo_url || null,
+          };
+      return { service: msRow, provider, providerType: isProfessional ? ("professional" as const) : ("business" as const), reviews: [] };
+    }
+
+    return null;
+  } catch (err) {
+    console.error("Error fetching service record:", err);
+    return null;
   }
+}
 
-  const { user } = useAuthStore();
-  const { items, setIsOpen, addItem } = useCartStore();
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const resolved = await params;
+  const rawId = resolved.id;
+  const data = await fetchServiceRecord(rawId);
 
-  const [service, setService] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notFoundFallback, setNotFoundFallback] = useState(false);
-
-  useEffect(() => {
-    if (!serviceId) return;
-    setLoading(true);
-    fetch(`/api/public/services/${serviceId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.service) {
-          setService(data.service);
-          const canonicalSeoUrl = buildServiceSeoUrl(data.service);
-          if (canonicalSeoUrl && !canonicalSeoUrl.startsWith("/services/")) {
-            router.replace(canonicalSeoUrl);
-          } else if (data.service.slug && /^\d+$/.test(serviceId) && data.service.slug !== serviceId) {
-            router.replace(`/services/${data.service.slug}`);
-          }
-        } else {
-          setService(null);
-          if (serviceId && (serviceId.includes("-in-") || serviceId.includes("-"))) {
-            setNotFoundFallback(true);
-          }
-        }
-      })
-      .catch((err) => {
-        console.error("Error loading service:", err);
-      })
-      .finally(() => setLoading(false));
-  }, [serviceId]);
-
-  const effectiveBusiness = useMemo(() => {
-    if (!service) return null;
+  if (data?.service) {
+    const s = data.service;
     return {
-      id: service.business_profile_id,
-      name: service.business_name || "Service Provider",
-      slug: service.business_slug || "",
-      institution_profile_id: service.institution_profile_id,
+      title: `${s.name || s.title} | 143Panda`,
+      description: s.description?.slice(0, 160) || `Book ${s.title} online at best prices.`,
     };
-  }, [service]);
+  }
 
-  const isOwner = useMemo(() => isUserStoreOwner(user, effectiveBusiness), [user, effectiveBusiness]);
-
-  const price = Number(service?.price || service?.suggested_price || 0);
-  const pricingModel = service?.pricing_model || "Service";
-  const durationText = service?.duration_minutes
-    ? `${service.duration_minutes} ${service.duration_unit || "min"}`
-    : "";
-
-  const handleBookService = () => {
-    if (isOwner) {
-      toast.error("You cannot book services from your own storefront.");
-      return;
-    }
-
-    const added = addItem(
-      {
-        id: `service_${service.id}`,
-        name: service.name,
-        price: price,
-        image_url: service.default_image_url,
-        brand: effectiveBusiness?.name,
-        unit: pricingModel,
-        business_id: effectiveBusiness?.id,
-        business_name: effectiveBusiness?.name,
-        business_slug: effectiveBusiness?.slug,
-        institution_id: effectiveBusiness?.institution_profile_id,
-        item_type: "service",
-      },
-      1
-    );
-
-    if (added) {
-      toast.success(`${service.name} added to service bookings!`);
-      setIsOpen(true);
-    }
+  const { city, categorySlug, categoryName } = parseDiscoverySeoSlug(rawId);
+  const locationText = city ? ` in ${city.charAt(0).toUpperCase() + city.slice(1)}` : "";
+  const catText = categoryName || (categorySlug ? categorySlug.replace(/-/g, " ") : "Services & Maintenance");
+  return {
+    title: `${catText}${locationText} | 143Panda`,
+    description: `Browse verified local services and experts${locationText}.`,
   };
+}
 
-  const storeLink = service?.business_slug
-    ? `/${service.category_slug || "services"}/${service.business_slug}?tab=services&highlight=${service.id}`
-    : service?.professional_slug
-    ? `/professional/${service.professional_slug}?tab=services&highlight=${service.id}`
-    : null;
+export default async function ServiceDetailPage({
+  params,
+  searchParams,
+}: Props) {
+  const resolvedParams = await params;
+  const rawId = resolvedParams.id;
 
-  if (notFoundFallback) {
-    const { categorySlug, city } = parseDiscoverySeoSlug(serviceId);
-    return <CustomerExplorePage initialType="service" initialCategory={categorySlug} initialCity={city} />;
-  }
-
-  if (loading) {
+  // 1. Direct service view (renders modern PublicServiceDetailView directly)
+  const data = await fetchServiceRecord(rawId);
+  if (data?.service) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="size-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
-          <p className="text-xs text-muted-foreground">Loading service details...</p>
-        </div>
-      </div>
+      <PublicServiceDetailView
+        service={data.service}
+        provider={data.provider}
+        providerType={data.providerType}
+        reviews={data.reviews}
+      />
     );
   }
 
-  if (!service) {
-    const { categorySlug, city } = parseDiscoverySeoSlug(serviceId);
-    return <CustomerExplorePage initialType="service" initialCategory={categorySlug} initialCity={city} />;
-  }
+  // 2. Otherwise category/location listing alias
+  const { categorySlug, categoryName, city } = parseDiscoverySeoSlug(rawId);
+  const sp = searchParams ? await searchParams : {};
+  const query = typeof sp.q === "string" ? sp.q : "";
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-          <Link href="/" className="hover:text-foreground">Home</Link>
-          <ChevronRight className="size-3" />
-          <Link href="/explore?type=service" className="hover:text-foreground">Services</Link>
-          {service.category_name && (
-            <>
-              <ChevronRight className="size-3" />
-              <span>{service.category_name}</span>
-            </>
-          )}
-          <ChevronRight className="size-3" />
-          <span className="text-foreground font-semibold truncate max-w-[200px]">{service.name}</span>
-        </div>
-
-        {/* Main Service Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column: Image Banner */}
-          <div className="lg:col-span-6 space-y-3">
-            <div className="relative aspect-video sm:aspect-[4/3] w-full rounded-2xl bg-muted/30 border overflow-hidden shadow-2xs flex items-center justify-center">
-              {service.default_image_url ? (
-                <Image
-                  src={service.default_image_url}
-                  alt={service.name}
-                  fill
-                  priority
-                  sizes="(max-width: 768px) 100vw, 500px"
-                  className="object-cover"
-                />
-              ) : (
-                <Briefcase className="size-16 text-sky-600/40" />
-              )}
-              <span className="absolute top-3 left-3 bg-sky-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1 uppercase">
-                {pricingModel}
-              </span>
-            </div>
-          </div>
-
-          {/* Right Column: Service Details & Booking */}
-          <div className="lg:col-span-6 space-y-5">
-            <div>
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <Badge variant="outline" className="text-[10px] uppercase font-bold text-sky-700 bg-sky-50 dark:bg-sky-950/40 border-sky-200">
-                  {pricingModel}
-                </Badge>
-                {durationText && (
-                  <Badge variant="secondary" className="text-[10px] font-medium gap-1">
-                    <Clock className="size-2.5" /> {durationText}
-                  </Badge>
-                )}
-              </div>
-              <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
-                {service.name}
-              </h1>
-            </div>
-
-            {/* Price section */}
-            <div className="p-4 rounded-2xl bg-muted/30 border space-y-1">
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="text-2xl sm:text-3xl font-black text-foreground">
-                  ₹{Number(price).toLocaleString()}
-                </span>
-                <span className="text-xs font-semibold text-muted-foreground capitalize">
-                  ({pricingModel})
-                </span>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Confirmed booking with guaranteed service slot and professional provider.
-              </p>
-            </div>
-
-            {/* Booking action */}
-            <div className="pt-2">
-              {isOwner ? (
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-semibold">
-                  Provider View: Self-booking from your own service listing is disabled.
-                </div>
-              ) : (
-                <Button
-                  size="lg"
-                  onClick={handleBookService}
-                  className="w-full h-11 text-xs font-bold gap-2 bg-[#d9232e] hover:bg-[#d9232e]/90 text-white cursor-pointer shadow-md"
-                >
-                  <Calendar className="size-4" /> Book Service Now
-                </Button>
-              )}
-            </div>
-
-            {/* Provider Card */}
-            {effectiveBusiness && (
-              <Card className="rounded-2xl border shadow-2xs bg-card">
-                <CardContent className="p-4 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    {storeLink ? (
-                      <Link
-                        href={storeLink}
-                        className="size-11 rounded-xl bg-sky-500/10 text-sky-600 hover:bg-sky-500/20 flex items-center justify-center shrink-0 border transition-colors cursor-pointer"
-                        title={`Visit ${effectiveBusiness.name}`}
-                      >
-                        <Store className="size-5" />
-                      </Link>
-                    ) : (
-                      <div className="size-11 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center shrink-0 border">
-                        <Store className="size-5" />
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
-                        Service Provided By
-                      </span>
-                      {storeLink ? (
-                        <Link
-                          href={storeLink}
-                          className="text-sm font-bold text-foreground hover:text-primary hover:underline truncate block transition-colors cursor-pointer"
-                          title={`Visit ${effectiveBusiness.name}`}
-                        >
-                          {effectiveBusiness.name}
-                        </Link>
-                      ) : (
-                        <p className="text-sm font-bold text-foreground truncate">
-                          {effectiveBusiness.name}
-                        </p>
-                      )}
-                      {service.business_city && (
-                        <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
-                          <MapPin className="size-3 text-muted-foreground shrink-0" />
-                          {service.business_city}, {service.business_state || "India"}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Service Scope / Description */}
-            {service.description && (
-              <div className="space-y-2 pt-2 border-t">
-                <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                  Service Scope &amp; Details
-                </h3>
-                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
-                  {service.description}
-                </p>
-              </div>
-            )}
-
-            {/* Deliverables / Attributes */}
-            {service.attributes && typeof service.attributes === "object" && Object.keys(service.attributes).length > 0 && (
-              <div className="space-y-2.5 pt-2 border-t">
-                <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                  Deliverables &amp; Inclusions
-                </h3>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {Object.entries(service.attributes).map(([key, value]) => (
-                    <div key={key} className="p-2.5 rounded-xl border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-medium capitalize">
-                        {key}
-                      </span>
-                      <span className="font-semibold text-foreground">{String(value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    <CustomerExplorePage
+      key={`service-${rawId}`}
+      initialType="service"
+      initialCategory={categorySlug}
+      initialCategoryName={categoryName}
+      initialCity={city}
+      initialQuery={query}
+    />
   );
 }
