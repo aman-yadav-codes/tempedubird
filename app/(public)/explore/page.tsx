@@ -231,7 +231,7 @@ function CustomerExplorePageContent({
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number | null>(null);
   const [selectedSubcategoryName, setSelectedSubcategoryName] = useState<string>("");
   const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState<string>(urlSubcategoryParam);
-  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingCategories, setLoadingCategories] = useState(true);
   const [loadingSubcategories, setLoadingSubcategories] = useState(false);
 
   // New filters matching FindMy search layout
@@ -1282,9 +1282,15 @@ function CustomerExplorePageContent({
       </div>
 
       {/* 4. Results Count Label */}
-      <div className="text-xs sm:text-sm font-semibold text-slate-500 pl-1">
-        {totalFilteredCount} matching {activeType === "business" ? "businesses" : activeType === "service" ? "services" : activeType === "product" ? "products" : activeType === "course" ? "courses" : activeType === "job" ? "jobs" : "listings"}
-      </div>
+      {loading ? (
+        <div className="flex items-center gap-2 pl-1 h-5">
+          <div className="h-4 w-44 bg-slate-200 animate-pulse rounded-md" />
+        </div>
+      ) : (
+        <div className="text-xs sm:text-sm font-semibold text-slate-500 pl-1">
+          {totalFilteredCount} matching {activeType === "business" ? "businesses" : activeType === "service" ? "services" : activeType === "product" ? "products" : activeType === "course" ? "courses" : activeType === "job" ? "jobs" : "listings"}
+        </div>
+      )}
 
       {/* 5. Two-Column Layout: Grid on Left, Filters Sidebar on Right */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -1293,9 +1299,32 @@ function CustomerExplorePageContent({
 
           {/* Results Content */}
           {loading ? (
-            <div className="flex flex-col items-center justify-center p-16 text-muted-foreground gap-3">
-              <Loader2 className="size-8 animate-spin text-primary" />
-              <span className="text-sm font-medium">Finding matching listings...</span>
+            <div className="space-y-6">
+              <div className="h-6 w-56 bg-slate-200 animate-pulse rounded-md" />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div
+                    key={i}
+                    className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs animate-pulse flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="h-44 w-full bg-slate-200" />
+                      <div className="p-4 space-y-3">
+                        <div className="h-4 bg-slate-200 rounded-md w-3/4" />
+                        <div className="h-3 bg-slate-100 rounded-md w-1/2" />
+                        <div className="flex items-center gap-2 pt-1">
+                          <div className="h-4 w-12 bg-amber-100 rounded-md" />
+                          <div className="h-3 w-20 bg-slate-100 rounded-md" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 pt-0 border-t border-slate-100 flex items-center justify-between gap-2 mt-2">
+                      <div className="h-9 w-full bg-slate-100 rounded-xl" />
+                      <div className="h-9 w-20 bg-slate-200 rounded-xl" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="space-y-8">
@@ -2453,40 +2482,49 @@ function CustomerExplorePageContent({
                                     ? "Business Category"
                                     : "Category"}
                 </span>
-                {loadingCategories && <span className="text-[10px] text-amber-600 font-normal animate-pulse">Loading...</span>}
               </label>
               <div className="relative">
-                <select
-                  value={selectedCategoryId || ""}
-                  onChange={(e) => {
-                    const val = e.target.value ? Number(e.target.value) : null;
-                    setSelectedCategoryId(val);
-                    setSelectedSubcategoryId(null);
-                    setSelectedSubcategoryName("");
-                    setSelectedSubcategorySlug("");
-                    if (val) {
-                      const cat = categories.find((c) => c.id === val);
-                      const catName = cat ? cat.name : "";
-                      const catSlug = cat ? (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")) : "";
-                      setSelectedCategoryName(catName);
-                      setSelectedCategorySlug(catSlug);
-                      syncUrlParams({ category: catSlug || catName, subcategory: null });
-                    } else {
-                      setSelectedCategoryName("");
-                      setSelectedCategorySlug("");
-                      syncUrlParams({ category: null, subcategory: null });
-                    }
-                  }}
-                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-medium"
-                >
-                  <option value="">All Categories ({filteredCategories.length})</option>
-                  {filteredCategories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
+                {loadingCategories && filteredCategories.length === 0 ? (
+                  <div className="w-full h-10 rounded-xl bg-slate-100 border border-slate-200 animate-pulse flex items-center px-3 text-xs text-slate-400 font-medium">
+                    Loading categories...
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      value={selectedCategoryId || ""}
+                      onChange={(e) => {
+                        const val = e.target.value ? Number(e.target.value) : null;
+                        setSelectedCategoryId(val);
+                        setSelectedSubcategoryId(null);
+                        setSelectedSubcategoryName("");
+                        setSelectedSubcategorySlug("");
+                        if (val) {
+                          const cat = categories.find((c) => c.id === val);
+                          const catName = cat ? cat.name : "";
+                          const catSlug = cat ? (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")) : "";
+                          setSelectedCategoryName(catName);
+                          setSelectedCategorySlug(catSlug);
+                          syncUrlParams({ category: catSlug || catName, subcategory: null });
+                        } else {
+                          setSelectedCategoryName("");
+                          setSelectedCategorySlug("");
+                          syncUrlParams({ category: null, subcategory: null });
+                        }
+                      }}
+                      className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-medium"
+                    >
+                      <option value="">
+                        {filteredCategories.length > 0 ? `All Categories (${filteredCategories.length})` : (selectedCategoryName || "All Categories")}
+                      </option>
+                      {filteredCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
+                  </>
+                )}
               </div>
             </div>
 
@@ -2837,16 +2875,37 @@ function CustomerExplorePageContent({
   );
 }
 
+function ExplorePageSkeleton() {
+  return (
+    <div className="min-h-screen bg-slate-50 pb-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6">
+        <div className="space-y-3">
+          <div className="h-4 w-48 bg-slate-200 animate-pulse rounded-md" />
+          <div className="h-8 w-72 bg-slate-200 animate-pulse rounded-lg" />
+          <div className="h-4 w-96 bg-slate-100 animate-pulse rounded-md" />
+        </div>
+        <div className="h-14 w-full bg-white rounded-2xl border border-slate-200 shadow-xs animate-pulse" />
+        <div className="h-4 w-36 bg-slate-200 animate-pulse rounded-md" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="lg:col-span-8 xl:col-span-9 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="bg-white border border-slate-200 rounded-2xl overflow-hidden h-72 animate-pulse" />
+              ))}
+            </div>
+          </div>
+          <div className="lg:col-span-4 xl:col-span-3">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 h-96 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerExplorePage(props: CustomerExplorePageProps = {}) {
   return (
-    <Suspense
-      fallback={
-        <div className="container mx-auto px-4 py-16 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
-          <Loader2 className="size-4 animate-spin text-rose-600" />
-          <span>Loading Discovery Directory...</span>
-        </div>
-      }
-    >
+    <Suspense fallback={<ExplorePageSkeleton />}>
       <CustomerExplorePageContent {...props} />
     </Suspense>
   );
