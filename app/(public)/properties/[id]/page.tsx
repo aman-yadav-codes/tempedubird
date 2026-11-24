@@ -43,9 +43,14 @@ async function fetchPropertyRecord(idOrSlug: string) {
     const { id: withoutLocId } = extractIdFromSlug(withoutLocation);
     const numId = rawNumId || withoutLocId || -1;
 
+    // Build candidate slug variants
     const slugVariants = Array.from(new Set([
       rawSlug,
       withoutLocation,
+      rawSlug.replace(/-varanasi$/, ""),
+      withoutLocation.replace(/-varanasi$/, ""),
+      `${rawSlug}-varanasi`,
+      `${withoutLocation}-varanasi`,
     ])).filter(Boolean);
 
     const query = `
@@ -77,7 +82,13 @@ async function fetchPropertyRecord(idOrSlug: string) {
         bp.whatsapp,
         bp.email,
         c.name AS category_name,
+        c.slug AS category_slug,
         subc.name AS subcategory_name,
+        subc.slug AS subcategory_slug,
+        COALESCE(br.metadata->>'property_type', 'Commercial Space') AS property_type,
+        COALESCE(br.metadata->>'suitable_for', 'Coaching / Corporate Office / Warehousing') AS suitable_for,
+        COALESCE(br.metadata->>'furnishing', 'Ready for Possession') AS furnishing,
+        COALESCE(br.metadata->>'floor_number', pd.floor_number::text, 'Ground Level') AS floor_number,
         pd.bedrooms,
         pd.bathrooms,
         pd.built_up_area,

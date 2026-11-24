@@ -132,12 +132,12 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
                   className="object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
-                <div className="absolute top-4 left-4 flex gap-2">
+                <div className="absolute top-4 left-4 flex gap-2 flex-wrap">
                   <Badge className="bg-emerald-600 text-white font-bold text-xs shadow-sm">
-                    {property.property_type || "Commercial Space"}
+                    {property.property_type || property.category_name || "Commercial Space"}
                   </Badge>
                   <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-xs">
-                    {property.furnishing || "Semi-Furnished"}
+                    {property.furnishing || "Ready for Possession"}
                   </Badge>
                 </div>
                 <div className="absolute bottom-4 left-4 right-4 text-white">
@@ -158,20 +158,20 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
                     <span className="text-[11px] text-muted-foreground block font-medium">Carpet Area</span>
                     <span className="text-xs font-bold text-foreground flex items-center gap-1 mt-0.5">
                       <Maximize2 className="size-3.5 text-primary" />
-                      {property.area_sqft || 1800} Sq. Ft.
+                      {Number(property.area_sqft || property.built_up_area || 1800).toLocaleString("en-IN")} Sq. Ft.
                     </span>
                   </div>
                   <div>
                     <span className="text-[11px] text-muted-foreground block font-medium">Floor Level</span>
                     <span className="text-xs font-bold text-foreground flex items-center gap-1 mt-0.5">
                       <Layers className="size-3.5 text-primary" />
-                      {property.floor_number || "1st Floor (Road Facing)"}
+                      {property.floor_number || "Ground Level"}
                     </span>
                   </div>
                   <div>
                     <span className="text-[11px] text-muted-foreground block font-medium">Suitable For</span>
-                    <span className="text-xs font-bold text-foreground truncate mt-0.5 block">
-                      {property.suitable_for || "Coaching / Corporate Office"}
+                    <span className="text-xs font-bold text-foreground truncate mt-0.5 block" title={property.suitable_for || "Commercial / Industrial Setup"}>
+                      {property.suitable_for || "Commercial / Industrial Setup"}
                     </span>
                   </div>
                   <div>
