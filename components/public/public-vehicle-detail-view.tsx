@@ -13,6 +13,7 @@ import {
   Share2,
   Phone,
   MessageCircle,
+  ArrowRight,
   Gauge,
   Calendar,
   Fuel,
@@ -35,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
+import { buildDiscoverySeoUrl, slugify } from "@/lib/utils/seo-slug";
 
 interface Props {
   vehicle: any;
@@ -127,9 +129,16 @@ export function PublicVehicleDetailView({ vehicle, owner }: Props) {
             {vehicle.category_name && (
               <>
                 <ChevronRight className="size-3" />
-                <span className="text-foreground font-medium">
+                <Link
+                  href={buildDiscoverySeoUrl({
+                    type: "vehicle",
+                    category: vehicle.category_slug || vehicle.category_name,
+                    location: vehicle.city,
+                  })}
+                  className="hover:text-primary font-medium transition-colors"
+                >
                   {vehicle.category_name}
-                </span>
+                </Link>
               </>
             )}
             <ChevronRight className="size-3" />
@@ -399,6 +408,30 @@ export function PublicVehicleDetailView({ vehicle, owner }: Props) {
                 </div>
               </div>
             </Card>
+          </div>
+        </div>
+
+        {/* Explore More Vehicles CTA */}
+        <div className="mt-10 p-6 rounded-2xl bg-card border shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base sm:text-lg font-bold text-foreground">
+              Looking for more cars &amp; vehicles in {vehicle.city || "Varanasi"}?
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Browse verified passenger cars, commercial transport, electric vehicles, and two-wheelers.
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <Button asChild variant="outline" size="sm" className="text-xs">
+              <Link href={`/vehicles/in-${vehicle.city ? slugify(vehicle.city) : 'varanasi'}`}>
+                Vehicles in {vehicle.city || "Varanasi"}
+              </Link>
+            </Button>
+            <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold">
+              <Link href="/vehicles">
+                Browse All Vehicles <ArrowRight className="size-3.5 ml-1" />
+              </Link>
+            </Button>
           </div>
         </div>
       </div>

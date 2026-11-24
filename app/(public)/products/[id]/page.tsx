@@ -43,6 +43,8 @@ async function fetchProductRecord(idOrSlug: string) {
     const { id: withoutLocId } = extractIdFromSlug(withoutLocation);
     const numId = rawNumId || withoutLocId || -1;
 
+    const slugVariants = Array.from(new Set([rawSlug, withoutLocation])).filter(Boolean);
+
     // 1. Query products table
     const prodRes = await db.query(
       `SELECT
@@ -75,15 +77,14 @@ async function fetchProductRecord(idOrSlug: string) {
       LEFT JOIN business_profiles bp ON bp.id = p.business_profile_id
       WHERE COALESCE(p.status, 'active') = 'active'
         AND (
-          p.slug = $1
-          OR p.slug = $2
-          OR (p.id = $3 AND $3 > 0)
-          OR p.slug ILIKE $1
-          OR p.slug ILIKE $2
+          p.slug = ANY($1)
+          OR p.slug ILIKE ANY($1)
+          OR (p.id = $2 AND $2 > 0)
+          OR (length($3) >= 8 AND (p.slug ILIKE '%' || $3 || '%' OR $3 ILIKE '%' || p.slug || '%'))
         )
-      ORDER BY (CASE WHEN p.slug = $1 THEN 0 WHEN p.slug = $2 THEN 1 ELSE 2 END), p.id DESC
+      ORDER BY (CASE WHEN p.slug = $4 THEN 0 WHEN p.slug = $5 THEN 1 ELSE 2 END), p.id DESC
       LIMIT 1`,
-      [rawSlug, withoutLocation, numId]
+      [slugVariants, numId, withoutLocation, rawSlug, withoutLocation]
     );
 
     if (prodRes.rows.length > 0) {
@@ -132,15 +133,14 @@ async function fetchProductRecord(idOrSlug: string) {
       LEFT JOIN business_profiles bp ON bp.id = mp.business_profile_id
       WHERE COALESCE(mp.is_active, TRUE) = TRUE
         AND (
-          mp.slug = $1
-          OR mp.slug = $2
-          OR (mp.id = $3 AND $3 > 0)
-          OR mp.slug ILIKE $1
-          OR mp.slug ILIKE $2
+          mp.slug = ANY($1)
+          OR mp.slug ILIKE ANY($1)
+          OR (mp.id = $2 AND $2 > 0)
+          OR (length($3) >= 8 AND (mp.slug ILIKE '%' || $3 || '%' OR $3 ILIKE '%' || mp.slug || '%'))
         )
-      ORDER BY (CASE WHEN mp.slug = $1 THEN 0 WHEN mp.slug = $2 THEN 1 ELSE 2 END), mp.id DESC
+      ORDER BY (CASE WHEN mp.slug = $4 THEN 0 WHEN mp.slug = $5 THEN 1 ELSE 2 END), mp.id DESC
       LIMIT 1`,
-      [rawSlug, withoutLocation, numId]
+      [slugVariants, numId, withoutLocation, rawSlug, withoutLocation]
     );
 
     if (mpRes.rows.length > 0) {

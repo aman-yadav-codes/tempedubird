@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
-import { buildBusinessSeoUrl } from "@/lib/utils/seo-slug";
+import { buildBusinessSeoUrl, slugify, buildDiscoverySeoUrl } from "@/lib/utils/seo-slug";
 
 interface Props {
   property: any;
@@ -96,11 +96,20 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
             <Link href="/" className="hover:text-primary transition-colors">Home</Link>
             <ChevronRight className="size-3" />
-            <Link href="/explore?type=business" className="hover:text-primary transition-colors">Real Estate & Properties</Link>
+            <Link href="/properties" className="hover:text-primary transition-colors">Properties</Link>
             {property.category_name && (
               <>
                 <ChevronRight className="size-3" />
-                <span className="text-foreground font-medium">{property.category_name}</span>
+                <Link
+                  href={buildDiscoverySeoUrl({
+                    type: "property",
+                    category: property.category_slug || property.category_name,
+                    location: property.city,
+                  })}
+                  className="hover:text-primary font-medium transition-colors"
+                >
+                  {property.category_name}
+                </Link>
               </>
             )}
             <ChevronRight className="size-3" />
@@ -314,6 +323,30 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
                 </Button>
               )}
             </Card>
+          </div>
+        </div>
+
+        {/* Explore More Properties CTA */}
+        <div className="mt-10 p-6 rounded-2xl bg-card border shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base sm:text-lg font-bold text-foreground">
+              Looking for more properties in {property.city || "Varanasi"}?
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Browse our complete catalog of commercial spaces, retail showrooms, luxury apartments, and plots.
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <Button asChild variant="outline" size="sm" className="text-xs">
+              <Link href={`/properties/in-${property.city ? slugify(property.city) : 'varanasi'}`}>
+                Properties in {property.city || "Varanasi"}
+              </Link>
+            </Button>
+            <Button asChild size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
+              <Link href="/properties">
+                Browse All Properties <ArrowRight className="size-3.5 ml-1" />
+              </Link>
+            </Button>
           </div>
         </div>
       </div>

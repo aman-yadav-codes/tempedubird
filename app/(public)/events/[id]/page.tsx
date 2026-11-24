@@ -43,6 +43,16 @@ async function fetchEventRecord(idOrSlug: string) {
     const { id: withoutLocId } = extractIdFromSlug(withoutLocation);
     const numId = rawNumId || withoutLocId || -1;
 
+    // Build candidate slug variants (with/without "10k", with/without extra hyphens)
+    const slugVariants = Array.from(new Set([
+      rawSlug,
+      withoutLocation,
+      rawSlug.replace(/-10k-/g, "-"),
+      withoutLocation.replace(/-10k-/g, "-"),
+      rawSlug.replace(/-clean-/g, "-10k-clean-"),
+      withoutLocation.replace(/-clean-/g, "-10k-clean-"),
+    ])).filter(Boolean);
+
     const query = `
       SELECT 
         br.id,
@@ -86,18 +96,16 @@ async function fetchEventRecord(idOrSlug: string) {
       LEFT JOIN master_records subc ON subc.id = br.subcategory_id
       WHERE (br.vertical_code = 'events' OR br.vertical_code = 'event')
         AND (
-          br.slug = $1
-          OR br.slug = $2
-          OR br.slug ILIKE $1
-          OR br.slug ILIKE $2
-          OR (br.id = $3 AND $3 > 0)
-          
+          br.slug = ANY($1)
+          OR br.slug ILIKE ANY($1)
+          OR (br.id = $2 AND $2 > 0)
+          OR (length($3) >= 8 AND (br.slug ILIKE '%' || $3 || '%' OR $3 ILIKE '%' || br.slug || '%'))
         )
         AND (br.is_deleted IS NULL OR br.is_deleted = FALSE)
-      ORDER BY (CASE WHEN br.slug = $1 THEN 0 WHEN br.slug = $2 THEN 1 ELSE 2 END), br.id DESC
+      ORDER BY (CASE WHEN br.slug = $4 THEN 0 WHEN br.slug = $5 THEN 1 ELSE 2 END), br.id DESC
       LIMIT 1
     `;
-    const res = await db.query(query, [rawSlug, withoutLocation, numId]);
+    const res = await db.query(query, [slugVariants, numId, withoutLocation, rawSlug, withoutLocation]);
     if (res.rows.length === 0) return null;
 
     const row = res.rows[0];

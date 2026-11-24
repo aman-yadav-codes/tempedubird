@@ -14,6 +14,7 @@ import {
   Share2,
   Phone,
   MessageCircle,
+  ArrowRight,
   Ticket,
   Users,
   Sparkles,
@@ -33,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
+import { buildDiscoverySeoUrl, slugify } from "@/lib/utils/seo-slug";
 
 interface Props {
   event: any;
@@ -99,7 +101,7 @@ export function PublicEventDetailView({ event, owner }: Props) {
           text: `Check out ${event.title || event.name} in ${eventLocation}`,
           url: window.location.href,
         })
-        .catch(() => {});
+        .catch(() => { });
     } else if (typeof window !== "undefined") {
       navigator.clipboard.writeText(window.location.href);
       toast.success("Event link copied to clipboard!");
@@ -108,11 +110,11 @@ export function PublicEventDetailView({ event, owner }: Props) {
 
   const formattedDate = event.start_date
     ? new Date(event.start_date).toLocaleDateString("en-IN", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    })
     : null;
 
   return (
@@ -134,9 +136,16 @@ export function PublicEventDetailView({ event, owner }: Props) {
             {event.category_name && (
               <>
                 <ChevronRight className="size-3" />
-                <span className="text-foreground font-medium">
+                <Link
+                  href={buildDiscoverySeoUrl({
+                    type: "event",
+                    category: event.category_slug || event.category_name,
+                    location: event.city,
+                  })}
+                  className="hover:text-primary font-medium transition-colors"
+                >
                   {event.category_name}
-                </span>
+                </Link>
               </>
             )}
             <ChevronRight className="size-3" />
@@ -418,6 +427,30 @@ export function PublicEventDetailView({ event, owner }: Props) {
                 </div>
               </div>
             </Card>
+          </div>
+        </div>
+
+        {/* Explore More Events CTA */}
+        <div className="mt-10 p-6 rounded-2xl bg-card border shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base sm:text-lg font-bold text-foreground">
+              Looking for more events &amp; expos in {event.city || "Varanasi"}?
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Discover conferences, festivals, exhibitions, workshops, and trade shows.
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <Button asChild variant="outline" size="sm" className="text-xs">
+              <Link href={`/events/in-${event.city ? slugify(event.city) : 'varanasi'}`}>
+                Events in {event.city || "Varanasi"}
+              </Link>
+            </Button>
+            <Button asChild size="sm" className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold">
+              <Link href="/events">
+                Browse All Events <ArrowRight className="size-3.5 ml-1" />
+              </Link>
+            </Button>
           </div>
         </div>
       </div>
