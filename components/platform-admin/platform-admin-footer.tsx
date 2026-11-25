@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -11,17 +11,11 @@ import {
   MapPin,
   Phone,
   Mail,
-  Sparkles,
-  ArrowRight,
-  Smartphone,
   Users,
   Store,
   Handshake,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 
 function AppleIcon({ className = "size-4" }: { className?: string }) {
   return (
@@ -41,28 +35,15 @@ function PlayStoreIcon({ className = "size-4" }: { className?: string }) {
 
 export function PlatformAdminFooter() {
   const year = new Date().getFullYear();
-  const [email, setEmail] = useState("");
-  const [subscribed, setSubscribed] = useState(false);
-
-  const handleSubscribe = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !email.includes("@")) {
-      toast.error("Please enter a valid email address");
-      return;
-    }
-    setSubscribed(true);
-    toast.success("Thank you for subscribing to 143Panda platform updates!");
-    setEmail("");
-  };
 
   return (
     <footer className="w-full border-t border-border/60 bg-gradient-to-b from-card via-muted/20 to-card text-foreground">
-      {/* Top Pre-Footer Bar: App Download, Community Stats & Stay Updated */}
+      {/* Top Pre-Footer Bar: App Download & Community Stats */}
       <div className="py-6 px-4 sm:px-6 lg:px-8 border-b border-border/40">
         <div className="max-w-7xl mx-auto rounded-2xl bg-[#f0f6ff] border border-blue-100/90 p-4 sm:p-5 shadow-xs overflow-hidden">
-          <div className="flex flex-col xl:flex-row items-center justify-between gap-5 sm:gap-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-5 sm:gap-6">
             {/* 1. Left: Get the 143Panda App */}
-            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 shrink-0 w-full xl:w-auto justify-center sm:justify-start text-center sm:text-left">
+            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 shrink-0 w-full md:w-auto justify-center sm:justify-start text-center sm:text-left">
               <div className="flex items-center gap-3 sm:gap-4">
                 <div className="relative size-12 sm:size-14 shrink-0 flex items-center justify-center">
                   <Image
@@ -109,11 +90,11 @@ export function PlatformAdminFooter() {
               </div>
             </div>
 
-            {/* Vertical Divider */}
-            <div className="hidden xl:block w-px h-10 bg-blue-200/70 shrink-0" />
+            {/* Vertical Divider for desktop */}
+            <div className="hidden md:block w-px h-10 bg-blue-200/70 shrink-0" />
 
-            {/* 2. Middle: Stats Counter */}
-            <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:justify-center sm:gap-8 shrink-0 w-full xl:w-auto py-3 xl:py-0 border-y xl:border-y-0 border-blue-100/80">
+            {/* 2. Right: Stats Counter */}
+            <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:justify-center sm:gap-8 shrink-0 w-full md:w-auto py-3 md:py-0 border-t md:border-t-0 border-blue-100/80">
               {/* 10K+ Happy Users */}
               <div className="flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-left gap-1.5 sm:gap-2.5">
                 <div className="size-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
@@ -146,43 +127,6 @@ export function PlatformAdminFooter() {
                   <span className="text-[10px] sm:text-[11px] font-medium text-slate-500 leading-tight truncate">Connections</span>
                 </div>
               </div>
-            </div>
-
-            {/* Vertical Divider */}
-            <div className="hidden xl:block w-px h-10 bg-blue-200/70 shrink-0" />
-
-            {/* 3. Right: Stay Updated Newsletter */}
-            <div className="flex flex-col sm:flex-row items-center gap-3.5 shrink-0 w-full xl:w-auto justify-center sm:justify-end">
-              <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-start">
-                <div className="size-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                  <Mail className="size-4.5" />
-                </div>
-                <div className="text-left">
-                  <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">
-                    Stay Updated
-                  </h4>
-                  <p className="text-[11px] text-slate-500 leading-tight mt-0.5 whitespace-nowrap">
-                    Get the latest deals & updates
-                  </p>
-                </div>
-              </div>
-
-              <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  className="h-9 px-3.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-2xs w-full sm:w-48 md:w-52"
-                />
-                <button
-                  type="submit"
-                  className="h-9 px-4 bg-[#0070f3] hover:bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-2xs transition-colors shrink-0 cursor-pointer"
-                >
-                  Subscribe
-                </button>
-              </form>
             </div>
           </div>
         </div>

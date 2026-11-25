@@ -708,17 +708,8 @@ export function PlatformAdminHeader() {
           })}
         </nav>
 
-        {/* Right: Add Listing, Cart, Country Flag, Location Selector, User Profile */}
+        {/* Right: Cart, Country Flag, Location Selector, User Profile */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          {/* + Add Listing Button matching mockup */}
-          <Link
-            href="/packages"
-            className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-rose-300 hover:border-rose-400 text-rose-600 hover:text-rose-700 font-bold text-xs bg-rose-50/50 hover:bg-rose-50 transition-colors shadow-2xs"
-          >
-            <Plus className="size-3.5" />
-            <span>Add Listing</span>
-          </Link>
-
           {/* Cart Button with vibrant Red Count Badge */}
           <button
             type="button"
