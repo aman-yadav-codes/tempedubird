@@ -283,7 +283,7 @@ export function PublicProductDetailView({ product, seller, reviews = [] }: Props
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-xs text-foreground">{r.user_name || "Verified Customer"}</span>
                       <div className="flex items-center gap-1">
-                        {Array.from({ length: r.rating || 5 }).map((_, i) => (
+                        {Array.from({ length: Math.max(0, Math.min(5, Math.round(Number(r.rating) || 5))) }).map((_, i) => (
                           <Star key={i} className="size-3 text-amber-500 fill-amber-500" />
                         ))}
                       </div>

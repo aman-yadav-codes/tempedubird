@@ -1887,7 +1887,7 @@ export function PublicBusinessProfileClient({
                               {rev.user_name || rev.title || "Verified Customer"}
                             </span>
                             <div className="flex items-center gap-0.5 text-amber-500">
-                              {[...Array(Math.min(5, Number(rev.rating || 5)))].map((_, i) => (
+                              {Array.from({ length: Math.max(0, Math.min(5, Math.round(Number(rev.rating) || 5))) }).map((_, i) => (
                                 <Star key={i} className="size-3 fill-amber-500 text-amber-500" />
                               ))}
                             </div>
@@ -4116,7 +4116,7 @@ export function PublicBusinessProfileClient({
                             </div>
                             <div className="flex items-center gap-2">
                               <div className="flex items-center gap-0.5 text-amber-500">
-                                {[...Array(Number(rev.rating || 5))].map((_, i) => (
+                                {Array.from({ length: Math.max(0, Math.min(5, Math.round(Number(rev.rating) || 5))) }).map((_, i) => (
                                   <Star key={i} className="size-3.5 fill-amber-500 text-amber-500" />
                                 ))}
                               </div>
@@ -4394,7 +4394,7 @@ export function PublicBusinessProfileClient({
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-0.5 text-amber-500">
-                          {[...Array(Number(rev.rating || 5))].map((_, i) => (
+                          {Array.from({ length: Math.max(0, Math.min(5, Math.round(Number(rev.rating) || 5))) }).map((_, i) => (
                             <Star key={i} className="size-3.5 fill-amber-500 text-amber-500" />
                           ))}
                         </div>
