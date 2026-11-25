@@ -43,14 +43,10 @@ export function filterListingsByBusinessCategory(business: any, raw: BusinessLis
   ) {
     return {
       ...raw,
-      products: [],
-      services: [],
-      courses: [],
       vehicles: [],
-      events: [],
       dishes: [],
       rooms: [],
-      // Properties remain active
+      // Properties, Products, Courses, Events, Professionals, Jobs remain active
     };
   }
 
@@ -253,18 +249,16 @@ export function filterListingsByBusinessCategory(business: any, raw: BusinessLis
     catName.includes("sports") ||
     catSlug.includes("fitness") ||
     catSlug.includes("gym") ||
-    catSlug.includes("ironcore")
+    catSlug.includes("ironcore") ||
+    catSlug.includes("propulse")
   ) {
     return {
       ...raw,
-      products: [],
       properties: [],
       vehicles: [],
-      courses: [],
-      events: [],
       dishes: [],
       rooms: [],
-      // Fitness services & packages remain active
+      // Products, Services, Courses, Jobs, Events, Professionals, Packages remain active
     };
   }
 
@@ -279,14 +273,11 @@ export function filterListingsByBusinessCategory(business: any, raw: BusinessLis
   ) {
     return {
       ...raw,
-      products: [],
       properties: [],
       vehicles: [],
-      courses: [],
-      events: [],
       dishes: [],
       rooms: [],
-      // Salon & Spa services remain active
+      // Services, Products, Professionals, Jobs, Packages remain active
     };
   }
 

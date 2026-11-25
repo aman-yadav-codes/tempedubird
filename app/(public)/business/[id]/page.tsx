@@ -217,22 +217,22 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
         [bizId, instId, userId]
       ),
 
-      // Reviews
+      // Reviews: Platform Reviews
       db.query(
         `SELECT
-          r.id,
-          r.title,
-          r.review,
-          r.rating,
-          r.created_at,
-          u.full_name AS user_name
-        FROM institution_reviews r
-        LEFT JOIN users u ON u.id = r.user_id
-        WHERE (r.institution_id = $1 OR r.institution_id = $2)
-          AND COALESCE(r.is_approved, TRUE) = TRUE
-        ORDER BY r.id DESC
+          pr.id,
+          pr.title,
+          pr.comment AS review,
+          pr.rating,
+          pr.created_at,
+          COALESCE(u.full_name, 'Verified Customer') AS user_name
+        FROM platform_reviews pr
+        LEFT JOIN users u ON u.id = pr.author_user_id
+        WHERE (pr.business_id = $1 OR pr.business_id = $2)
+          AND (pr.status = 'approved' OR pr.status = 'active' OR pr.status IS NULL)
+        ORDER BY pr.id DESC
         LIMIT 20`,
-        [instId, bizId]
+        [bizId, instId]
       ),
 
       // Courses: Inherited / Created Institution & Business Courses
@@ -288,14 +288,14 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
           COALESCE(sjp.department, 'Store Operations') AS category_name
         FROM staff_job_postings sjp
         WHERE (
-          (sjp.institution_id IS NOT NULL AND sjp.institution_id = $1)
-          OR (sjp.created_by IS NOT NULL AND sjp.created_by = $2)
-          OR sjp.institution_id IS NULL
+          sjp.business_profile_id = $1
+          OR (sjp.institution_id IS NOT NULL AND sjp.institution_id = $2)
+          OR (sjp.created_by IS NOT NULL AND sjp.created_by = $3)
         )
           AND LOWER(COALESCE(sjp.status, 'active')) = 'active'
         ORDER BY sjp.id DESC
         LIMIT 50`,
-        [instId, userId]
+        [bizId, instId, userId]
       ),
 
       // Gallery Media: Photos & Showcases from institution_media

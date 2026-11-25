@@ -23,6 +23,7 @@ import { PublicProductDetailView } from "@/components/public/public-product-deta
 import { PublicPropertyDetailView } from "@/components/public/public-property-detail-view";
 import { filterListingsByBusinessCategory } from "@/lib/utils/business-vertical-filter";
 import CustomerExplorePage from "@/app/(public)/explore/page";
+import { fetchBusinessFullData } from "@/app/(public)/business/[id]/page";
 
 export const dynamic = "force-dynamic";
 
@@ -337,56 +338,13 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
       );
 
       if (bizRes.rows.length > 0) {
-        const business = bizRes.rows[0];
-        const bizId = business.id;
-        const instId = business.institution_profile_id || -1;
-        const userId = business.user_id || -1;
-
-        const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled] = await Promise.allSettled([
-          db.query(
-            `SELECT p.* FROM products p WHERE (p.business_profile_id = $1 OR (p.institution_id IS NOT NULL AND p.institution_id = $2)) AND COALESCE(p.status, 'active') = 'active' ORDER BY p.id DESC`,
-            [bizId, instId]
-          ),
-          db.query(
-            `SELECT s.* FROM services s WHERE (s.business_profile_id = $1 OR (s.institution_id IS NOT NULL AND s.institution_id = $2)) AND COALESCE(s.status, 'active') = 'active' ORDER BY s.id DESC`,
-            [bizId, instId]
-          ),
-          db.query(
-            `SELECT pp.* FROM professional_profiles pp WHERE (pp.business_profile_id = $1 OR pp.institution_profile_id = $2) AND COALESCE(pp.is_active, TRUE) = TRUE ORDER BY pp.id DESC`,
-            [bizId, instId]
-          ),
-          db.query(
-            `SELECT pr.*, u.full_name AS user_name FROM platform_reviews pr LEFT JOIN users u ON u.id = pr.user_id WHERE pr.business_id = $1 AND COALESCE(pr.is_approved, TRUE) = TRUE ORDER BY pr.id DESC LIMIT 20`,
-            [bizId]
-          ),
-        ]);
-
-        let resolvedServices = servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [];
-        try {
-          const targetInstId = instId > 0 ? instId : bizId;
-          const disabledCheck = await db.query(
-            `SELECT 1 FROM business_type_modules btm
-             JOIN system_modules sm ON sm.id = btm.module_id
-             JOIN institution_profiles ip ON (ip.institution_type_id = btm.business_type_id OR btm.business_type_id = 27)
-             WHERE ip.id = $1 AND (sm.route = '/admin/marketing/services' OR sm.module_key = 'admin_services' OR sm.route = '/admin/catalog/services') AND btm.is_enabled = FALSE
-             LIMIT 1`,
-            [targetInstId]
-          );
-          if (disabledCheck.rows.length > 0) {
-            resolvedServices = [];
-          }
-        } catch {
-          // ignore
+        const fullData = await fetchBusinessFullData(bizRes.rows[0].id.toString());
+        if (fullData && !("redirectTo" in fullData)) {
+          return {
+            type: "business" as const,
+            ...fullData,
+          };
         }
-
-        return {
-          type: "business" as const,
-          business,
-          products: productsSettled.status === "fulfilled" ? productsSettled.value.rows : [],
-          services: resolvedServices,
-          professionals: professionalsSettled.status === "fulfilled" ? professionalsSettled.value.rows : [],
-          reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
-        };
       }
     } catch {
       // Continue
