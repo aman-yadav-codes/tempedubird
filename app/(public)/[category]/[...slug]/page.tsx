@@ -483,15 +483,15 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
           COALESCE(ip.title, 'Academic Course') AS name,
           COALESCE(ip.title, 'Academic Course') AS title,
           ip.slug,
-          ip.code,
-          ip.description,
+          NULL AS code,
+          COALESCE(ip.about, '') AS description,
           ip.about,
           ip.duration_value,
           ip.duration_unit,
           ip.seats_available,
           ip.fee_amount,
-          COALESCE(c.name, 'Education & Coaching') AS category_name,
-          COALESCE(c.slug, 'education-coaching') AS category_slug,
+          'Education & Coaching' AS category_name,
+          'education-coaching' AS category_slug,
           inst.name AS institution_name,
           inst.slug AS institution_slug,
           inst.id AS institution_id,
@@ -501,7 +501,6 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
         FROM institution_programs ip
         LEFT JOIN institution_profiles inst ON inst.id = ip.institution_id
         LEFT JOIN locations loc ON loc.id = inst.location_id
-        LEFT JOIN categories c ON c.id = ip.category_id
         WHERE COALESCE(ip.is_active, TRUE) = TRUE
           AND (
             ip.slug = $1
