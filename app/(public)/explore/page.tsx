@@ -1263,6 +1263,22 @@ function CustomerExplorePageContent({
 
     setSubmittingEnquiry(true);
     try {
+      const resolvedBusinessId =
+        enquiryModalItem.resultType === "business"
+          ? enquiryModalItem.id
+          : enquiryModalItem.business_id ||
+            enquiryModalItem.businessId ||
+            enquiryModalItem.institution_id ||
+            enquiryModalItem.institution_profile_id ||
+            undefined;
+
+      const resolvedProfessionalId =
+        enquiryModalItem.resultType === "professional"
+          ? enquiryModalItem.id
+          : enquiryModalItem.professional_id ||
+            enquiryModalItem.professionalId ||
+            undefined;
+
       const res = await fetch("/api/customer/enquiries", {
         method: "POST",
         headers: {
@@ -1270,8 +1286,13 @@ function CustomerExplorePageContent({
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
-          businessId: enquiryModalItem.resultType === "business" ? enquiryModalItem.id : undefined,
-          professionalId: enquiryModalItem.resultType === "professional" ? enquiryModalItem.id : undefined,
+          businessId: resolvedBusinessId,
+          professionalId: resolvedProfessionalId,
+          productId: enquiryModalItem.resultType === "product" ? enquiryModalItem.id : enquiryModalItem.product_id || undefined,
+          serviceId: enquiryModalItem.resultType === "service" ? enquiryModalItem.id : enquiryModalItem.service_id || undefined,
+          courseId: enquiryModalItem.resultType === "course" ? enquiryModalItem.id : undefined,
+          itemTitle: enquiryModalItem.title || enquiryModalItem.name,
+          sourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
           customerName: enquiryForm.name || user?.full_name || "Customer",
           customerEmail: enquiryForm.email || user?.email,
           customerPhone: enquiryForm.phone || user?.phone,

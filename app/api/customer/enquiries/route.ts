@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
-import { getAuthenticatedUser } from "@/lib/auth/auth";
+import { getAuthenticatedUser, getAuthUser } from "@/lib/auth/auth";
 
 export async function GET(req: NextRequest) {
   try {
@@ -46,33 +46,69 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(req);
+    const user = await getAuthUser(req);
     const body = await req.json();
 
-    const businessId = body.businessId ? Number(body.businessId) : null;
-    const professionalId = body.professionalId ? Number(body.professionalId) : null;
+    let businessId = body.businessId ? Number(body.businessId) : null;
+    let professionalId = body.professionalId ? Number(body.professionalId) : null;
+    const productId = body.productId ? Number(body.productId) : null;
+    const serviceId = body.serviceId ? Number(body.serviceId) : null;
     const customerName = body.customerName?.trim() || user?.full_name || "Customer";
     const customerEmail = body.customerEmail?.trim() || user?.email || null;
     const customerPhone = body.customerPhone?.trim() || user?.phone || null;
     const message = body.message?.trim();
     const preferredDate = body.preferredDate || null;
     const preferredTime = body.preferredTime || null;
-
-    if (!businessId && !professionalId) {
-      return NextResponse.json({ error: "businessId or professionalId is required" }, { status: 400 });
-    }
+    const sourceUrl = body.sourceUrl || req.headers.get("referer") || null;
 
     if (!message) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
 
+    // Attempt resolving businessId or professionalId if not explicitly provided
+    if (!businessId && !professionalId) {
+      if (productId) {
+        try {
+          const pRes = await db.query("SELECT business_profile_id FROM products WHERE id = $1", [productId]);
+          if (pRes.rows[0]?.business_profile_id) businessId = Number(pRes.rows[0].business_profile_id);
+        } catch {}
+      } else if (serviceId) {
+        try {
+          const sRes = await db.query("SELECT business_profile_id FROM master_services WHERE id = $1", [serviceId]);
+          if (sRes.rows[0]?.business_profile_id) businessId = Number(sRes.rows[0].business_profile_id);
+        } catch {}
+      } else if (body.courseId) {
+        try {
+          const ipRes = await db.query("SELECT institution_id FROM institution_programs WHERE id = $1", [Number(body.courseId)]);
+          if (ipRes.rows[0]?.institution_id) {
+            const bpRes = await db.query("SELECT id FROM business_profiles WHERE institution_profile_id = $1 LIMIT 1", [ipRes.rows[0].institution_id]);
+            if (bpRes.rows[0]?.id) businessId = Number(bpRes.rows[0].id);
+          }
+        } catch {}
+      }
+    }
+
     const res = await db.query(
       `INSERT INTO customer_inquiries (
-         customer_user_id, business_id, professional_id, customer_name, customer_email,
-         customer_phone, message, status, preferred_date, preferred_time, created_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, NOW())
+         customer_user_id, business_id, professional_id, product_id, service_id,
+         customer_name, customer_email, customer_phone, message, status,
+         preferred_date, preferred_time, source_url, created_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11, $12, NOW())
        RETURNING *`,
-      [user?.id || null, businessId, professionalId, customerName, customerEmail, customerPhone, message, preferredDate, preferredTime]
+      [
+        user?.id || null,
+        businessId,
+        professionalId,
+        productId,
+        serviceId,
+        customerName,
+        customerEmail,
+        customerPhone,
+        message,
+        preferredDate,
+        preferredTime,
+        sourceUrl,
+      ]
     );
 
     return NextResponse.json({
