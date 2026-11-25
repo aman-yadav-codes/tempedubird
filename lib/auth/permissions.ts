@@ -773,8 +773,14 @@ export function isAdminPathVisibleForRole(
   if (isCustomerUser(user)) {
     return (
       normalized === "/admin" ||
+      normalized === "/admin/enquiries" ||
+      normalized.startsWith("/admin/enquiries/") ||
+      normalized === "/admin/bookings" ||
+      normalized.startsWith("/admin/bookings/") ||
       normalized === "/admin/orders" ||
       normalized.startsWith("/admin/orders/") ||
+      normalized === "/admin/favorites" ||
+      normalized.startsWith("/admin/favorites/") ||
       normalized === "/admin/finance" ||
       normalized.startsWith("/admin/finance/") ||
       normalized === "/admin/my-profile" ||

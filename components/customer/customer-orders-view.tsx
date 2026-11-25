@@ -49,6 +49,8 @@ import { useAuthStore } from "@/store";
 import { OrderBillDialog } from "@/components/orders/order-bill-dialog";
 import { OrderStatusDialog } from "@/components/orders/order-status-dialog";
 
+import { CustomerSalesTabs } from "./customer-sales-tabs";
+
 interface OrderItem {
   id: number;
   product_name: string;
@@ -271,6 +273,9 @@ export function CustomerOrdersView() {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+      {/* Sales Navigation Tabs */}
+      <CustomerSalesTabs />
+
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

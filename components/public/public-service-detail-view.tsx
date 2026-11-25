@@ -99,9 +99,27 @@ export function PublicServiceDetailView({
     }
     setSubmitting(true);
     try {
-      await new Promise((r) => setTimeout(r, 600));
-      toast.success("Booking request sent! The service provider will call to confirm your appointment.");
-      setBookingOpen(false);
+      const res = await fetch("/api/customer/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessId: service.business_id || service.businessId,
+          professionalId: service.professional_id || service.professionalId,
+          serviceId: service.id,
+          serviceName: service.name || service.title || "Service",
+          bookingDate,
+          bookingTime,
+          notes,
+          totalPrice: finalPrice,
+        }),
+      });
+      if (res.ok) {
+        toast.success("Booking request sent! The service provider will call to confirm your appointment.");
+        setBookingOpen(false);
+      } else {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error || "Failed to submit booking. Please try again.");
+      }
     } catch {
       toast.error("Failed to submit booking. Please try again.");
     } finally {

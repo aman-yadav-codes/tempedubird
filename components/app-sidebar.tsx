@@ -94,6 +94,8 @@ import {
     SlidersHorizontal,
     Target,
     User,
+    CalendarCheck2,
+    Heart,
 } from "lucide-react";
 import { CreateBusinessProfileDialog } from "@/components/business/create-business-profile-dialog";
 import { toast } from "sonner";
@@ -436,11 +438,12 @@ const navItems: SidebarItem[] = [
         url: "/admin/sales/pipeline",
         icon: BadgeDollarSign,
         children: [
-            { title: "Orders & Bookings", url: "/admin/sales/orders", icon: ShoppingCart },
+            { title: "Enquiry", url: "/admin/sales/enquiries", icon: Mail },
+            { title: "Bookings", url: "/admin/sales/bookings", icon: CalendarCheck2 },
+            { title: "Orders", url: "/admin/sales/orders", icon: ShoppingCart },
             { title: "Pipeline", url: "/admin/sales/pipeline", icon: TrendingUp },
             { title: "Leads", url: "/admin/sales/leads", icon: UserCheck },
             { title: "Proposals", url: "/admin/sales/proposals", icon: FileSignature },
-            { title: "Enquiry", url: "/admin/sales/enquiries", icon: Mail },
             { title: "Commissions", url: "/admin/sales/commissions", icon: Percent },
             { title: "Generate Documents", url: "/admin/sales/generate-documents", icon: Sparkles },
         ],
@@ -983,7 +986,10 @@ export function AppSidebar() {
         }
         if (isCustomer) {
             return pathname === "/admin" ||
+                pathname.startsWith("/admin/enquiries") ||
+                pathname.startsWith("/admin/bookings") ||
                 pathname.startsWith("/admin/orders") ||
+                pathname.startsWith("/admin/favorites") ||
                 pathname.startsWith("/admin/finance") ||
                 pathname.startsWith("/admin/my-profile");
         }
@@ -1011,9 +1017,24 @@ export function AppSidebar() {
                         icon: LayoutDashboard,
                     },
                     {
-                        title: "My Orders",
+                        title: "Enquiry",
+                        url: "/admin/enquiries",
+                        icon: Mail,
+                    },
+                    {
+                        title: "Bookings",
+                        url: "/admin/bookings",
+                        icon: CalendarCheck2,
+                    },
+                    {
+                        title: "Orders",
                         url: "/admin/orders",
                         icon: ShoppingCart,
+                    },
+                    {
+                        title: "Favorites",
+                        url: "/admin/favorites",
+                        icon: Heart,
                     },
                     {
                         title: "My Finance & Invoices",
@@ -1049,7 +1070,14 @@ export function AppSidebar() {
                     if (item.title === "Manage Staff" || item.url.startsWith("/admin/staff")) return [];
                     if (item.title === "Finance" || item.url.startsWith("/admin/finance")) return [];
                     if (item.title === "Marketing" || item.url.startsWith("/admin/marketing")) return [];
-                    if (item.title === "Sales" || item.url.startsWith("/admin/sales")) return [];
+                    if (item.title === "Sales" || item.url.startsWith("/admin/sales")) {
+                        return [{
+                            ...item,
+                            children: (item.children || []).filter(c =>
+                                ["Enquiry", "Bookings", "Orders", "Orders & Bookings", "Pipeline", "Leads"].includes(c.title)
+                            )
+                        }];
+                    }
 
                     if (item.url === "/admin/classroom/attendance") return [];
                     if (item.url === "/admin/institution/calendar") return [];

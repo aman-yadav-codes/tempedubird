@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { AdminSalesTabs } from "@/components/sales/admin-sales-tabs";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -763,6 +764,7 @@ export default function SalesEnquiriesPage() {
     return (
         <TooltipProvider>
             <div className="space-y-6">
+                <AdminSalesTabs />
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight">Sales — Enquiries</h1>

@@ -31,6 +31,7 @@ import {
   User,
   MapPin,
 } from "lucide-react";
+import { AdminSalesTabs } from "@/components/sales/admin-sales-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -380,6 +381,7 @@ export default function SalesOrdersPage() {
 
   return (
     <div className="space-y-6 pb-12">
+      <AdminSalesTabs />
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/80 pb-5">
         <div>
