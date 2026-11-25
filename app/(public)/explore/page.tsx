@@ -2705,8 +2705,41 @@ function CustomerExplorePageContent({
               </button>
             </div>
 
-            {/* 1. Business Category Filter */}
-            <div className="space-y-2">
+            {/* 1. Listing Type / Vertical Dropdown (On Top) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span>Listing Type</span>
+                {allowedVerticals.length > 0 && (
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {allowedVerticals.length} available
+                  </span>
+                )}
+              </label>
+              <div className="relative">
+                <select
+                  value={activeType}
+                  onChange={(e) => {
+                    const newType = e.target.value as any;
+                    setActiveType(newType);
+                    setSelectedSubcategoryId(null);
+                    setSelectedSubcategoryName("");
+                    setSelectedSubcategorySlug("");
+                    syncUrlParams({ type: newType, subcategory: null });
+                  }}
+                  className="w-full h-10 rounded-xl bg-slate-50 hover:bg-slate-100/70 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white focus:border-blue-500 font-medium cursor-pointer transition-all appearance-none"
+                >
+                  {allowedVerticals.map((v) => (
+                    <option key={v.type} value={v.type}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 2. Business Category Filter */}
+            <div className="space-y-2 pt-2 border-t border-slate-200">
               <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
                 <span>Business Category</span>
               </label>
@@ -2753,39 +2786,6 @@ function CustomerExplorePageContent({
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
                   </>
                 )}
-              </div>
-            </div>
-
-            {/* 2. Listing Type / Vertical Dropdown (Directly after Business Category) */}
-            <div className="space-y-1.5 pt-2 border-t border-slate-200">
-              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                <span>Listing Type</span>
-                {allowedVerticals.length > 0 && (
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    {allowedVerticals.length} available
-                  </span>
-                )}
-              </label>
-              <div className="relative">
-                <select
-                  value={activeType}
-                  onChange={(e) => {
-                    const newType = e.target.value as any;
-                    setActiveType(newType);
-                    setSelectedSubcategoryId(null);
-                    setSelectedSubcategoryName("");
-                    setSelectedSubcategorySlug("");
-                    syncUrlParams({ type: newType, subcategory: null });
-                  }}
-                  className="w-full h-10 rounded-xl bg-slate-50 hover:bg-slate-100/70 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white focus:border-blue-500 font-medium cursor-pointer transition-all appearance-none"
-                >
-                  {allowedVerticals.map((v) => (
-                    <option key={v.type} value={v.type}>
-                      {v.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
               </div>
             </div>
 
