@@ -1036,6 +1036,11 @@ export function AppSidebar() {
                         url: "/admin/favorites",
                         icon: Heart,
                     },
+                    {
+                        title: "Finance",
+                        url: "/admin/finance",
+                        icon: CreditCard,
+                    },
                 ];
             }
             if (isClient) {
