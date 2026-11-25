@@ -1036,16 +1036,6 @@ export function AppSidebar() {
                         url: "/admin/favorites",
                         icon: Heart,
                     },
-                    {
-                        title: "My Finance & Invoices",
-                        url: "/admin/finance",
-                        icon: CreditCard,
-                    },
-                    {
-                        title: "My Profile",
-                        url: "/admin/my-profile",
-                        icon: UserCog,
-                    },
                 ];
             }
             if (isClient) {
@@ -1796,25 +1786,28 @@ export function AppSidebar() {
                             ) : (
                                 <SidebarMenuButton
                                     size="lg"
-                                    className="cursor-default hover:bg-transparent hover:text-foreground active:bg-transparent"
+                                    asChild
+                                    className="cursor-pointer hover:bg-muted/60 transition-colors"
                                 >
-                                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive/10 text-xs font-bold text-destructive-foreground overflow-hidden border border-border/40 shrink-0">
-                                        {activeWorkspaceLogo ? (
-                                            <img
-                                                src={activeWorkspaceLogo}
-                                                alt={activeWorkspaceName}
-                                                className={`h-full w-full rounded-lg ${String(activeWorkspaceLogo).includes("143panda") ? "object-contain p-0.5 bg-white" : "object-cover"}`}
-                                            />
-                                        ) : (
-                                            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
-                                                {activeWorkspaceInitial}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="grid flex-1 text-left text-sm leading-tight">
-                                        <span className="truncate font-semibold">{activeWorkspaceName}</span>
-                                        <span className="truncate text-xs text-muted-foreground">{activeWorkspaceRole}</span>
-                                    </div>
+                                    <Link href="/" title="Open Home Page">
+                                        <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive/10 text-xs font-bold text-destructive-foreground overflow-hidden border border-border/40 shrink-0">
+                                            {activeWorkspaceLogo ? (
+                                                <img
+                                                    src={activeWorkspaceLogo}
+                                                    alt={activeWorkspaceName}
+                                                    className={`h-full w-full rounded-lg ${String(activeWorkspaceLogo).includes("143panda") ? "object-contain p-0.5 bg-white" : "object-cover"}`}
+                                                />
+                                            ) : (
+                                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
+                                                    {activeWorkspaceInitial}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="grid flex-1 text-left text-sm leading-tight">
+                                            <span className="truncate font-semibold">{activeWorkspaceName}</span>
+                                            <span className="truncate text-xs text-muted-foreground">{activeWorkspaceRole}</span>
+                                        </div>
+                                    </Link>
                                 </SidebarMenuButton>
                             )}
                         </SidebarMenuItem>

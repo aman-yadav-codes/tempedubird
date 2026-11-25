@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { LogOut, Loader2, ChevronDown, Package, Store, User as UserIcon, Settings } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,11 +48,35 @@ export function AdminUserProfileMenu() {
     .substring(0, 2)
     .toUpperCase() || "U";
 
+  const pathname = usePathname();
+
   // Role detection
   const isPlatformAdmin = Boolean(user.role_codes?.includes("platform_admin") || user.is_super_admin);
   const isInstitutionAdmin = Boolean(user.role_codes?.includes("institution_admin") && !isPlatformAdmin);
   const isParent = Boolean(user.role_codes?.includes("parent") && !isPlatformAdmin && !isInstitutionAdmin);
   const isStudent = Boolean(user.role_codes?.includes("student") && !isPlatformAdmin && !isInstitutionAdmin && !isParent);
+
+  const isCustomer = Boolean(
+    pathname?.startsWith("/customer") ||
+    (
+      Array.isArray((user as any)?.role_codes)
+        ? (user as any).role_codes.some((r: string) => String(r).toLowerCase() === "customer") && !(user as any).role_codes.some((r: string) => ["platform_admin", "superadmin", "super_admin", "admin", "platformadmin", "institution_admin", "head_of_operations", "staff", "teacher", "faculty", "business_owner", "professional"].includes(String(r).toLowerCase()))
+        : (user as any)?.role === "customer" || (user as any)?.primary_role === "customer"
+    )
+  );
+
+  const isSeller = Boolean(
+    !isCustomer && (
+      user.has_business_profile ||
+      user.has_professional_profile ||
+      user.primary_role === "business_owner" ||
+      user.primary_role === "professional" ||
+      user.role_codes?.includes("business_owner") ||
+      user.role_codes?.includes("professional") ||
+      user.role_codes?.includes("institution_admin") ||
+      (Array.isArray(user.memberships) && user.memberships.length > 0)
+    )
+  );
 
   const formatRoleName = (code: string | null | undefined): string => {
     if (!code) return "Staff";
@@ -155,30 +180,34 @@ export function AdminUserProfileMenu() {
 
           <DropdownMenuSeparator className="my-1" />
 
-          {/* Navigation Items Matching Platform Header */}
-          <DropdownMenuItem asChild>
-            <Link
-              href="/packages"
-              className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2.5 text-foreground hover:text-amber-600 rounded-lg hover:bg-muted"
-            >
-              <Package className="size-4 text-amber-500" />
-              <span>My Packages</span>
-            </Link>
-          </DropdownMenuItem>
+          {/* Navigation Items: My Packages & My Store only for sellers, not for customers */}
+          {isSeller && (
+            <>
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/packages"
+                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2.5 text-foreground hover:text-amber-600 rounded-lg hover:bg-muted"
+                >
+                  <Package className="size-4 text-amber-500" />
+                  <span>My Packages</span>
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/workspace"
+                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2.5 text-foreground hover:text-sky-600 rounded-lg hover:bg-muted"
+                >
+                  <Store className="size-4 text-sky-500" />
+                  <span>My Store</span>
+                </Link>
+              </DropdownMenuItem>
+            </>
+          )}
 
           <DropdownMenuItem asChild>
             <Link
-              href="/workspace"
-              className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2.5 text-foreground hover:text-sky-600 rounded-lg hover:bg-muted"
-            >
-              <Store className="size-4 text-sky-500" />
-              <span>My Store</span>
-            </Link>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem asChild>
-            <Link
-              href="/admin/account"
+              href={isCustomer ? "/customer/my-profile" : "/admin/my-profile"}
               className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2.5 text-foreground hover:text-sky-600 rounded-lg hover:bg-muted"
             >
               <UserIcon className="size-4 text-sky-500" />
@@ -188,7 +217,7 @@ export function AdminUserProfileMenu() {
 
           <DropdownMenuItem asChild>
             <Link
-              href="/admin/settings"
+              href={isCustomer ? "/customer/my-profile?tab=account" : "/admin/settings"}
               className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2.5 text-foreground hover:text-sky-600 rounded-lg hover:bg-muted"
             >
               <Settings className="size-4 text-sky-500" />
