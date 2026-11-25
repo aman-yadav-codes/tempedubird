@@ -2912,50 +2912,56 @@ export function MyProfileClient() {
                     <span className="text-muted-foreground block text-[11px]">User Account ID</span>
                     <span className="font-semibold font-mono text-foreground text-xs mt-0.5 block">USR-#{user?.id || 101}</span>
                   </div>
-                  <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 sm:col-span-2">
-                    <span className="text-muted-foreground block text-[11px] font-medium">Assigned Attendance Setup & Shift Policy</span>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mt-1">
-                      <span className="font-semibold text-foreground text-xs flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5 text-primary" />
-                        {attendanceData?.shift_info?.label || ((user as any)?.profile)?.shift_timing || "09:00 AM - 05:00 PM (General Shift)"}
-                      </span>
-                      <Badge variant="outline" className="text-[10px] text-primary border-primary/30 w-fit">
-                        {attendanceData?.shift_info?.expectedHours || 8}h Shift • 15m Grace Period
-                      </Badge>
+                  {!isCustomer && (
+                    <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 sm:col-span-2">
+                      <span className="text-muted-foreground block text-[11px] font-medium">Assigned Attendance Setup & Shift Policy</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mt-1">
+                        <span className="font-semibold text-foreground text-xs flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5 text-primary" />
+                          {attendanceData?.shift_info?.label || ((user as any)?.profile)?.shift_timing || "09:00 AM - 05:00 PM (General Shift)"}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] text-primary border-primary/30 w-fit">
+                          {attendanceData?.shift_info?.expectedHours || 8}h Shift • 15m Grace Period
+                        </Badge>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
-                <div className="pt-3 border-t border-border/60 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold text-foreground">Advanced Profile & Bio Editor</p>
-                    <p className="text-[11px] text-muted-foreground">Manage certifications, experience, education, and social links.</p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => router.push('/admin/account')} className="gap-1.5 text-xs shadow-xs shrink-0">
-                    <ExternalLink className="h-3.5 w-3.5" /> Full Account Editor
-                  </Button>
-                </div>
+                {!isCustomer && (
+                  <>
+                    <div className="pt-3 border-t border-border/60 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">Advanced Profile & Bio Editor</p>
+                        <p className="text-[11px] text-muted-foreground">Manage certifications, experience, education, and social links.</p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => router.push('/admin/account')} className="gap-1.5 text-xs shadow-xs shrink-0">
+                        <ExternalLink className="h-3.5 w-3.5" /> Full Account Editor
+                      </Button>
+                    </div>
 
-                <div className="pt-3 border-t border-border/60 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <Layers className="h-3.5 w-3.5 text-primary" />
-                      Multiple Roles Under One Account
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Manage Customer, Business Owner, and Professional Service Provider details.
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setActiveTab("roles-profiles")}
-                    className="gap-1.5 text-xs shadow-xs shrink-0 cursor-pointer"
-                  >
-                    <Briefcase className="h-3.5 w-3.5 text-primary" />
-                    Manage Roles & Profiles
-                  </Button>
-                </div>
+                    <div className="pt-3 border-t border-border/60 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          <Layers className="h-3.5 w-3.5 text-primary" />
+                          Multiple Roles Under One Account
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Manage Customer, Business Owner, and Professional Service Provider details.
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setActiveTab("roles-profiles")}
+                        className="gap-1.5 text-xs shadow-xs shrink-0 cursor-pointer"
+                      >
+                        <Briefcase className="h-3.5 w-3.5 text-primary" />
+                        Manage Roles & Profiles
+                      </Button>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
