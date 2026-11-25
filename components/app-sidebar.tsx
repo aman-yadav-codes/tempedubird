@@ -264,6 +264,11 @@ const navItems: SidebarItem[] = [
         icon: FileText,
     },
     {
+        title: "Subscribers",
+        url: "/platformadmin/subscribers",
+        icon: Mail,
+    },
+    {
         title: "Categories",
         url: "/admin/categories?type=business",
         icon: FolderTree,
@@ -1056,6 +1061,7 @@ export function AppSidebar() {
                     if (item.url === "/admin/business-type-access") return [item];
                     if (item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [item];
                     if (item.url === "/platformadmin/content/blog" || item.url === "/admin/content/blog") return [item];
+                    if (item.url === "/platformadmin/subscribers" || item.url === "/admin/subscribers") return [item];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [item];
                     if (item.url === "/admin/catalog/products") return [item];
                 } else {
@@ -1063,6 +1069,7 @@ export function AppSidebar() {
                     if (item.url === "/admin/business-type-access") return [];
                     if (item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [];
                     if (item.url === "/platformadmin/content/blog") return [];
+                    if (item.url === "/platformadmin/subscribers" || item.url === "/admin/subscribers") return [];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [];
                     if (item.url === "/admin/catalog/products") return [];
                 }
