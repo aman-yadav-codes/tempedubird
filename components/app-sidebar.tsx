@@ -256,12 +256,18 @@ const navItems: SidebarItem[] = [
         icon: SlidersHorizontal,
     },
     {
-        title: "SEO & Marketing",
+        title: "SEO, Marketing & Analytics",
         url: "/platformadmin/seo-locations",
         icon: Globe,
         children: [
             { title: "SEO Locations", url: "/platformadmin/seo-locations", icon: MapPin },
             { title: "Page Creation with SEO Tags", url: "/platformadmin/marketing/seo", icon: Tags },
+            { title: "Analytics Overview", url: "/admin/analytics?tab=overview", permissionPath: "/admin/analytics", icon: BarChart3 },
+            { title: "Option Clicks", url: "/admin/analytics?tab=clicks", permissionPath: "/admin/analytics", icon: MousePointerClick },
+            { title: "Views", url: "/admin/analytics?tab=views", permissionPath: "/admin/analytics", icon: Eye },
+            { title: "Impressions", url: "/admin/analytics?tab=impressions", permissionPath: "/admin/analytics", icon: Layers },
+            { title: "Search History", url: "/admin/analytics?tab=searches", permissionPath: "/admin/analytics", icon: Search },
+            { title: "User Journey", url: "/admin/analytics?tab=journeys", permissionPath: "/admin/analytics", icon: Compass },
         ],
     },
     {
@@ -1065,6 +1071,7 @@ export function AppSidebar() {
                     if (item.title === "Manage Staff" || item.url.startsWith("/admin/staff")) return [];
                     if (item.title === "Finance" || item.url.startsWith("/admin/finance")) return [];
                     if (item.title === "Marketing" || item.url.startsWith("/admin/marketing")) return [];
+                    if (item.title === "Analytics" || item.url === "/admin/analytics") return [];
                     if (item.title === "Sales" || item.url.startsWith("/admin/sales")) {
                         return [{
                             ...item,
@@ -1082,14 +1089,14 @@ export function AppSidebar() {
                     if (item.url === "/admin/vendors") return [];
                     if (item.url === "/admin/profiles" || item.url.startsWith("/admin/profiles")) return [item];
                     if (item.url === "/admin/business-type-access") return [item];
-                    if (item.title === "SEO & Marketing" || item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [item];
+                    if (item.title === "SEO, Marketing & Analytics" || item.title === "SEO & Marketing" || item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [item];
                     if (item.url === "/platformadmin/content/blog" || item.url === "/admin/content/blog") return [item];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [item];
                     if (item.url === "/admin/catalog/products") return [item];
                 } else {
                     if (item.url === "/admin/profiles" || item.url.startsWith("/admin/profiles")) return [];
                     if (item.url === "/admin/business-type-access") return [];
-                    if (item.title === "SEO & Marketing" || item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [];
+                    if (item.title === "SEO, Marketing & Analytics" || item.title === "SEO & Marketing" || item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [];
                     if (item.url === "/platformadmin/content/blog") return [];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [];
                     if (item.url === "/admin/catalog/products") return [];
