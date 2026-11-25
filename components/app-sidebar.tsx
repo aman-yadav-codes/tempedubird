@@ -270,11 +270,6 @@ const navItems: SidebarItem[] = [
         icon: FileText,
     },
     {
-        title: "Subscribers",
-        url: "/platformadmin/subscribers",
-        icon: Mail,
-    },
-    {
         title: "Categories",
         url: "/admin/categories?type=business",
         icon: FolderTree,
@@ -445,6 +440,7 @@ const navItems: SidebarItem[] = [
             { title: "Enquiry", url: "/admin/sales/enquiries", icon: Mail },
             { title: "Bookings", url: "/admin/sales/bookings", icon: CalendarCheck2 },
             { title: "Orders", url: "/admin/sales/orders", icon: ShoppingCart },
+            { title: "Subscribers", url: "/admin/sales/subscribers", icon: Mail },
             { title: "Pipeline", url: "/admin/sales/pipeline", icon: TrendingUp },
             { title: "Leads", url: "/admin/sales/leads", icon: UserCheck },
             { title: "Proposals", url: "/admin/sales/proposals", icon: FileSignature },
@@ -1073,7 +1069,7 @@ export function AppSidebar() {
                         return [{
                             ...item,
                             children: (item.children || []).filter(c =>
-                                ["Enquiry", "Bookings", "Orders", "Orders & Bookings", "Pipeline", "Leads"].includes(c.title)
+                                ["Enquiry", "Bookings", "Orders", "Orders & Bookings", "Subscribers", "Subscriber", "Pipeline", "Leads"].includes(c.title)
                             )
                         }];
                     }
@@ -1088,7 +1084,6 @@ export function AppSidebar() {
                     if (item.url === "/admin/business-type-access") return [item];
                     if (item.title === "SEO & Marketing" || item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [item];
                     if (item.url === "/platformadmin/content/blog" || item.url === "/admin/content/blog") return [item];
-                    if (item.url === "/platformadmin/subscribers" || item.url === "/admin/subscribers") return [item];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [item];
                     if (item.url === "/admin/catalog/products") return [item];
                 } else {
@@ -1096,7 +1091,6 @@ export function AppSidebar() {
                     if (item.url === "/admin/business-type-access") return [];
                     if (item.title === "SEO & Marketing" || item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [];
                     if (item.url === "/platformadmin/content/blog") return [];
-                    if (item.url === "/platformadmin/subscribers" || item.url === "/admin/subscribers") return [];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [];
                     if (item.url === "/admin/catalog/products") return [];
                 }
