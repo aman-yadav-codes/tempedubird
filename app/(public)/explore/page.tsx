@@ -630,6 +630,72 @@ function CustomerExplorePageContent({
     }
   }, [allowedVerticals, activeType, syncUrlParams]);
 
+  const effectiveBusinessCategoryId = useMemo(() => {
+    if (selectedBusinessCategoryId) return selectedBusinessCategoryId;
+    if (selectedCategoryId) {
+      const isRootBiz = businessCategories.some((bc) => bc.id === selectedCategoryId);
+      if (isRootBiz) return selectedCategoryId;
+      const cat = categories.find((c) => c.id === selectedCategoryId);
+      if (cat?.business_category_id) return cat.business_category_id;
+      if (cat?.parent_id) {
+        const isParentBiz = businessCategories.some((bc) => bc.id === cat.parent_id);
+        if (isParentBiz) return cat.parent_id;
+      }
+    }
+    if (activeBusinessCategoryKey) {
+      const found = businessCategories.find((bc) => bc.slug === activeBusinessCategoryKey);
+      if (found) return found.id;
+    }
+    return null;
+  }, [selectedBusinessCategoryId, selectedCategoryId, businessCategories, categories, activeBusinessCategoryKey]);
+
+  const [typeCategories, setTypeCategories] = useState<Array<{ id: number; name: string; slug?: string; parent_id?: number | null }>>([]);
+  const [loadingTypeCategories, setLoadingTypeCategories] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadTypeCategoriesForActiveVertical() {
+      setLoadingTypeCategories(true);
+      try {
+        const bizCatId = effectiveBusinessCategoryId;
+        let url = "";
+
+        if (activeType === "business" && bizCatId) {
+          url = `/api/public/categories?parentId=${bizCatId}&limit=300`;
+        } else if (activeType === "business") {
+          url = `/api/public/categories?type=business&onlyRoot=true&limit=300`;
+        } else if (bizCatId) {
+          url = `/api/public/categories?type=${activeType}&businessCategoryId=${bizCatId}&limit=300`;
+        } else {
+          url = `/api/public/categories?type=${activeType}&limit=300`;
+        }
+
+        const res = await fetch(url);
+        const json = await res.json();
+        let list = Array.isArray(json?.data) ? json.data : [];
+
+        if (list.length === 0 && activeType !== "business" && bizCatId) {
+          const fallbackRes = await fetch(`/api/public/categories?type=${activeType}&limit=300`);
+          const fallbackJson = await fallbackRes.json();
+          if (Array.isArray(fallbackJson?.data) && fallbackJson.data.length > 0) {
+            list = fallbackJson.data;
+          }
+        }
+
+        if (!ignore) {
+          setTypeCategories(list);
+        }
+      } catch (err) {
+        console.error("Failed to load categories for active vertical:", err);
+      } finally {
+        if (!ignore) setLoadingTypeCategories(false);
+      }
+    }
+
+    loadTypeCategoriesForActiveVertical();
+    return () => { ignore = true; };
+  }, [activeType, effectiveBusinessCategoryId]);
+
   // Load subcategories dynamically based on selected Category
   useEffect(() => {
     let ignore = false;
@@ -2639,28 +2705,29 @@ function CustomerExplorePageContent({
               </button>
             </div>
 
-            {/* Category Filter */}
+            {/* 1. Business Category Filter */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
                 <span>Business Category</span>
               </label>
               <div className="relative">
-                {loadingCategories && filteredCategories.length === 0 ? (
+                {loadingCategories && businessCategories.length === 0 ? (
                   <div className="w-full h-10 rounded-xl bg-slate-100 border border-slate-200 animate-pulse flex items-center px-3 text-xs text-slate-400 font-medium">
                     Loading categories...
                   </div>
                 ) : (
                   <>
                     <select
-                      value={selectedCategoryId || ""}
+                      value={effectiveBusinessCategoryId || ""}
                       onChange={(e) => {
                         const val = e.target.value ? Number(e.target.value) : null;
+                        setSelectedBusinessCategoryId(val);
                         setSelectedCategoryId(val);
                         setSelectedSubcategoryId(null);
                         setSelectedSubcategoryName("");
                         setSelectedSubcategorySlug("");
                         if (val) {
-                          const cat = displayCategories.find((c) => c.id === val);
+                          const cat = businessCategories.find((c) => c.id === val);
                           const catName = cat ? cat.name : "";
                           const catSlug = cat ? (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")) : "";
                           setSelectedCategoryName(catName);
@@ -2675,9 +2742,9 @@ function CustomerExplorePageContent({
                       className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-medium"
                     >
                       <option value="">
-                        {filteredCategories.length > 0 ? `All Categories (${filteredCategories.length})` : (selectedCategoryName || "All Categories")}
+                        {businessCategories.length > 0 ? `All Business Categories (${businessCategories.length})` : (selectedCategoryName || "All Business Categories")}
                       </option>
-                      {filteredCategories.map((c) => (
+                      {businessCategories.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
                         </option>
@@ -2689,10 +2756,73 @@ function CustomerExplorePageContent({
               </div>
             </div>
 
-            {/* Subcategory Filter (if category selected) */}
-            {selectedCategoryId && subcategories.length > 0 && (
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-700">Subcategory</label>
+            {/* 2. Listing Type / Vertical Dropdown (Directly after Business Category) */}
+            <div className="space-y-1.5 pt-2 border-t border-slate-200">
+              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span>Listing Type</span>
+                {allowedVerticals.length > 0 && (
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {allowedVerticals.length} available
+                  </span>
+                )}
+              </label>
+              <div className="relative">
+                <select
+                  value={activeType}
+                  onChange={(e) => {
+                    const newType = e.target.value as any;
+                    setActiveType(newType);
+                    setSelectedSubcategoryId(null);
+                    setSelectedSubcategoryName("");
+                    setSelectedSubcategorySlug("");
+                    syncUrlParams({ type: newType, subcategory: null });
+                  }}
+                  className="w-full h-10 rounded-xl bg-slate-50 hover:bg-slate-100/70 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white focus:border-blue-500 font-medium cursor-pointer transition-all appearance-none"
+                >
+                  {allowedVerticals.map((v) => (
+                    <option key={v.type} value={v.type}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 3. Category / Subcategory Filter for Selected Listing Type */}
+            <div className="space-y-2 pt-2 border-t border-slate-200">
+              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span>
+                  {activeType === "product"
+                    ? "Product Category"
+                    : activeType === "course"
+                      ? "Course Category"
+                      : activeType === "job"
+                        ? "Job Category"
+                        : activeType === "property"
+                          ? "Property Category"
+                          : activeType === "vehicle"
+                            ? "Vehicle Category"
+                            : activeType === "event"
+                              ? "Event Category"
+                              : activeType === "professional"
+                                ? "Profession Category"
+                                : activeType === "service"
+                                  ? "Service Category"
+                                  : "Subcategory"}
+                </span>
+                {typeCategories.length > 0 && (
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    ({typeCategories.length})
+                  </span>
+                )}
+              </label>
+
+              {loadingTypeCategories && typeCategories.length === 0 ? (
+                <div className="w-full h-10 rounded-xl bg-slate-100 border border-slate-200 animate-pulse flex items-center px-3 text-xs text-slate-400 font-medium">
+                  Loading categories...
+                </div>
+              ) : typeCategories.length > 0 ? (
                 <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                   <button
                     type="button"
@@ -2700,45 +2830,64 @@ function CustomerExplorePageContent({
                       setSelectedSubcategoryId(null);
                       setSelectedSubcategoryName("");
                       setSelectedSubcategorySlug("");
-                      syncUrlParams({ subcategory: null });
+                      const bc = businessCategories.find((b) => b.id === effectiveBusinessCategoryId);
+                      const baseSlug = bc?.slug || "";
+                      setSelectedCategoryId(effectiveBusinessCategoryId);
+                      setSelectedCategorySlug(baseSlug);
+                      setSelectedCategoryName(bc?.name || "");
+                      syncUrlParams({ category: baseSlug || null, subcategory: null });
                     }}
                     className={cn(
                       "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
-                      !selectedSubcategoryId ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      !selectedSubcategoryId
+                        ? "bg-amber-100 text-amber-900 font-semibold"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                     )}
                   >
-                    <span>All Subcategories</span>
-                    <span className="text-[10px] text-slate-400">({subcategories.length})</span>
+                    <span>All {activeType === "product" ? "Product Categories" : activeType === "job" ? "Job Categories" : activeType === "property" ? "Property Categories" : activeType === "vehicle" ? "Vehicle Categories" : activeType === "course" ? "Course Categories" : activeType === "event" ? "Event Categories" : activeType === "professional" ? "Profession Categories" : activeType === "service" ? "Service Categories" : "Subcategories"}</span>
+                    <span className="text-[10px] text-slate-400">({typeCategories.length})</span>
                   </button>
-                  {
-                    subcategories.map((sub) => (
+
+                  {typeCategories.map((cat) => {
+                    const catSlug = cat.slug || slugify(cat.name);
+                    const isSelected =
+                      selectedSubcategoryId === cat.id ||
+                      (selectedCategoryId === cat.id && !selectedSubcategoryId) ||
+                      selectedSubcategorySlug === catSlug ||
+                      (selectedCategorySlug === catSlug && !selectedSubcategorySlug);
+
+                    return (
                       <button
-                        key={sub.id}
+                        key={cat.id}
                         type="button"
                         onClick={() => {
-                          setSelectedSubcategoryId(sub.id);
-                          setSelectedSubcategoryName(sub.name);
-                          const subSlug = sub.slug || sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-                          setSelectedSubcategorySlug(subSlug);
-                          syncUrlParams({ subcategory: subSlug });
+                          setSelectedSubcategoryId(cat.id);
+                          setSelectedSubcategoryName(cat.name);
+                          setSelectedSubcategorySlug(catSlug);
+                          syncUrlParams({ subcategory: catSlug });
                         }}
                         className={cn(
                           "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
-                          selectedSubcategoryId === sub.id ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                          isSelected
+                            ? "bg-amber-100 text-amber-900 font-semibold"
+                            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                         )}
                       >
-                        <span className="truncate">{sub.name}</span>
+                        <span className="truncate">{cat.name}</span>
                       </button>
-                    ))
-                  }
+                    );
+                  })}
                 </div>
-              </div>
-            )}
-
+              ) : (
+                <div className="text-xs text-slate-400 italic py-1">
+                  No categories found for this listing type
+                </div>
+              )}
+            </div>
 
             {/* Brand Filter (if products available) */}
-            {availableBrands.length > 0 && (
-              <div className="space-y-2">
+            {activeType === "product" && availableBrands.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-slate-200">
                 <label className="text-xs font-semibold text-slate-700">Brand</label>
                 <select
                   value={selectedBrand}
@@ -2757,36 +2906,6 @@ function CustomerExplorePageContent({
                 </select>
               </div>
             )}
-
-            {/* Listing Type / Vertical Dropdown (Context-filtered by active Business Category) */}
-            <div className="space-y-1.5 pt-2 border-t border-slate-200">
-              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                <span>Listing Type</span>
-                {allowedVerticals.length > 0 && (
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    {allowedVerticals.length} available
-                  </span>
-                )}
-              </label>
-              <div className="relative">
-                <select
-                  value={activeType}
-                  onChange={(e) => {
-                    const newType = e.target.value as any;
-                    setActiveType(newType);
-                    syncUrlParams({ type: newType });
-                  }}
-                  className="w-full h-10 rounded-xl bg-slate-50 hover:bg-slate-100/70 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white focus:border-blue-500 font-medium cursor-pointer transition-all appearance-none"
-                >
-                  {allowedVerticals.map((v) => (
-                    <option key={v.type} value={v.type}>
-                      {v.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
 
             {/* Rating Star Checklist */}
             <div className="space-y-2 pt-2 border-t border-slate-200">
