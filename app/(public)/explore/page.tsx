@@ -174,6 +174,95 @@ interface DiscoveryItem {
   [key: string]: any;
 }
 
+export const BUSINESS_CATEGORY_VERTICALS: Record<string, Array<{ type: string; label: string }>> = {
+  "retail-and-shopping": [
+    { type: "business", label: "Businesses" },
+    { type: "product", label: "Products" },
+    { type: "job", label: "Jobs" },
+  ],
+  "real-estate-and-construction": [
+    { type: "business", label: "Businesses" },
+    { type: "property", label: "Properties" },
+    { type: "job", label: "Jobs" },
+    { type: "professional", label: "Professionals" },
+  ],
+  "automotive-and-transport": [
+    { type: "business", label: "Businesses" },
+    { type: "vehicle", label: "Vehicles" },
+    { type: "product", label: "Products" },
+    { type: "job", label: "Jobs" },
+  ],
+  "education-and-coaching": [
+    { type: "business", label: "Businesses" },
+    { type: "course", label: "Courses" },
+    { type: "job", label: "Jobs" },
+    { type: "professional", label: "Professionals" },
+  ],
+  "hospitality-and-events": [
+    { type: "business", label: "Businesses" },
+    { type: "event", label: "Events" },
+    { type: "job", label: "Jobs" },
+    { type: "service", label: "Services" },
+  ],
+  "healthcare-and-medical": [
+    { type: "business", label: "Businesses" },
+    { type: "professional", label: "Professionals" },
+    { type: "product", label: "Products" },
+    { type: "job", label: "Jobs" },
+  ],
+  "it-and-digital-agencies": [
+    { type: "business", label: "Businesses" },
+    { type: "job", label: "Jobs" },
+    { type: "professional", label: "Professionals" },
+    { type: "product", label: "Products" },
+    { type: "service", label: "Services" },
+  ],
+  "professional-and-financial-services": [
+    { type: "business", label: "Businesses" },
+    { type: "professional", label: "Professionals" },
+    { type: "job", label: "Jobs" },
+    { type: "service", label: "Services" },
+  ],
+  "food-dining-and-cafes": [
+    { type: "business", label: "Businesses" },
+    { type: "product", label: "Products" },
+    { type: "event", label: "Events" },
+    { type: "job", label: "Jobs" },
+  ],
+  "home-services-and-maintenance": [
+    { type: "business", label: "Businesses" },
+    { type: "service", label: "Services" },
+    { type: "professional", label: "Professionals" },
+    { type: "job", label: "Jobs" },
+  ],
+  "fitness-and-sports": [
+    { type: "business", label: "Businesses" },
+    { type: "course", label: "Courses" },
+    { type: "product", label: "Products" },
+    { type: "professional", label: "Professionals" },
+    { type: "job", label: "Jobs" },
+  ],
+  "salons-and-personal-care": [
+    { type: "business", label: "Businesses" },
+    { type: "service", label: "Services" },
+    { type: "professional", label: "Professionals" },
+    { type: "product", label: "Products" },
+    { type: "job", label: "Jobs" },
+  ],
+};
+
+export const DEFAULT_ALL_VERTICALS = [
+  { type: "business", label: "Businesses" },
+  { type: "product", label: "Products" },
+  { type: "job", label: "Jobs" },
+  { type: "course", label: "Courses" },
+  { type: "property", label: "Properties" },
+  { type: "vehicle", label: "Vehicles" },
+  { type: "event", label: "Events" },
+  { type: "professional", label: "Professionals" },
+  { type: "service", label: "Services" },
+];
+
 export interface CustomerExplorePageProps {
   initialType?: string;
   initialCategory?: string;
@@ -224,7 +313,7 @@ function CustomerExplorePageContent({
   const [postalCode, setPostalCode] = useState<string>("");
 
   // Cascading Category & Subcategory states
-  const [businessCategories, setBusinessCategories] = useState<Array<{ id: number; name: string }>>([]);
+  const [businessCategories, setBusinessCategories] = useState<Array<{ id: number; name: string; slug?: string }>>([]);
   const [selectedBusinessCategoryId, setSelectedBusinessCategoryId] = useState<number | null>(urlBizCat);
   const [categories, setCategories] = useState<Array<{ id: number; name: string; slug?: string; parent_id?: number | null; business_category_id?: number | null }>>([]);
   const [subcategories, setSubcategories] = useState<Array<{ id: number; name: string; slug?: string }>>([]);
@@ -483,10 +572,63 @@ function CustomerExplorePageContent({
       .catch(() => { });
   }, []);
 
+  const displayCategories = useMemo(() => {
+    return businessCategories.length > 0 ? businessCategories : categories;
+  }, [businessCategories, categories]);
+
   const filteredCategories = useMemo(() => {
-    if (!selectedBusinessCategoryId) return categories;
-    return categories.filter((c) => c.business_category_id === selectedBusinessCategoryId || c.id === selectedBusinessCategoryId);
-  }, [categories, selectedBusinessCategoryId]);
+    if (!selectedBusinessCategoryId) return displayCategories;
+    return displayCategories.filter((c) => c.business_category_id === selectedBusinessCategoryId || c.id === selectedBusinessCategoryId);
+  }, [displayCategories, selectedBusinessCategoryId]);
+
+  // Active business category slug for vertical context
+  const activeBusinessCategoryKey = useMemo(() => {
+    if (selectedBusinessCategoryId) {
+      const bc = businessCategories.find((b) => b.id === selectedBusinessCategoryId);
+      if (bc?.slug) return bc.slug.toLowerCase().trim();
+    }
+    if (selectedCategoryId) {
+      const bc = businessCategories.find((b) => b.id === selectedCategoryId);
+      if (bc?.slug) return bc.slug.toLowerCase().trim();
+      const cat = categories.find((c) => c.id === selectedCategoryId);
+      if (cat?.business_category_id) {
+        const parentBc = businessCategories.find((b) => b.id === cat.business_category_id);
+        if (parentBc?.slug) return parentBc.slug.toLowerCase().trim();
+      }
+    }
+    const raw = (selectedCategorySlug || urlCategoryParam || selectedCategoryName || "").toLowerCase().trim();
+    for (const key of Object.keys(BUSINESS_CATEGORY_VERTICALS)) {
+      if (raw.startsWith(key) || raw.includes(key)) {
+        return key;
+      }
+    }
+    const nameSlug = slugify(selectedCategoryName || "");
+    for (const key of Object.keys(BUSINESS_CATEGORY_VERTICALS)) {
+      if (nameSlug.startsWith(key) || nameSlug.includes(key)) {
+        return key;
+      }
+    }
+    return "";
+  }, [selectedBusinessCategoryId, selectedCategoryId, businessCategories, categories, selectedCategorySlug, urlCategoryParam, selectedCategoryName]);
+
+  const allowedVerticals = useMemo(() => {
+    if (activeBusinessCategoryKey && BUSINESS_CATEGORY_VERTICALS[activeBusinessCategoryKey]) {
+      return BUSINESS_CATEGORY_VERTICALS[activeBusinessCategoryKey];
+    }
+    return DEFAULT_ALL_VERTICALS;
+  }, [activeBusinessCategoryKey]);
+
+  // Fallback activeType if current vertical is not valid for selected business category
+  useEffect(() => {
+    if (allowedVerticals.length > 0 && activeType !== "all") {
+      const exists = allowedVerticals.some((v) => v.type === activeType);
+      if (!exists) {
+        const fallback = allowedVerticals[0].type as any;
+        setActiveType(fallback);
+        syncUrlParams({ type: fallback });
+      }
+    }
+  }, [allowedVerticals, activeType, syncUrlParams]);
 
   // Load subcategories dynamically based on selected Category
   useEffect(() => {
@@ -767,16 +909,51 @@ function CustomerExplorePageContent({
     return list;
   }, [events, productNameSearch, sortBy]);
 
-  const totalFilteredCount =
-    filteredBusinesses.length +
-    filteredProfessionals.length +
-    filteredProducts.length +
-    filteredServices.length +
-    filteredCourses.length +
-    filteredJobs.length +
-    filteredProperties.length +
-    filteredVehicles.length +
-    filteredEvents.length;
+  const totalFilteredCount = useMemo(() => {
+    switch (activeType) {
+      case "business":
+        return filteredBusinesses.length;
+      case "professional":
+        return filteredProfessionals.length;
+      case "product":
+        return filteredProducts.length;
+      case "service":
+        return filteredServices.length;
+      case "course":
+        return filteredCourses.length;
+      case "job":
+        return filteredJobs.length;
+      case "property":
+        return filteredProperties.length;
+      case "vehicle":
+        return filteredVehicles.length;
+      case "event":
+        return filteredEvents.length;
+      default:
+        return (
+          filteredBusinesses.length +
+          filteredProfessionals.length +
+          filteredProducts.length +
+          filteredServices.length +
+          filteredCourses.length +
+          filteredJobs.length +
+          filteredProperties.length +
+          filteredVehicles.length +
+          filteredEvents.length
+        );
+    }
+  }, [
+    activeType,
+    filteredBusinesses.length,
+    filteredProfessionals.length,
+    filteredProducts.length,
+    filteredServices.length,
+    filteredCourses.length,
+    filteredJobs.length,
+    filteredProperties.length,
+    filteredVehicles.length,
+    filteredEvents.length,
+  ]);
 
   // Favorites set
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -2465,27 +2642,7 @@ function CustomerExplorePageContent({
             {/* Category Filter */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                <span>
-                  {activeType === "service"
-                    ? "Service Category"
-                    : activeType === "product"
-                      ? "Product Category"
-                      : activeType === "course"
-                        ? "Course Category"
-                        : activeType === "professional"
-                          ? "Profession Category"
-                          : activeType === "job"
-                            ? "Job Domain"
-                            : activeType === "property"
-                              ? "Property Category"
-                              : activeType === "vehicle"
-                                ? "Vehicle Category"
-                                : activeType === "event"
-                                  ? "Event Category"
-                                  : activeType === "business"
-                                    ? "Business Category"
-                                    : "Category"}
-                </span>
+                <span>Business Category</span>
               </label>
               <div className="relative">
                 {loadingCategories && filteredCategories.length === 0 ? (
@@ -2503,7 +2660,7 @@ function CustomerExplorePageContent({
                         setSelectedSubcategoryName("");
                         setSelectedSubcategorySlug("");
                         if (val) {
-                          const cat = categories.find((c) => c.id === val);
+                          const cat = displayCategories.find((c) => c.id === val);
                           const catName = cat ? cat.name : "";
                           const catSlug = cat ? (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")) : "";
                           setSelectedCategoryName(catName);
@@ -2600,6 +2757,36 @@ function CustomerExplorePageContent({
                 </select>
               </div>
             )}
+
+            {/* Listing Type / Vertical Dropdown (Context-filtered by active Business Category) */}
+            <div className="space-y-1.5 pt-2 border-t border-slate-200">
+              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span>Listing Type</span>
+                {allowedVerticals.length > 0 && (
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {allowedVerticals.length} available
+                  </span>
+                )}
+              </label>
+              <div className="relative">
+                <select
+                  value={activeType}
+                  onChange={(e) => {
+                    const newType = e.target.value as any;
+                    setActiveType(newType);
+                    syncUrlParams({ type: newType });
+                  }}
+                  className="w-full h-10 rounded-xl bg-slate-50 hover:bg-slate-100/70 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white focus:border-blue-500 font-medium cursor-pointer transition-all appearance-none"
+                >
+                  {allowedVerticals.map((v) => (
+                    <option key={v.type} value={v.type}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
 
             {/* Rating Star Checklist */}
             <div className="space-y-2 pt-2 border-t border-slate-200">
