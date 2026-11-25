@@ -250,6 +250,7 @@ export async function getSalesOrdersList(params: {
   paymentStatus?: string;
   fulfillmentStatus?: string;
   institutionId?: number | null;
+  institutionIds?: number[] | null;
   customerUserId?: number | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
@@ -258,6 +259,7 @@ export async function getSalesOrdersList(params: {
   sellerBusinessIds?: number[] | null;
   sellerProfessionalId?: number | null;
   sellerProfessionalIds?: number[] | null;
+  sellerOrCustomerUserId?: number | null;
   orderType?: string | null;
   page?: number;
   limit?: number;
@@ -271,49 +273,71 @@ export async function getSalesOrdersList(params: {
   const conditions: string[] = ["1=1"];
   const values: any[] = [];
 
-  if (params.customerUserId) {
-    values.push(params.customerUserId);
+  if (params.sellerOrCustomerUserId) {
+    const scConds: string[] = [];
+    values.push(params.sellerOrCustomerUserId);
     const uIdx = values.length;
-    if (params.customerEmail || params.customerPhone) {
-      values.push(params.customerEmail ? params.customerEmail.toLowerCase().trim() : "");
-      const eIdx = values.length;
-      values.push(params.customerPhone ? params.customerPhone.trim() : "");
-      const pIdx = values.length;
-      conditions.push(`(o.created_by = $${uIdx} OR ($${eIdx} != '' AND LOWER(o.customer_email) = $${eIdx}) OR ($${pIdx} != '' AND o.customer_phone = $${pIdx}))`);
-    } else {
-      conditions.push(`o.created_by = $${uIdx}`);
-    }
-  }
+    scConds.push(`o.seller_user_id = $${uIdx}`);
+    scConds.push(`o.created_by = $${uIdx}`);
 
-  if (
-    params.sellerUserId ||
-    params.sellerBusinessId ||
-    params.sellerProfessionalId ||
-    (Array.isArray(params.sellerBusinessIds) && params.sellerBusinessIds.length > 0) ||
-    (Array.isArray(params.sellerProfessionalIds) && params.sellerProfessionalIds.length > 0)
-  ) {
-    const sellerConds: string[] = [];
-    if (params.sellerUserId) {
-      values.push(params.sellerUserId);
-      sellerConds.push(`o.seller_user_id = $${values.length}`);
-    }
-    if (params.sellerBusinessId) {
-      values.push(params.sellerBusinessId);
-      sellerConds.push(`o.business_id = $${values.length}`);
-    }
     if (Array.isArray(params.sellerBusinessIds) && params.sellerBusinessIds.length > 0) {
       values.push(params.sellerBusinessIds);
-      sellerConds.push(`o.business_id = ANY($${values.length})`);
-    }
-    if (params.sellerProfessionalId) {
-      values.push(params.sellerProfessionalId);
-      sellerConds.push(`o.professional_id = $${values.length}`);
+      scConds.push(`o.business_id = ANY($${values.length})`);
     }
     if (Array.isArray(params.sellerProfessionalIds) && params.sellerProfessionalIds.length > 0) {
       values.push(params.sellerProfessionalIds);
-      sellerConds.push(`o.professional_id = ANY($${values.length})`);
+      scConds.push(`o.professional_id = ANY($${values.length})`);
     }
-    conditions.push(`(${sellerConds.join(" OR ")})`);
+    if (Array.isArray(params.institutionIds) && params.institutionIds.length > 0) {
+      values.push(params.institutionIds);
+      scConds.push(`o.institution_id = ANY($${values.length})`);
+    }
+    conditions.push(`(${scConds.join(" OR ")})`);
+  } else {
+    if (params.customerUserId) {
+      values.push(params.customerUserId);
+      const uIdx = values.length;
+      if (params.customerEmail || params.customerPhone) {
+        values.push(params.customerEmail ? params.customerEmail.toLowerCase().trim() : "");
+        const eIdx = values.length;
+        values.push(params.customerPhone ? params.customerPhone.trim() : "");
+        const pIdx = values.length;
+        conditions.push(`(o.created_by = $${uIdx} OR ($${eIdx} != '' AND LOWER(o.customer_email) = $${eIdx}) OR ($${pIdx} != '' AND o.customer_phone = $${pIdx}))`);
+      } else {
+        conditions.push(`o.created_by = $${uIdx}`);
+      }
+    }
+
+    if (
+      params.sellerUserId ||
+      params.sellerBusinessId ||
+      params.sellerProfessionalId ||
+      (Array.isArray(params.sellerBusinessIds) && params.sellerBusinessIds.length > 0) ||
+      (Array.isArray(params.sellerProfessionalIds) && params.sellerProfessionalIds.length > 0)
+    ) {
+      const sellerConds: string[] = [];
+      if (params.sellerUserId) {
+        values.push(params.sellerUserId);
+        sellerConds.push(`o.seller_user_id = $${values.length}`);
+      }
+      if (params.sellerBusinessId) {
+        values.push(params.sellerBusinessId);
+        sellerConds.push(`o.business_id = $${values.length}`);
+      }
+      if (Array.isArray(params.sellerBusinessIds) && params.sellerBusinessIds.length > 0) {
+        values.push(params.sellerBusinessIds);
+        sellerConds.push(`o.business_id = ANY($${values.length})`);
+      }
+      if (params.sellerProfessionalId) {
+        values.push(params.sellerProfessionalId);
+        sellerConds.push(`o.professional_id = $${values.length}`);
+      }
+      if (Array.isArray(params.sellerProfessionalIds) && params.sellerProfessionalIds.length > 0) {
+        values.push(params.sellerProfessionalIds);
+        sellerConds.push(`o.professional_id = ANY($${values.length})`);
+      }
+      conditions.push(`(${sellerConds.join(" OR ")})`);
+    }
   }
 
   if (params.orderType && params.orderType !== "all") {

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
 import { requireAdmin } from "@/lib/auth/auth";
+import { isPlatformAdminUser } from "@/lib/auth/permissions";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin(req);
+    const user = await requireAdmin(req);
+    const isPlatformAdmin = isPlatformAdminUser(user);
     const { searchParams } = new URL(req.url);
 
     const search = searchParams.get("search")?.trim() || "";
@@ -15,6 +17,31 @@ export async function GET(req: NextRequest) {
 
     const whereClauses: string[] = [];
     const params: any[] = [];
+
+    // Seller Scoping: Sellers only see bookings for their business/professional services OR which they booked
+    if (!isPlatformAdmin) {
+      const [bpRes, ppRes] = await Promise.all([
+        db.query(`SELECT id FROM business_profiles WHERE user_id = $1`, [user.id]).catch(() => ({ rows: [] })),
+        db.query(`SELECT id FROM professional_profiles WHERE user_id = $1`, [user.id]).catch(() => ({ rows: [] })),
+      ]);
+      const businessIds: number[] = bpRes.rows.map((r: any) => Number(r.id)).filter(Boolean);
+      const professionalIds: number[] = ppRes.rows.map((r: any) => Number(r.id)).filter(Boolean);
+
+      params.push(user.id);
+      const uIdx = params.length;
+      params.push(businessIds);
+      const bIdx = params.length;
+      params.push(professionalIds);
+      const pIdx = params.length;
+
+      whereClauses.push(`(
+        b.customer_user_id = $${uIdx}
+        OR bp.user_id = $${uIdx}
+        OR pp.user_id = $${uIdx}
+        OR (b.business_id IS NOT NULL AND b.business_id = ANY($${bIdx}))
+        OR (b.professional_id IS NOT NULL AND b.professional_id = ANY($${pIdx}))
+      )`);
+    }
 
     if (search) {
       params.push(`%${search}%`);
@@ -69,12 +96,26 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    await requireAdmin(req);
+    const user = await requireAdmin(req);
+    const isPlatformAdmin = isPlatformAdminUser(user);
     const body = await req.json();
     const { id, status, notes } = body;
 
     if (!id || !status) {
       return NextResponse.json({ error: "Booking ID and status are required" }, { status: 400 });
+    }
+
+    if (!isPlatformAdmin) {
+      const checkRes = await db.query(
+        `SELECT b.id FROM service_bookings b
+         LEFT JOIN business_profiles bp ON bp.id = b.business_id
+         LEFT JOIN professional_profiles pp ON pp.id = b.professional_id
+         WHERE b.id = $1 AND (bp.user_id = $2 OR pp.user_id = $2 OR b.customer_user_id = $2)`,
+        [Number(id), user.id]
+      );
+      if (checkRes.rows.length === 0) {
+        return NextResponse.json({ error: "Unauthorized to update this booking" }, { status: 403 });
+      }
     }
 
     const res = await db.query(
