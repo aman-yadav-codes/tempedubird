@@ -273,32 +273,16 @@ export function CustomerOrdersView() {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Sales Navigation Tabs */}
-      <CustomerSalesTabs />
-
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <ShoppingCart className="size-5 text-[#d9232e]" /> My Orders &amp; Bookings
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {scope === "purchases"
-              ? "View orders you have placed, tracking status, item details, and receipts."
-              : "Manage orders placed by customers on your store & services. Update status and generate bills."}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button asChild size="sm" variant="outline" className="h-9 text-xs">
-            <Link href="/explore">
-              <Search className="size-3.5 mr-1.5" /> Explore Products &amp; Services
-            </Link>
-          </Button>
-          <Button size="sm" variant="outline" onClick={loadOrders} className="h-9 text-xs">
-            <RefreshCw className={`size-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} /> Refresh
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+          <ShoppingCart className="size-5 text-[#d9232e]" /> My Orders &amp; Bookings
+        </h1>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {scope === "purchases"
+            ? "View orders you have placed, tracking status, item details, and receipts."
+            : "Manage orders placed by customers on your store & services. Update status and generate bills."}
+        </p>
       </div>
 
       {/* Scope Switcher: My Purchases vs Store Orders Received */}

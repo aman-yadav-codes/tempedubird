@@ -157,30 +157,14 @@ export function CustomerBookingsView() {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Sales Navigation Tabs */}
-      <CustomerSalesTabs />
-
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <CalendarCheck2 className="size-5 text-primary" /> My Service Bookings &amp; Appointments
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Manage your booked appointments, training sessions, consultations, and salon services.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button asChild size="sm" variant="outline" className="h-9 text-xs">
-            <Link href="/explore">
-              <Search className="size-3.5 mr-1.5" /> Book New Service
-            </Link>
-          </Button>
-          <Button size="sm" variant="outline" onClick={loadBookings} className="h-9 text-xs">
-            <RefreshCw className={`size-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} /> Refresh
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+          <CalendarCheck2 className="size-5 text-primary" /> My Service Bookings &amp; Appointments
+        </h1>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Manage your booked appointments, training sessions, consultations, and salon services.
+        </p>
       </div>
 
       {/* Search Bar */}
