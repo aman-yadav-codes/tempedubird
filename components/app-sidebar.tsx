@@ -256,9 +256,13 @@ const navItems: SidebarItem[] = [
         icon: SlidersHorizontal,
     },
     {
-        title: "SEO Locations",
+        title: "SEO & Marketing",
         url: "/platformadmin/seo-locations",
         icon: Globe,
+        children: [
+            { title: "SEO Locations", url: "/platformadmin/seo-locations", icon: MapPin },
+            { title: "Page Creation with SEO Tags", url: "/platformadmin/marketing/seo", icon: Tags },
+        ],
     },
     {
         title: "Articles & Blog",
@@ -1082,7 +1086,7 @@ export function AppSidebar() {
                     if (item.url === "/admin/vendors") return [];
                     if (item.url === "/admin/profiles" || item.url.startsWith("/admin/profiles")) return [item];
                     if (item.url === "/admin/business-type-access") return [item];
-                    if (item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [item];
+                    if (item.title === "SEO & Marketing" || item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [item];
                     if (item.url === "/platformadmin/content/blog" || item.url === "/admin/content/blog") return [item];
                     if (item.url === "/platformadmin/subscribers" || item.url === "/admin/subscribers") return [item];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [item];
@@ -1090,7 +1094,7 @@ export function AppSidebar() {
                 } else {
                     if (item.url === "/admin/profiles" || item.url.startsWith("/admin/profiles")) return [];
                     if (item.url === "/admin/business-type-access") return [];
-                    if (item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [];
+                    if (item.title === "SEO & Marketing" || item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [];
                     if (item.url === "/platformadmin/content/blog") return [];
                     if (item.url === "/platformadmin/subscribers" || item.url === "/admin/subscribers") return [];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [];
