@@ -1449,13 +1449,22 @@ export function AppSidebar() {
             .join(" ");
     };
 
+    const isCustomerPortal = Boolean(
+        pathname?.startsWith("/customer") ||
+        (Array.isArray(user?.role_codes)
+            ? user.role_codes.includes("customer") && !user.role_codes.some(r => ["platform_admin", "super_admin", "admin", "institution_admin", "staff"].includes(r))
+            : (user as any)?.role === "customer" || (user as any)?.primary_role === "customer")
+    );
+
     const activeWorkspaceLogo = isPlatformAdmin
         ? null
         : isParent
             ? null
             : isStudent
                 ? (activeStudentEnrollment as any)?.institutionLogo ?? (activeStudentEnrollment as any)?.institution_logo_url ?? (studentInstitution as any)?.institution_logo ?? (studentInstitution as any)?.institution_logo_url ?? null
-                : staffInstitution?.logoUrl ?? activeInstitution?.logoUrl ?? null;
+                : isCustomerPortal
+                    ? staffInstitution?.logoUrl ?? activeInstitution?.logoUrl ?? "/images/143panda-logo.png"
+                    : staffInstitution?.logoUrl ?? activeInstitution?.logoUrl ?? null;
 
     const activeWorkspaceName = isPlatformAdmin
         ? "EduBird Platform"
@@ -1465,7 +1474,9 @@ export function AppSidebar() {
                 ? activeChild?.name ?? "EduBird"
                 : isStudent
                     ? activeStudentEnrollment?.institutionName ?? studentInstitution?.institution_name ?? "EduBird"
-                    : staffInstitution?.name ?? activeInstitution?.name ?? (isInstitutionAdmin ? (user?.full_name ? `${user.full_name} (Personal)` : "Personal Profile") : "EduBird");
+                    : isCustomerPortal
+                        ? staffInstitution?.name ?? activeInstitution?.name ?? "143Panda"
+                        : staffInstitution?.name ?? activeInstitution?.name ?? (isInstitutionAdmin ? (user?.full_name ? `${user.full_name} (Personal)` : "Personal Profile") : "EduBird");
 
     const activeWorkspaceRole = isPlatformAdmin
         ? "Platform Admin"
@@ -1477,7 +1488,9 @@ export function AppSidebar() {
                     ? activeStudentEnrollment
                         ? `${activeStudentEnrollment.programName}${activeStudentEnrollment.sectionName ? ` • ${activeStudentEnrollment.sectionName}` : ""}`
                         : "Student"
-                    : isInstitutionAdmin
+                    : isCustomerPortal
+                        ? "Customer"
+                        : isInstitutionAdmin
                         ? (user?.has_business_profile ? "Business Owner" : user?.has_professional_profile ? "Professional Provider" : "Business & Professional Admin")
                         : staffInstitution?.roleName ?? activeInstitution?.roleName ?? user?.primary_role ?? (user?.role_codes?.[0] ? formatStaffRole(user.role_codes[0]) : "Staff");
 
@@ -1648,7 +1661,7 @@ export function AppSidebar() {
                                                     <img
                                                         src={activeWorkspaceLogo}
                                                         alt={activeWorkspaceName}
-                                                        className="h-full w-full object-cover rounded-lg"
+                                                        className={`h-full w-full rounded-lg ${String(activeWorkspaceLogo).includes("143panda") ? "object-contain p-0.5 bg-white" : "object-cover"}`}
                                                     />
                                                 ) : (
                                                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
@@ -1762,7 +1775,7 @@ export function AppSidebar() {
                                             <img
                                                 src={activeWorkspaceLogo}
                                                 alt={activeWorkspaceName}
-                                                className="h-full w-full object-cover rounded-lg"
+                                                className={`h-full w-full rounded-lg ${String(activeWorkspaceLogo).includes("143panda") ? "object-contain p-0.5 bg-white" : "object-cover"}`}
                                             />
                                         ) : (
                                             <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
