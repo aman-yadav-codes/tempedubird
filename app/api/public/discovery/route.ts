@@ -1271,10 +1271,12 @@ export async function GET(req: NextRequest) {
 
         if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
           const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
-          const isComm = catSearch.includes("commercial");
-          const isRes = catSearch.includes("residential") || catSearch.includes("apartment") || catSearch.includes("flat") || catSearch.includes("villa") || catSearch.includes("real estate");
-          const isPlot = catSearch.includes("plot") || catSearch.includes("land");
-          const isInd = catSearch.includes("industrial") || catSearch.includes("warehous");
+          const words = catSearch.split(/[^a-z0-9]+/);
+          const isMainRealEstate = catSearch.includes("real-estate-and-construction") || catSearch.includes("real estate & construction");
+          const isComm = !isMainRealEstate && (words.includes("commercial") || words.includes("showroom") || words.includes("office"));
+          const isRes = !isMainRealEstate && (words.includes("residential") || words.includes("apartment") || words.includes("apartments") || words.includes("flat") || words.includes("flats") || words.includes("villa") || words.includes("villas"));
+          const isPlot = !isMainRealEstate && (words.includes("plot") || words.includes("plots") || words.includes("land") || words.includes("lands"));
+          const isInd = !isMainRealEstate && (words.includes("industrial") || words.includes("warehouse") || words.includes("warehousing"));
 
           if (isComm) {
             pConditions.push(`(br.category_id = 50 OR br.title ILIKE '%commercial%' OR br.title ILIKE '%retail%' OR br.title ILIKE '%showroom%' OR br.title ILIKE '%office%' OR br.title ILIKE '%suite%')`);
@@ -1286,7 +1288,16 @@ export async function GET(req: NextRequest) {
             pConditions.push(`(br.category_id = 52 OR br.title ILIKE '%industrial%' OR br.title ILIKE '%warehouse%')`);
           } else if (categoryIds.length > 0) {
             pParams.push(categoryIds);
-            pConditions.push(`(br.category_id = ANY($${pParams.length}::int[]) OR br.subcategory_id = ANY($${pParams.length}::int[]))`);
+            pConditions.push(`(
+              br.category_id = ANY($${pParams.length}::int[]) 
+              OR br.subcategory_id = ANY($${pParams.length}::int[])
+              OR (br.business_id IS NOT NULL AND br.business_id IN (
+                SELECT id FROM business_profiles 
+                WHERE category_id = ANY($${pParams.length}::int[]) 
+                   OR subcategory_id = ANY($${pParams.length}::int[])
+                   OR (subcategory_ids IS NOT NULL AND subcategory_ids && $${pParams.length}::int[])
+              ))
+            )`);
           }
         }
 
@@ -1378,10 +1389,12 @@ export async function GET(req: NextRequest) {
 
         if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
           const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
-          const isPass = catSearch.includes("passenger") || catSearch.includes("car") || catSearch.includes("suv") || catSearch.includes("auto");
-          const isComm = catSearch.includes("commercial") || catSearch.includes("transport") || catSearch.includes("truck") || catSearch.includes("van");
-          const isBike = catSearch.includes("two-wheeler") || catSearch.includes("two wheeler") || catSearch.includes("motorcycle") || catSearch.includes("bike") || catSearch.includes("scooter");
-          const isLux = catSearch.includes("luxury") || catSearch.includes("exotic");
+          const words = catSearch.split(/[^a-z0-9]+/);
+          const isMainAuto = catSearch.includes("automotive-and-transport") || catSearch.includes("automotive & transport");
+          const isPass = !isMainAuto && (words.includes("passenger") || words.includes("car") || words.includes("cars") || words.includes("suv") || words.includes("sedan"));
+          const isComm = !isMainAuto && (words.includes("commercial") || words.includes("truck") || words.includes("trucks") || words.includes("bus") || words.includes("buses") || words.includes("van") || words.includes("pickup"));
+          const isBike = !isMainAuto && (words.includes("bike") || words.includes("bikes") || words.includes("motorcycle") || words.includes("motorcycles") || words.includes("scooter") || words.includes("scooters") || words.includes("two-wheeler"));
+          const isLux = !isMainAuto && (words.includes("luxury") || words.includes("exotic"));
 
           if (isPass) {
             vConditions.push(`(br.category_id IN (2, 4) OR br.title ILIKE '%scorpio%' OR br.title ILIKE '%thar%' OR br.title ILIKE '%xuv%' OR br.title ILIKE '%fortuner%' OR br.title ILIKE '%creta%' OR br.title ILIKE '%seltos%' OR br.title ILIKE '%city%' OR br.title ILIKE '%safari%' OR br.title ILIKE '%nexon%' OR br.title ILIKE '%vitara%')`);
@@ -1393,7 +1406,16 @@ export async function GET(req: NextRequest) {
             vConditions.push(`(br.category_id = 4 OR br.title ILIKE '%luxury%' OR br.title ILIKE '%exotic%' OR br.title ILIKE '%fortuner%' OR br.title ILIKE '%safari%')`);
           } else if (categoryIds.length > 0) {
             vParams.push(categoryIds);
-            vConditions.push(`(br.category_id = ANY($${vParams.length}::int[]) OR br.subcategory_id = ANY($${vParams.length}::int[]))`);
+            vConditions.push(`(
+              br.category_id = ANY($${vParams.length}::int[]) 
+              OR br.subcategory_id = ANY($${vParams.length}::int[])
+              OR (br.business_id IS NOT NULL AND br.business_id IN (
+                SELECT id FROM business_profiles 
+                WHERE category_id = ANY($${vParams.length}::int[]) 
+                   OR subcategory_id = ANY($${vParams.length}::int[])
+                   OR (subcategory_ids IS NOT NULL AND subcategory_ids && $${vParams.length}::int[])
+              ))
+            )`);
           }
         }
 
@@ -1485,10 +1507,12 @@ export async function GET(req: NextRequest) {
 
         if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
           const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
-          const isCorp = catSearch.includes("corporate") || catSearch.includes("industry") || catSearch.includes("business") || catSearch.includes("tech");
-          const isWed = catSearch.includes("wedding") || catSearch.includes("social") || catSearch.includes("gala") || catSearch.includes("celebration");
-          const isEnt = catSearch.includes("entertainment") || catSearch.includes("cultural") || catSearch.includes("music") || catSearch.includes("show") || catSearch.includes("art");
-          const isSports = catSearch.includes("sports") || catSearch.includes("fitness") || catSearch.includes("tournament") || catSearch.includes("marathon") || catSearch.includes("athletics");
+          const words = catSearch.split(/[^a-z0-9]+/);
+          const isMainHosp = catSearch.includes("hospitality-and-events") || catSearch.includes("hospitality & events");
+          const isCorp = !isMainHosp && (words.includes("corporate") || words.includes("business") || words.includes("industry"));
+          const isWed = !isMainHosp && (words.includes("wedding") || words.includes("social") || words.includes("gala") || words.includes("celebration"));
+          const isEnt = !isMainHosp && (words.includes("entertainment") || words.includes("cultural") || words.includes("music") || words.includes("concert") || words.includes("show"));
+          const isSports = !isMainHosp && (words.includes("sports") || words.includes("fitness") || words.includes("tournament") || words.includes("marathon"));
 
           if (isCorp) {
             eConditions.push(`(br.category_id = 350 OR br.title ILIKE '%tech%' OR br.title ILIKE '%summit%' OR br.title ILIKE '%conclave%' OR br.title ILIKE '%expo%' OR br.title ILIKE '%agritech%' OR br.title ILIKE '%handloom%')`);
@@ -1500,7 +1524,16 @@ export async function GET(req: NextRequest) {
             eConditions.push(`(br.category_id = 354 OR br.title ILIKE '%marathon%' OR br.title ILIKE '%sports%' OR br.title ILIKE '%cricket%' OR br.title ILIKE '%run%')`);
           } else if (categoryIds.length > 0) {
             eParams.push(categoryIds);
-            eConditions.push(`(br.category_id = ANY($${eParams.length}::int[]) OR br.subcategory_id = ANY($${eParams.length}::int[]))`);
+            eConditions.push(`(
+              br.category_id = ANY($${eParams.length}::int[]) 
+              OR br.subcategory_id = ANY($${eParams.length}::int[])
+              OR (br.business_id IS NOT NULL AND br.business_id IN (
+                SELECT id FROM business_profiles 
+                WHERE category_id = ANY($${eParams.length}::int[]) 
+                   OR subcategory_id = ANY($${eParams.length}::int[])
+                   OR (subcategory_ids IS NOT NULL AND subcategory_ids && $${eParams.length}::int[])
+              ))
+            )`);
           }
         }
 
