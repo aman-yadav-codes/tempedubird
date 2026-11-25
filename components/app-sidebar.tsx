@@ -1520,8 +1520,8 @@ export function AppSidebar() {
                     : isCustomerPortal
                         ? "Customer"
                         : isInstitutionAdmin
-                        ? (user?.has_business_profile ? "Business Owner" : user?.has_professional_profile ? "Professional Provider" : "Business & Professional Admin")
-                        : staffInstitution?.roleName ?? activeInstitution?.roleName ?? user?.primary_role ?? (user?.role_codes?.[0] ? formatStaffRole(user.role_codes[0]) : "Staff");
+                            ? (user?.has_business_profile ? "Business Owner" : user?.has_professional_profile ? "Professional Provider" : "Business & Professional Admin")
+                            : staffInstitution?.roleName ?? activeInstitution?.roleName ?? user?.primary_role ?? (user?.role_codes?.[0] ? formatStaffRole(user.role_codes[0]) : "Staff");
 
     const activeWorkspaceInitial = isPlatformAdmin ? "E" : (activeWorkspaceName[0] ?? "E").toUpperCase();
     const canSwitchInstitution = isInstitutionAdmin && !isPlatformAdmin;
