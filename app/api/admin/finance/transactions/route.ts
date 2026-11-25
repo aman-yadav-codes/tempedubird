@@ -323,14 +323,14 @@ export async function GET(req: Request) {
       transactions = allRows.slice(offset, offset + limit);
     }
 
-    // Lookup options for forms
+    // Lookup options for forms (with graceful fallbacks)
     const [incCatRes, expCatRes, clientsRes, vendorsRes, inventoryRes, payMethodsRes] = await Promise.all([
-      db.query(`SELECT id, name FROM finance_income_categories WHERE is_active = TRUE AND (scope_type = $1 OR ($2::INT IS NOT NULL AND institution_id = $2)) ORDER BY name ASC`, [scope, institutionId]),
-      db.query(`SELECT id, name FROM finance_expense_categories WHERE is_active = TRUE AND (scope_type = $1 OR ($2::INT IS NOT NULL AND institution_id = $2)) ORDER BY name ASC`, [scope, institutionId]),
-      institutionId ? db.query(`SELECT id, name, company_name, email, phone, address FROM clients WHERE institution_id = $1 ORDER BY name ASC LIMIT 200`, [institutionId]) : { rows: [] },
-      institutionId ? db.query(`SELECT id, name, company_name, email, phone, address FROM vendors WHERE institution_id = $1 ORDER BY name ASC LIMIT 200`, [institutionId]) : { rows: [] },
-      institutionId ? db.query(`SELECT id, name, sku, unit, unit_price, quantity FROM inventory_items WHERE institution_id = $1 ORDER BY name ASC LIMIT 200`, [institutionId]) : { rows: [] },
-      db.query(`SELECT id, method_name, method_key, category FROM finance_payment_methods WHERE is_active = TRUE AND (scope_type = $1 OR ($2::INT IS NOT NULL AND institution_id = $2)) ORDER BY id ASC`, [scope, institutionId]),
+      db.query(`SELECT id, name FROM finance_income_categories WHERE is_active = TRUE AND (scope_type = $1 OR ($2::INT IS NOT NULL AND institution_id = $2)) ORDER BY name ASC`, [scope, institutionId]).catch(() => ({ rows: [] })),
+      db.query(`SELECT id, name FROM finance_expense_categories WHERE is_active = TRUE AND (scope_type = $1 OR ($2::INT IS NOT NULL AND institution_id = $2)) ORDER BY name ASC`, [scope, institutionId]).catch(() => ({ rows: [] })),
+      institutionId ? db.query(`SELECT id, name, company_name, email, phone, address FROM clients WHERE institution_id = $1 ORDER BY name ASC LIMIT 200`, [institutionId]).catch(() => ({ rows: [] })) : { rows: [] },
+      institutionId ? db.query(`SELECT id, name, company_name, email, phone, address FROM vendors WHERE institution_id = $1 ORDER BY name ASC LIMIT 200`, [institutionId]).catch(() => ({ rows: [] })) : { rows: [] },
+      institutionId ? db.query(`SELECT id, name, sku, unit, unit_price, quantity FROM inventory_items WHERE institution_id = $1 ORDER BY name ASC LIMIT 200`, [institutionId]).catch(() => ({ rows: [] })) : { rows: [] },
+      db.query(`SELECT id, COALESCE(title, method_type, 'Payment Method') AS method_name, method_type AS method_key, method_type AS category FROM finance_payment_methods WHERE is_active = TRUE AND (scope_type = $1 OR ($2::INT IS NOT NULL AND institution_id = $2)) ORDER BY id ASC`, [scope, institutionId]).catch(() => ({ rows: [] })),
     ]);
 
     return NextResponse.json({

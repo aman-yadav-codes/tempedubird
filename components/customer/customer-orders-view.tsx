@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ShoppingCart,
   Search,
@@ -88,14 +89,17 @@ interface Order {
 
 export function CustomerOrdersView() {
   const { user } = useAuthStore();
+  const pathname = usePathname();
+  const isCustomerPortal = pathname?.startsWith("/customer");
   const isSellerUser = Boolean(
-    user?.has_business_profile ||
-    user?.has_professional_profile ||
-    user?.role_codes?.includes("business_owner") ||
-    user?.role_codes?.includes("professional_provider") ||
-    user?.role_codes?.includes("institution_admin") ||
-    user?.role_codes?.includes("platform_admin") ||
-    user?.is_super_admin
+    (user?.has_business_profile ||
+      user?.has_professional_profile ||
+      user?.role_codes?.includes("business_owner") ||
+      user?.role_codes?.includes("professional_provider") ||
+      user?.role_codes?.includes("institution_admin") ||
+      user?.role_codes?.includes("platform_admin") ||
+      user?.is_super_admin) &&
+    !isCustomerPortal
   );
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -104,10 +108,10 @@ export function CustomerOrdersView() {
   const [activeTab, setActiveTab] = useState("all");
 
   useEffect(() => {
-    if (!isSellerUser && scope === "sales") {
+    if ((!isSellerUser || isCustomerPortal) && scope === "sales") {
       setScope("purchases");
     }
-  }, [isSellerUser, scope]);
+  }, [isSellerUser, isCustomerPortal, scope]);
 
   // Dialogs
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);

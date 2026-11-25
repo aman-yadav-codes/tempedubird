@@ -1288,9 +1288,9 @@ function CustomerExplorePageContent({
         body: JSON.stringify({
           businessId: resolvedBusinessId,
           professionalId: resolvedProfessionalId,
-          productId: enquiryModalItem.resultType === "product" ? enquiryModalItem.id : enquiryModalItem.product_id || undefined,
-          serviceId: enquiryModalItem.resultType === "service" ? enquiryModalItem.id : enquiryModalItem.service_id || undefined,
-          courseId: enquiryModalItem.resultType === "course" ? enquiryModalItem.id : undefined,
+          productId: enquiryModalItem.resultType === "product" ? enquiryModalItem.id : enquiryModalItem.product_id || (enquiryModalItem as any).productId || undefined,
+          serviceId: enquiryModalItem.resultType === "service" ? enquiryModalItem.id : enquiryModalItem.service_id || (enquiryModalItem as any).serviceId || undefined,
+          courseId: enquiryModalItem.resultType === "course" || (enquiryModalItem as any).courseId ? ((enquiryModalItem as any).courseId || enquiryModalItem.id) : undefined,
           itemTitle: enquiryModalItem.title || enquiryModalItem.name,
           sourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
           customerName: enquiryForm.name || user?.full_name || "Customer",
@@ -2145,7 +2145,7 @@ function CustomerExplorePageContent({
                               variant="default"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setEnquiryModalItem(c);
+                                setEnquiryModalItem({ ...c, resultType: "course", courseId: c.id });
                                 setEnquiryForm({
                                   name: user?.full_name || "",
                                   email: user?.email || "",
@@ -2276,7 +2276,7 @@ function CustomerExplorePageContent({
                               variant="default"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setEnquiryModalItem(j);
+                                setEnquiryModalItem({ ...j, resultType: "job", jobId: j.id });
                                 setEnquiryForm({
                                   name: user?.full_name || "",
                                   email: user?.email || "",
@@ -2402,7 +2402,7 @@ function CustomerExplorePageContent({
                               className="flex-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setEnquiryModalItem(p);
+                                setEnquiryModalItem({ ...p, resultType: "property", propertyId: p.id });
                                 setEnquiryForm({
                                   name: user?.full_name || "",
                                   email: user?.email || "",
@@ -2532,7 +2532,7 @@ function CustomerExplorePageContent({
                               className="flex-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setEnquiryModalItem(v);
+                                setEnquiryModalItem({ ...v, resultType: "vehicle", vehicleId: v.id });
                                 setEnquiryForm({
                                   name: user?.full_name || "",
                                   email: user?.email || "",
@@ -2660,7 +2660,7 @@ function CustomerExplorePageContent({
                               className="flex-1 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white"
                               onClick={(ev) => {
                                 ev.stopPropagation();
-                                setEnquiryModalItem(e);
+                                setEnquiryModalItem({ ...e, resultType: "event", eventId: e.id });
                                 setEnquiryForm({
                                   name: user?.full_name || "",
                                   email: user?.email || "",

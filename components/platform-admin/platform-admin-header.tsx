@@ -799,59 +799,61 @@ export function PlatformAdminHeader() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-xl shadow-xl border-sky-100">
-              <DropdownMenuLabel className="px-3 py-1.5 text-xs text-muted-foreground font-semibold truncate">
-                {user ? (user.full_name || user.email) : "Guest User"}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/packages"
-                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
-                >
-                  <Package className="size-4 text-amber-500" />
-                  <span>My Packages</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/workspace"
-                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
-                >
-                  <Store className="size-4 text-sky-500" />
-                  <span>My Store</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/platformadmin/my-profile"
-                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
-                >
-                  <User className="size-4 text-sky-500" />
-                  <span>Profile</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/workspace/settings"
-                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
-                >
-                  <Settings className="size-4 text-sky-500" />
-                  <span>Settings</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               {user ? (
-                <DropdownMenuItem
-                  onClick={() => {
-                    clearAuth();
-                    toast.success("Signed out successfully");
-                    router.push("/");
-                  }}
-                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-rose-600 hover:text-rose-700 rounded-lg hover:bg-rose-50"
-                >
-                  <LogOut className="size-4 text-rose-500" />
-                  <span>Sign Out</span>
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuLabel className="px-3 py-1.5 text-xs text-muted-foreground font-semibold truncate">
+                    {user.full_name || user.email}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href="/packages"
+                      className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                    >
+                      <Package className="size-4 text-amber-500" />
+                      <span>My Packages</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href="/workspace"
+                      className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                    >
+                      <Store className="size-4 text-sky-500" />
+                      <span>My Store</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href="/platformadmin/my-profile"
+                      className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                    >
+                      <User className="size-4 text-sky-500" />
+                      <span>Profile</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href="/workspace/settings"
+                      className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                    >
+                      <Settings className="size-4 text-sky-500" />
+                      <span>Settings</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      clearAuth();
+                      toast.success("Signed out successfully");
+                      router.push("/");
+                    }}
+                    className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-rose-600 hover:text-rose-700 rounded-lg hover:bg-rose-50"
+                  >
+                    <LogOut className="size-4 text-rose-500" />
+                    <span>Sign Out</span>
+                  </DropdownMenuItem>
+                </>
               ) : (
                 <DropdownMenuItem
                   onClick={() => {

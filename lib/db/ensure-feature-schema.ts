@@ -974,6 +974,7 @@ export async function ensureFeatureSchema() {
       `ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS tax_amount NUMERIC DEFAULT 0`,
       `ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS amount_paid NUMERIC`,
       `ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS outstanding_amount NUMERIC DEFAULT 0`,
+      `ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS receipt_url TEXT`,
       `ALTER TABLE finance_expense_entries ADD COLUMN IF NOT EXISTS items JSONB DEFAULT '[]'::jsonb`,
       `CREATE TABLE IF NOT EXISTS finance_transaction_payments (
         id BIGSERIAL PRIMARY KEY,

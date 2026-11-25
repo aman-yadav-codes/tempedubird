@@ -991,13 +991,14 @@ export function AppSidebar() {
             return true;
         }
         if (isCustomer) {
-            return pathname === "/admin" ||
-                pathname.startsWith("/admin/enquiries") ||
-                pathname.startsWith("/admin/bookings") ||
-                pathname.startsWith("/admin/orders") ||
-                pathname.startsWith("/admin/favorites") ||
-                pathname.startsWith("/admin/finance") ||
-                pathname.startsWith("/admin/my-profile");
+            const norm = normalizeAdminPath(pathname);
+            return norm === "/admin" ||
+                norm.startsWith("/admin/enquiries") ||
+                norm.startsWith("/admin/bookings") ||
+                norm.startsWith("/admin/orders") ||
+                norm.startsWith("/admin/favorites") ||
+                norm.startsWith("/admin/finance") ||
+                norm.startsWith("/admin/my-profile");
         }
         if (pathname === "/admin/account" || pathname.startsWith("/admin/account")) {
             return !isStudent && !isParent;
