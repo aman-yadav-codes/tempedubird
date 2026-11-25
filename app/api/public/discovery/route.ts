@@ -279,9 +279,9 @@ export async function GET(req: NextRequest) {
         bParams.push(categoryIds);
         if (matchingBusinessIds.length > 0) {
           bParams.push(matchingBusinessIds);
-          bConditions.push(`(bp.category_id = ANY($${bParams.length - 1}::int[]) OR bp.subcategory_id = ANY($${bParams.length - 1}::int[]) OR bp.id = ANY($${bParams.length}::int[]))`);
+          bConditions.push(`(bp.category_id = ANY($${bParams.length - 1}::int[]) OR bp.subcategory_id = ANY($${bParams.length - 1}::int[]) OR (bp.subcategory_ids IS NOT NULL AND bp.subcategory_ids && $${bParams.length - 1}::int[]) OR bp.id = ANY($${bParams.length}::int[]))`);
         } else {
-          bConditions.push(`(bp.category_id = ANY($${bParams.length}::int[]) OR bp.subcategory_id = ANY($${bParams.length}::int[]))`);
+          bConditions.push(`(bp.category_id = ANY($${bParams.length}::int[]) OR bp.subcategory_id = ANY($${bParams.length}::int[]) OR (bp.subcategory_ids IS NOT NULL AND bp.subcategory_ids && $${bParams.length}::int[]))`);
         }
       }
 
@@ -305,6 +305,10 @@ export async function GET(req: NextRequest) {
           bp.established_year,
           bp.logo_url,
           bp.banner_url,
+          bp.banner_url AS cover_url,
+          bp.gallery_images,
+          bp.subcategory_id,
+          bp.subcategory_ids,
           bp.latitude,
           bp.longitude,
           bp.is_verified,

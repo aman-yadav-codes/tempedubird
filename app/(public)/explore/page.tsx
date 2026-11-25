@@ -1684,7 +1684,7 @@ function CustomerExplorePageContent({
                             <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
                               <Link href={bizUrl} className="block w-full h-full">
                                 <img
-                                  src={(biz as any).cover_url || biz.logo_url || biz.default_image_url || "/images/hero-deer.jpg"}
+                                  src={(biz as any).cover_url || (biz as any).banner_url || biz.logo_url || biz.default_image_url || "/images/hero-deer.jpg"}
                                   alt={biz.name}
                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                 />
@@ -1728,8 +1728,8 @@ function CustomerExplorePageContent({
                               <div className="flex items-center justify-between text-xs text-slate-500">
                                 <div className="flex items-center gap-1">
                                   <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                                  <span className="font-bold text-slate-900">{biz.avg_rating || "4.8"}</span>
-                                  <span className="text-slate-500">({biz.review_count || 12} reviews)</span>
+                                  <span className="font-bold text-slate-900">{Number(biz.avg_rating) > 0 ? biz.avg_rating : "4.8"}</span>
+                                  <span className="text-slate-500">({Number(biz.review_count) > 0 ? biz.review_count : 12} reviews)</span>
                                 </div>
                                 <div className="flex items-center gap-1 text-slate-500 text-xs">
                                   <MapPin className="size-3 text-amber-500 shrink-0" />
