@@ -38,13 +38,18 @@ export async function GET(req: NextRequest) {
     const res = await db.query(
       `SELECT
          b.*,
+         COALESCE(bp.name, pp.name, 'Store') AS store_name,
          bp.name AS business_name,
          bp.city AS business_city,
          bp.phone AS business_phone,
-         pp.name AS professional_name
+         pp.name AS professional_name,
+         COALESCE(u_bp.full_name, u_pp.full_name, 'Business Owner') AS seller_name,
+         COALESCE(b.source_url, CASE WHEN b.service_id IS NOT NULL THEN '/services/' || b.service_id::text WHEN b.business_id IS NOT NULL THEN '/business/' || b.business_id::text WHEN b.professional_id IS NOT NULL THEN '/professional/' || b.professional_id::text ELSE '/explore' END) AS source_url
        FROM service_bookings b
        LEFT JOIN business_profiles bp ON bp.id = b.business_id
+       LEFT JOIN users u_bp ON u_bp.id = bp.user_id
        LEFT JOIN professional_profiles pp ON pp.id = b.professional_id
+       LEFT JOIN users u_pp ON u_pp.id = pp.user_id
        ${whereStr}
        ORDER BY b.id DESC
        LIMIT 100`,

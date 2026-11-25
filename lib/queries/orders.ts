@@ -20,6 +20,9 @@ export type SalesOrder = {
   professional_id?: number | null;
   professional_name?: string | null;
   seller_user_id?: number | null;
+  seller_name?: string | null;
+  store_name?: string | null;
+  source_url?: string | null;
   order_type?: string | null;
   customer_name: string;
   customer_email: string;
@@ -364,6 +367,9 @@ export async function getSalesOrdersList(params: {
       i.name AS institution_name,
       bp.name AS business_name,
       pp.name AS professional_name,
+      COALESCE(u_bp.full_name, u_pp.full_name, 'Store Merchant') AS seller_name,
+      COALESCE(bp.name, pp.name, i.name, '143Panda Store') AS store_name,
+      COALESCE(o.source_url, CASE WHEN o.business_id IS NOT NULL THEN '/business/' || o.business_id::text WHEN o.professional_id IS NOT NULL THEN '/professional/' || o.professional_id::text ELSE '/explore' END) AS source_url,
       COALESCE(
         string_agg(it.product_name || ' (x' || it.quantity || ')', ', ' ORDER BY it.id),
         ''
@@ -371,10 +377,12 @@ export async function getSalesOrdersList(params: {
     FROM sales_orders o
     LEFT JOIN institution_profiles i ON i.id = o.institution_id
     LEFT JOIN business_profiles bp ON bp.id = o.business_id
+    LEFT JOIN users u_bp ON u_bp.id = bp.user_id
     LEFT JOIN professional_profiles pp ON pp.id = o.professional_id
+    LEFT JOIN users u_pp ON u_pp.id = pp.user_id
     LEFT JOIN sales_order_items it ON it.order_id = o.id
     WHERE ${whereClause}
-    GROUP BY o.id, i.name, bp.name, pp.name
+    GROUP BY o.id, i.name, bp.name, pp.name, u_bp.full_name, u_pp.full_name, bp.id, pp.id
     ORDER BY o.created_at DESC
     LIMIT $${values.length + 1} OFFSET $${values.length + 2}
   `;

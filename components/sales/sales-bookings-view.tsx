@@ -18,6 +18,9 @@ import {
   MoreVertical,
   Check,
   AlertCircle,
+  ExternalLink,
+  Store,
+  Globe,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +70,9 @@ interface Booking {
   business_city?: string;
   business_phone?: string;
   professional_name?: string;
+  store_name?: string;
+  seller_name?: string;
+  source_url?: string;
 }
 
 interface SalesBookingsViewProps {
@@ -279,7 +285,8 @@ export function SalesBookingsView({ scope = "admin" }: SalesBookingsViewProps) {
                   <TableHead className="text-xs font-semibold">Booking #</TableHead>
                   <TableHead className="text-xs font-semibold">Customer Details</TableHead>
                   <TableHead className="text-xs font-semibold">Service Name</TableHead>
-                  {scope === "admin" && <TableHead className="text-xs font-semibold">Business Provider</TableHead>}
+                  <TableHead className="text-xs font-semibold">Seller &amp; Store</TableHead>
+                  <TableHead className="text-xs font-semibold">Origin Page</TableHead>
                   <TableHead className="text-xs font-semibold">Appointment Slot</TableHead>
                   <TableHead className="text-xs font-semibold">Price</TableHead>
                   <TableHead className="text-xs font-semibold">Status</TableHead>
@@ -302,14 +309,32 @@ export function SalesBookingsView({ scope = "admin" }: SalesBookingsViewProps) {
                     <TableCell className="text-xs font-medium">
                       {item.service_name}
                     </TableCell>
-                    {scope === "admin" && (
-                      <TableCell className="text-xs">
-                        <div className="flex items-center gap-1.5 font-medium">
-                          <Building2 className="size-3.5 text-muted-foreground" />
-                          <span>{item.business_name || item.professional_name || "—"}</span>
-                        </div>
-                      </TableCell>
-                    )}
+                    <TableCell className="text-xs">
+                      <div className="flex items-center gap-1.5 font-bold text-foreground">
+                        <Store className="size-3.5 text-primary shrink-0" />
+                        <span className="truncate max-w-[150px]">{item.store_name || item.business_name || item.professional_name || "—"}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5">
+                        <User className="size-3 shrink-0" />
+                        <span className="truncate max-w-[150px]">Seller: {item.seller_name || "Business Owner"}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {item.source_url ? (
+                        <a
+                          href={item.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded-md px-2 py-1 transition-colors"
+                        >
+                          <Globe className="size-3 shrink-0" />
+                          <span className="truncate max-w-[100px]">View Page</span>
+                          <ExternalLink className="size-2.5 shrink-0" />
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground italic">Directory</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-xs">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="size-3 text-muted-foreground" />
@@ -358,14 +383,28 @@ export function SalesBookingsView({ scope = "admin" }: SalesBookingsViewProps) {
 
           {selectedBooking && (
             <div className="space-y-3.5 text-xs">
-              <div className="p-3 rounded-lg bg-muted/50 border space-y-1.5">
+              <div className="p-3 rounded-lg bg-muted/50 border space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-foreground text-sm">{selectedBooking.service_name}</span>
                   {getStatusBadge(selectedBooking.status)}
                 </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Building2 className="size-3.5 text-primary" />
-                  <span>{selectedBooking.business_name || selectedBooking.professional_name || "Provider"}</span>
+                <div className="flex items-center justify-between gap-2 text-muted-foreground pt-1 border-t border-border/40">
+                  <div className="flex items-center gap-1.5">
+                    <Store className="size-3.5 text-primary shrink-0" />
+                    <span className="font-bold text-foreground">{selectedBooking.store_name || selectedBooking.business_name || selectedBooking.professional_name || "Provider"}</span>
+                    <span className="text-[11px] text-muted-foreground">· Seller: {selectedBooking.seller_name || "Business Owner"}</span>
+                  </div>
+                  {selectedBooking.source_url && (
+                    <a
+                      href={selectedBooking.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline shrink-0"
+                    >
+                      <Globe className="size-3" />
+                      <span>View Page ↗</span>
+                    </a>
+                  )}
                 </div>
               </div>
 

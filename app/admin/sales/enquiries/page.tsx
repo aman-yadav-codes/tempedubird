@@ -25,6 +25,9 @@ import {
     Sparkles,
     UserCheck,
     Users,
+    ExternalLink,
+    Store,
+    User,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -127,6 +130,9 @@ type EnquiryRecord = {
     updated_at?: string;
     institution_id?: number | null;
     institution_name?: string | null;
+    store_name?: string | null;
+    seller_name?: string | null;
+    source_url?: string | null;
 };
 
 type EnquiryStatusValue =
@@ -522,14 +528,46 @@ export default function SalesEnquiriesPage() {
             ),
         },
         {
-            accessorKey: "institution_name",
-            header: "Target Institution",
-            cell: ({ row }) => (
-                <div className="flex items-center gap-1.5 text-xs text-foreground font-semibold">
-                    <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
-                    <span>{row.original.institution_name || "EduBird Platform"}</span>
-                </div>
-            ),
+            accessorKey: "store_name",
+            header: "Seller & Store",
+            cell: ({ row }) => {
+                const store = row.original.store_name || row.original.metadata?.store_name || row.original.institution_name || "143Panda Store";
+                const seller = row.original.seller_name || row.original.metadata?.seller_name || "Store Merchant";
+                return (
+                    <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5 text-xs text-foreground font-bold">
+                            <Store className="h-3.5 w-3.5 text-primary shrink-0" />
+                            <span className="truncate max-w-[150px]">{store}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <User className="h-3 w-3 shrink-0" />
+                            <span className="truncate max-w-[150px]">Seller: {seller}</span>
+                        </div>
+                    </div>
+                );
+            },
+        },
+        {
+            accessorKey: "source_url",
+            header: "Origin Page",
+            cell: ({ row }) => {
+                const url = row.original.source_url || row.original.metadata?.source_url;
+                if (!url) {
+                    return <span className="text-[11px] text-muted-foreground italic">Platform</span>;
+                }
+                return (
+                    <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded-md px-2 py-1 transition-colors"
+                    >
+                        <Globe className="size-3 shrink-0" />
+                        <span className="truncate max-w-[100px]">View Page</span>
+                        <ExternalLink className="size-2.5 shrink-0" />
+                    </a>
+                );
+            },
         },
         {
             accessorKey: "phone",
@@ -1191,7 +1229,22 @@ export default function SalesEnquiriesPage() {
                                 {selectedEnquiry?.parent_name && (
                                     <p><span className="text-muted-foreground">Parent:</span> {selectedEnquiry?.parent_name} {selectedEnquiry?.parent_phone ? `(${selectedEnquiry.parent_phone})` : ""}</p>
                                 )}
-                                <p><span className="text-muted-foreground">Target Institution:</span> <strong className="text-foreground">{selectedEnquiry?.institution_name || "EduBird Platform"}</strong></p>
+                                <p><span className="text-muted-foreground">Store / Institution:</span> <strong className="text-foreground">{selectedEnquiry?.store_name || selectedEnquiry?.metadata?.store_name || selectedEnquiry?.institution_name || "143Panda Platform"}</strong></p>
+                                <p><span className="text-muted-foreground">Seller:</span> <strong className="text-foreground">{selectedEnquiry?.seller_name || selectedEnquiry?.metadata?.seller_name || "Store Merchant"}</strong></p>
+                                {(selectedEnquiry?.source_url || selectedEnquiry?.metadata?.source_url) && (
+                                    <p className="flex items-center gap-1.5 pt-1">
+                                        <span className="text-muted-foreground">Origin Page:</span>
+                                        <a
+                                            href={selectedEnquiry?.source_url || selectedEnquiry?.metadata?.source_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline bg-primary/5 px-2 py-0.5 rounded border border-primary/20"
+                                        >
+                                            <Globe className="size-3" />
+                                            <span>View Page ↗</span>
+                                        </a>
+                                    </p>
+                                )}
                                 <p><span className="text-muted-foreground">Contact Phone:</span> {selectedEnquiry?.phone}</p>
                                 <p><span className="text-muted-foreground">Email:</span> {selectedEnquiry?.email || "N/A"}</p>
                                 <p><span className="text-muted-foreground">Enquiry Item:</span> <strong className="text-foreground">{selectedEnquiry?.package_name || selectedEnquiry?.preferred_program || "General"}</strong></p>

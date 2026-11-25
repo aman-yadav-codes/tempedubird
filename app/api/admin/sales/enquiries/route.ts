@@ -156,6 +156,47 @@ export async function GET(req: Request) {
                 INNER JOIN users u ON u.id = sp.user_id
                 LEFT JOIN institution_programs p ON p.id = se.program_id
                 WHERE COALESCE(se.is_deleted, FALSE) = FALSE
+
+                UNION ALL
+
+                SELECT
+                    'ci_' || ci.id::text AS id,
+                    ci.customer_name AS student_name,
+                    NULL AS parent_name,
+                    NULL AS parent_phone,
+                    NULL AS parent_email,
+                    NULL AS child_name,
+                    COALESCE(ci.customer_phone, '') AS phone,
+                    COALESCE(ci.customer_email, '') AS email,
+                    COALESCE(ci.status, 'new') AS status,
+                    COALESCE(ci.status, 'new') AS pipeline_stage,
+                    25000::numeric AS estimated_value,
+                    COALESCE(ci.message, 'Direct Customer Enquiry') AS notes,
+                    COALESCE(prod.title, s.title, bp.name, pp.name, 'Customer Inquiry') AS preferred_program,
+                    'inquiry' AS enquiry_type,
+                    NULL AS package_id,
+                    NULL AS package_name,
+                    NULL AS package_price,
+                    NULL AS package_for,
+                    NULL AS package_validity,
+                    jsonb_build_object(
+                        'store_name', COALESCE(bp.name, pp.name, '143Panda Store'),
+                        'seller_name', COALESCE(u_bp.full_name, u_pp.full_name, 'Store Merchant'),
+                        'source_url', COALESCE(ci.source_url, CASE WHEN ci.business_id IS NOT NULL THEN '/business/' || ci.business_id::text WHEN ci.professional_id IS NOT NULL THEN '/professional/' || ci.professional_id::text ELSE '/explore' END),
+                        'message', ci.message,
+                        'preferred_date', ci.preferred_date,
+                        'preferred_time', ci.preferred_time
+                    ) AS metadata,
+                    'Store Directory' AS source,
+                    ci.created_at,
+                    NULL::integer AS institution_id
+                FROM customer_inquiries ci
+                LEFT JOIN business_profiles bp ON bp.id = ci.business_id
+                LEFT JOIN users u_bp ON u_bp.id = bp.user_id
+                LEFT JOIN professional_profiles pp ON pp.id = ci.professional_id
+                LEFT JOIN users u_pp ON u_pp.id = pp.user_id
+                LEFT JOIN products prod ON prod.id = ci.product_id
+                LEFT JOIN services s ON s.id = ci.service_id
             )
         `;
 
@@ -197,7 +238,10 @@ export async function GET(req: Request) {
                     ce.source,
                     ce.created_at,
                     ce.institution_id,
-                    COALESCE(ip.name, ip.slug, 'EduBird Partner Institute') AS institution_name
+                    COALESCE(ce.metadata->>'store_name', ip.name, ip.slug, '143Panda Platform') AS store_name,
+                    COALESCE(ce.metadata->>'seller_name', 'Store Merchant') AS seller_name,
+                    COALESCE(ce.metadata->>'source_url', '/explore') AS source_url,
+                    COALESCE(ip.name, ip.slug, ce.metadata->>'store_name', 'EduBird Partner Institute') AS institution_name
                 FROM combined_enquiries ce
                 LEFT JOIN institution_profiles ip ON ip.id = ce.institution_id
                 ${whereSql}

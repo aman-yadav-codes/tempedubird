@@ -30,6 +30,9 @@ import {
   Receipt,
   User,
   MapPin,
+  ExternalLink,
+  Store,
+  Globe,
 } from "lucide-react";
 import { AdminSalesTabs } from "@/components/sales/admin-sales-tabs";
 import { Button } from "@/components/ui/button";
@@ -582,6 +585,8 @@ export default function SalesOrdersPage() {
                 <tr className="border-b border-border/80 bg-muted/40 font-bold text-muted-foreground">
                   <th className="p-3.5 pl-4">Order #</th>
                   <th className="p-3.5">Customer</th>
+                  <th className="p-3.5">Seller &amp; Store</th>
+                  <th className="p-3.5">Origin Page</th>
                   <th className="p-3.5 text-right">Amount</th>
                   <th className="p-3.5">Payment</th>
                   <th className="p-3.5">Fulfillment</th>
@@ -631,6 +636,34 @@ export default function SalesOrdersPage() {
                           <span>{ord.customer_email}</span>
                           {ord.customer_phone && <span>· {ord.customer_phone}</span>}
                         </div>
+                      </td>
+
+                      <td className="p-3.5">
+                        <div className="font-bold text-foreground flex items-center gap-1.5">
+                          <Store className="size-3.5 text-primary shrink-0" />
+                          <span className="truncate max-w-[150px]">{ord.store_name || ord.business_name || "143Panda Store"}</span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <User className="size-3 shrink-0" />
+                          <span className="truncate max-w-[150px]">Seller: {ord.seller_name || "Store Merchant"}</span>
+                        </div>
+                      </td>
+
+                      <td className="p-3.5">
+                        {ord.source_url ? (
+                          <a
+                            href={ord.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded-md px-2 py-1 transition-colors"
+                          >
+                            <Globe className="size-3 shrink-0" />
+                            <span className="truncate max-w-[110px]">View Page</span>
+                            <ExternalLink className="size-2.5 shrink-0" />
+                          </a>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground italic">Explore</span>
+                        )}
                       </td>
 
                       <td className="p-3.5 text-right font-bold text-foreground font-mono">
@@ -1054,11 +1087,12 @@ export default function SalesOrdersPage() {
               <div className="border-b pb-4 flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-1.5 text-primary font-black text-lg">
-                    <ShoppingCart className="size-5" />
-                    <span>EduBird Campus Store</span>
+                    <Store className="size-5" />
+                    <span>{viewOrder.store_name || viewOrder.business_name || "143Panda Store"}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {viewOrder.institution_name || "Maa Sharda Institute PVT LTD"}
+                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                    <User className="size-3" />
+                    Seller: <span className="font-semibold text-foreground">{viewOrder.seller_name || "Store Merchant"}</span>
                   </p>
                 </div>
                 <div className="text-right">
@@ -1070,6 +1104,19 @@ export default function SalesOrdersPage() {
                       year: "numeric",
                     })}
                   </p>
+                  {viewOrder.source_url && (
+                    <div className="mt-1.5">
+                      <a
+                        href={viewOrder.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline bg-primary/5 border border-primary/20 rounded px-2 py-0.5"
+                      >
+                        <Globe className="size-3" />
+                        <span>View Origin Page ↗</span>
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
 
