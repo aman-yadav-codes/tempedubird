@@ -81,6 +81,7 @@ import {
   Edit2,
   Trash2,
   ListPlus,
+  Pencil,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -237,7 +238,7 @@ const TASK_STATUS_TABS = [
 ];
 
 export function MyProfileClient() {
-  const { user, accessToken } = useAuthStore();
+  const { user, accessToken, updateUser } = useAuthStore();
   const { activeInstitutionId, activeInstitution: hookActiveInst } = useActiveInstitution();
 
   const memberships = useMemo(() => (Array.isArray(user?.memberships) ? user.memberships : []), [user?.memberships]);
@@ -269,9 +270,100 @@ export function MyProfileClient() {
     );
   }, [pathname, user]);
 
+  const isCustomer = useMemo(() => {
+    if (pathname?.startsWith("/customer")) return true;
+    const codes = Array.isArray((user as any)?.role_codes)
+      ? (user as any).role_codes
+      : [(user as any)?.role || (user as any)?.primary_role || ""].filter(Boolean);
+    return codes.some((r: string) => String(r).toLowerCase() === "customer") && !codes.some((r: string) => ["platform_admin", "superadmin", "super_admin", "admin", "platformadmin", "institution_admin", "head_of_operations", "staff", "teacher", "faculty"].includes(String(r).toLowerCase()));
+  }, [pathname, user]);
+
   const activeTab = searchParams.get("tab") || "my-data";
   const setActiveTab = (tab: string) => {
     router.push(`${pathname}?tab=${tab}`);
+  };
+
+  const [dbUserProfile, setDbUserProfile] = useState<any>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!accessToken) return;
+    fetch("/api/user/profile", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.profile && isMounted) {
+          setDbUserProfile(data.profile);
+        }
+      })
+      .catch((err) => console.error("Error loading user profile:", err));
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken]);
+
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [editProfileForm, setEditProfileForm] = useState({
+    full_name: "",
+    phone: "",
+    gender: "",
+    date_of_birth: "",
+    blood_group: "",
+    marital_status: "",
+    address: "",
+    emergency_contact_name: "",
+    emergency_contact_phone: "",
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const handleOpenEditProfile = () => {
+    setEditProfileForm({
+      full_name: dbUserProfile?.full_name || user?.full_name || "",
+      phone: dbUserProfile?.phone || user?.phone || "",
+      gender: dbUserProfile?.gender || "",
+      date_of_birth: dbUserProfile?.date_of_birth ? String(dbUserProfile.date_of_birth).slice(0, 10) : "",
+      blood_group: dbUserProfile?.blood_group || "",
+      marital_status: dbUserProfile?.marital_status || "",
+      address: dbUserProfile?.address || "",
+      emergency_contact_name: dbUserProfile?.emergency_contact_name || "",
+      emergency_contact_phone: dbUserProfile?.emergency_contact_phone || "",
+    });
+    setIsEditProfileOpen(true);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingProfile(true);
+    try {
+      const res = await fetch("/api/user/profile", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify(editProfileForm),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDbUserProfile(data.profile);
+        if (updateUser) {
+          updateUser({
+            full_name: data.profile.full_name,
+            phone: data.profile.phone,
+          });
+        }
+        toast.success("Profile updated successfully!");
+        setIsEditProfileOpen(false);
+      } else {
+        toast.error(data.error || "Failed to update profile");
+      }
+    } catch {
+      toast.error("Network error while updating profile");
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
   const [businessProfile, setBusinessProfile] = useState<any>(null);
   const [professionalProfile, setProfessionalProfile] = useState<any>(null);
@@ -1611,14 +1703,29 @@ export function MyProfileClient() {
 
   // Derived user details
   const extendedUser = user as Record<string, any> | null;
-  const userName = user?.full_name || extendedUser?.name || "Admin / Staff Member";
-  const userEmail = user?.email || "staff@edubird.in";
-  const userPhone = user?.phone || "+91 98765 43210";
-  const userRole = (user?.role_codes && user.role_codes[0]) ? user.role_codes[0].replace(/_/g, " ").toUpperCase() : (user?.primary_role || "Staff Member").toUpperCase();
-  const employeeId = user?.id ? `EB-STF-${String(user.id).padStart(4, "0")}` : "EB-STF-0102";
-  const department = extendedUser?.department || "Academic & Operations";
-  const designation = extendedUser?.designation || (userRole.includes("ADMIN") ? "System Administrator" : "Senior Faculty Member");
-  const joinDate = extendedUser?.created_at ? new Date(extendedUser.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" }) : "Jan 15, 2024";
+  const userName = dbUserProfile?.full_name || user?.full_name || extendedUser?.name || "";
+  const userEmail = dbUserProfile?.email || user?.email || "";
+  const userPhone = dbUserProfile?.phone || user?.phone || "";
+  const userRole = (user?.role_codes && user.role_codes[0]) ? user.role_codes[0].replace(/_/g, " ").toUpperCase() : (user?.primary_role || (isCustomer ? "Customer" : "Staff Member")).toUpperCase();
+  const employeeId = isCustomer ? `USR-#${user?.id || ""}` : (user?.id ? `EB-STF-${String(user.id).padStart(4, "0")}` : "");
+  const department = dbUserProfile?.department || extendedUser?.department || "";
+  const designation = dbUserProfile?.designation || extendedUser?.designation || (isCustomer ? "Customer" : (userRole.includes("ADMIN") ? "System Administrator" : "Senior Faculty Member"));
+  const joinDate = (dbUserProfile?.created_at || extendedUser?.created_at) ? new Date(dbUserProfile?.created_at || extendedUser.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" }) : "";
+
+  // Profile biographical fields without fake fallbacks
+  const profileGender = dbUserProfile?.gender || extendedUser?.gender || "";
+  const profileDob = dbUserProfile?.date_of_birth
+    ? new Date(dbUserProfile.date_of_birth).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : (extendedUser?.dob || "");
+  const profileBloodGroup = dbUserProfile?.blood_group || extendedUser?.blood_group || "";
+  const profileMaritalStatus = dbUserProfile?.marital_status || extendedUser?.marital_status || "";
+  const profileAddress = dbUserProfile?.address || extendedUser?.address || "";
+  const profileEmergencyName = dbUserProfile?.emergency_contact_name || extendedUser?.emergency_contact_name || "";
+  const profileEmergencyPhone = dbUserProfile?.emergency_contact_phone || extendedUser?.emergency_contact_phone || "";
 
   // Task Status Toggle
   const handleToggleTaskStatus = async (taskId: number, currentStatus: string) => {
@@ -2268,9 +2375,9 @@ export function MyProfileClient() {
       netPay,
       status,
       paymentDate,
-      bankName: extendedUser?.bank_name || "State Bank of India",
-      accountNumber: extendedUser?.account_number ? `XXXX-XXXX-${extendedUser.account_number.slice(-4)}` : "XXXX-XXXX-4892",
-      panNumber: extendedUser?.pan_number || "ABCDE1234F"
+      bankName: dbUserProfile?.bank_name || extendedUser?.bank_name || "",
+      accountNumber: (dbUserProfile?.account_number || extendedUser?.account_number) ? `XXXX-XXXX-${String(dbUserProfile?.account_number || extendedUser?.account_number).slice(-4)}` : "",
+      panNumber: dbUserProfile?.pan_number || extendedUser?.pan_number || ""
     };
   }, [salaryData, user, extendedUser]);
 
@@ -2493,7 +2600,17 @@ export function MyProfileClient() {
                 </a>
               </Button>
             )}
-            <AddBusinessProfileButton />
+            {!isCustomer && <AddBusinessProfileButton />}
+            {isCustomer && (
+              <Button
+                size="sm"
+                onClick={handleOpenEditProfile}
+                className="font-bold text-xs gap-1.5 bg-white text-slate-900 hover:bg-slate-100 shadow-md cursor-pointer"
+              >
+                <Pencil className="size-3.5 text-primary" />
+                Edit Profile
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -2701,7 +2818,7 @@ export function MyProfileClient() {
         )}
 
         {/* Empty State Banner (No business or professional profile yet) */}
-        {!businessProfile && !professionalProfile && !loadingUserProfiles && (
+        {!isCustomer && !businessProfile && !professionalProfile && !loadingUserProfiles && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 px-5 rounded-2xl bg-gradient-to-r from-rose-50 via-white to-amber-50/50 border border-rose-200/70 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 shadow-2xs">
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
@@ -2729,23 +2846,29 @@ export function MyProfileClient() {
           <TabsTrigger value="my-data" className="text-xs font-semibold gap-1.5 py-2">
             <User className="size-3.5" /> Personal Information
           </TabsTrigger>
-          <TabsTrigger value="roles-profiles" className="text-xs font-semibold gap-1.5 py-2">
-            <Layers className="size-3.5" /> Business & Professional Workspaces
-            {(businessProfile || professionalProfile) && (
-              <Badge variant="secondary" className="text-[9px] px-1.5 py-0 bg-primary/10 text-primary ml-1">
-                Active
-              </Badge>
-            )}
-          </TabsTrigger>
+          {!isCustomer && (
+            <TabsTrigger value="roles-profiles" className="text-xs font-semibold gap-1.5 py-2">
+              <Layers className="size-3.5" /> Business & Professional Workspaces
+              {(businessProfile || professionalProfile) && (
+                <Badge variant="secondary" className="text-[9px] px-1.5 py-0 bg-primary/10 text-primary ml-1">
+                  Active
+                </Badge>
+              )}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="account" className="text-xs font-semibold gap-1.5 py-2">
             <UserCog className="size-3.5" /> Account & Security
           </TabsTrigger>
-          <TabsTrigger value="tasks" className="text-xs font-semibold gap-1.5 py-2">
-            <ListTodo className="size-3.5" /> Tasks & Deliverables
-          </TabsTrigger>
-          <TabsTrigger value="performance" className="text-xs font-semibold gap-1.5 py-2">
-            <TrendingUp className="size-3.5" /> Performance & KPIs
-          </TabsTrigger>
+          {!isCustomer && (
+            <TabsTrigger value="tasks" className="text-xs font-semibold gap-1.5 py-2">
+              <ListTodo className="size-3.5" /> Tasks & Deliverables
+            </TabsTrigger>
+          )}
+          {!isCustomer && (
+            <TabsTrigger value="performance" className="text-xs font-semibold gap-1.5 py-2">
+              <TrendingUp className="size-3.5" /> Performance & KPIs
+            </TabsTrigger>
+          )}
         </TabsList>
         {/* ================= TAB: ROLES & PROFILES ================= */}
         <TabsContent value="roles-profiles" className="space-y-6">
@@ -2889,34 +3012,45 @@ export function MyProfileClient() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Personal Information */}
             <Card className="rounded-2xl border shadow-xs">
-              <CardHeader className="pb-3 border-b bg-muted/20">
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <User className="h-4 w-4 text-primary" />
-                  Personal Information
-                </CardTitle>
-                <CardDescription className="text-xs">Primary identification and biographical records</CardDescription>
+              <CardHeader className="pb-3 border-b bg-muted/20 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-bold flex items-center gap-2">
+                    <User className="h-4 w-4 text-primary" />
+                    Personal Information
+                  </CardTitle>
+                  <CardDescription className="text-xs">Primary identification and biographical records</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenEditProfile}
+                  className="gap-1.5 text-xs font-semibold cursor-pointer shrink-0"
+                >
+                  <Pencil className="size-3.5 text-primary" />
+                  Edit Profile
+                </Button>
               </CardHeader>
               <CardContent className="p-5 space-y-4 text-xs">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Full Legal Name</span>
-                    <span className="font-bold text-foreground text-sm">{userName}</span>
+                    <span className="font-bold text-foreground text-sm">{userName || "—"}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Gender</span>
-                    <span className="font-semibold text-foreground">{extendedUser?.gender || "Male"}</span>
+                    <span className="font-semibold text-foreground">{profileGender || "—"}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Date of Birth</span>
-                    <span className="font-semibold text-foreground">{extendedUser?.dob || "14 Aug 1990"}</span>
+                    <span className="font-semibold text-foreground">{profileDob || "—"}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Blood Group</span>
-                    <span className="font-semibold text-foreground">{extendedUser?.blood_group || "O+ (Positive)"}</span>
+                    <span className="font-semibold text-foreground">{profileBloodGroup || "—"}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Marital Status</span>
-                    <span className="font-semibold text-foreground">{extendedUser?.marital_status || "Married"}</span>
+                    <span className="font-semibold text-foreground">{profileMaritalStatus || "—"}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Nationality</span>
@@ -2926,118 +3060,133 @@ export function MyProfileClient() {
               </CardContent>
             </Card>
 
-            {/* Employment Details */}
-            <Card className="rounded-2xl border shadow-xs">
-              <CardHeader className="pb-3 border-b bg-muted/20">
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <Briefcase className="h-4 w-4 text-primary" />
-                  Employment Details
-                </CardTitle>
-                <CardDescription className="text-xs">Role classification and organizational hierarchy</CardDescription>
-              </CardHeader>
-              <CardContent className="p-5 space-y-4 text-xs">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Employee Code</span>
-                    <span className="font-bold font-mono text-primary">{employeeId}</span>
+            {/* Employment Details (Hidden on Customer Profile) */}
+            {!isCustomer && (
+              <Card className="rounded-2xl border shadow-xs">
+                <CardHeader className="pb-3 border-b bg-muted/20">
+                  <CardTitle className="text-base font-bold flex items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-primary" />
+                    Employment Details
+                  </CardTitle>
+                  <CardDescription className="text-xs">Role classification and organizational hierarchy</CardDescription>
+                </CardHeader>
+                <CardContent className="p-5 space-y-4 text-xs">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">Employee Code</span>
+                      <span className="font-bold font-mono text-primary">{employeeId || "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">Designation</span>
+                      <span className="font-semibold text-foreground">{designation || "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">Department</span>
+                      <span className="font-semibold text-foreground">{department || "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">Employment Type</span>
+                      <span className="font-semibold text-foreground">Full-Time Regular</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">Date of Joining</span>
+                      <span className="font-semibold text-foreground">{joinDate || "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">Work Status</span>
+                      <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px]">Active & Confirmed</Badge>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Designation</span>
-                    <span className="font-semibold text-foreground">{designation}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Department</span>
-                    <span className="font-semibold text-foreground">{department}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Employment Type</span>
-                    <span className="font-semibold text-foreground">Full-Time Regular</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Date of Joining</span>
-                    <span className="font-semibold text-foreground">{joinDate}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Work Status</span>
-                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px]">Active & Confirmed</Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Contact & Address */}
             <Card className="rounded-2xl border shadow-xs">
-              <CardHeader className="pb-3 border-b bg-muted/20">
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  Contact & Addresses
-                </CardTitle>
-                <CardDescription className="text-xs">Communication channels and physical residence</CardDescription>
+              <CardHeader className="pb-3 border-b bg-muted/20 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-bold flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    Contact & Addresses
+                  </CardTitle>
+                  <CardDescription className="text-xs">Communication channels and physical residence</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenEditProfile}
+                  className="gap-1.5 text-xs font-semibold cursor-pointer shrink-0"
+                >
+                  <Pencil className="size-3.5 text-primary" />
+                  Edit Details
+                </Button>
               </CardHeader>
               <CardContent className="p-5 space-y-4 text-xs">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-muted-foreground block text-[11px]">Work Email</span>
-                    <span className="font-medium text-foreground">{userEmail}</span>
+                    <span className="text-muted-foreground block text-[11px]">Email</span>
+                    <span className="font-medium text-foreground">{userEmail || "—"}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Primary Phone</span>
-                    <span className="font-medium text-foreground">{userPhone}</span>
+                    <span className="font-medium text-foreground">{userPhone || "—"}</span>
                   </div>
                   <div className="col-span-2">
                     <span className="text-muted-foreground block text-[11px]">Current Address</span>
-                    <span className="font-medium text-foreground">{extendedUser?.address || "Tower 4, Civil Lines, Varanasi, Uttar Pradesh - 221002"}</span>
+                    <span className="font-medium text-foreground">{profileAddress || "—"}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Emergency Contact Person</span>
-                    <span className="font-medium text-foreground">{extendedUser?.emergency_contact_name || "Suman Sharma (Spouse)"}</span>
+                    <span className="font-medium text-foreground">{profileEmergencyName || "—"}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Emergency Contact Phone</span>
-                    <span className="font-medium text-foreground">{extendedUser?.emergency_contact_phone || "+91 98765 43211"}</span>
+                    <span className="font-medium text-foreground">{profileEmergencyPhone || "—"}</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Bank & Statutory Details */}
-            <Card className="rounded-2xl border shadow-xs">
-              <CardHeader className="pb-3 border-b bg-muted/20">
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-primary" />
-                  Banking & Statutory Details
-                </CardTitle>
-                <CardDescription className="text-xs">Payroll disbursement and government identity numbers</CardDescription>
-              </CardHeader>
-              <CardContent className="p-5 space-y-4 text-xs">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Bank Name</span>
-                    <span className="font-medium text-foreground">{currentSalary.bankName}</span>
+            {/* Bank & Statutory Details (Hidden on Customer Profile) */}
+            {!isCustomer && (
+              <Card className="rounded-2xl border shadow-xs">
+                <CardHeader className="pb-3 border-b bg-muted/20">
+                  <CardTitle className="text-base font-bold flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-primary" />
+                    Banking & Statutory Details
+                  </CardTitle>
+                  <CardDescription className="text-xs">Payroll disbursement and government identity numbers</CardDescription>
+                </CardHeader>
+                <CardContent className="p-5 space-y-4 text-xs">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">Bank Name</span>
+                      <span className="font-medium text-foreground">{currentSalary.bankName || "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">Account Number</span>
+                      <span className="font-mono font-medium text-foreground">{currentSalary.accountNumber || "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">IFSC Code</span>
+                      <span className="font-mono font-medium text-foreground">{dbUserProfile?.ifsc_code || "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">Account Type</span>
+                      <span className="font-medium text-foreground">Salary / Savings</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">PAN Number</span>
+                      <span className="font-mono font-medium text-foreground">{currentSalary.panNumber || "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">UAN / PF Number</span>
+                      <span className="font-mono font-medium text-foreground">{dbUserProfile?.uan_number || "—"}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Account Number</span>
-                    <span className="font-mono font-medium text-foreground">{currentSalary.accountNumber}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">IFSC Code</span>
-                    <span className="font-mono font-medium text-foreground">SBIN0001234</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">Account Type</span>
-                    <span className="font-medium text-foreground">Salary / Savings</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">PAN Number</span>
-                    <span className="font-mono font-medium text-foreground">{currentSalary.panNumber}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">UAN / PF Number</span>
-                    <span className="font-mono font-medium text-foreground">101239847291</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </TabsContent>
 
@@ -5050,6 +5199,163 @@ export function MyProfileClient() {
       </Dialog>
 
 
+
+      {/* Edit Profile Dialog */}
+      <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" />
+              Edit Profile Information
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Update your personal records and contact channels. Fields left empty will remain blank.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveProfile} className="space-y-4 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Full Legal Name</Label>
+                <Input
+                  value={editProfileForm.full_name}
+                  onChange={(e) => setEditProfileForm((prev) => ({ ...prev, full_name: e.target.value }))}
+                  placeholder="Enter full legal name"
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Primary Phone</Label>
+                <Input
+                  value={editProfileForm.phone}
+                  onChange={(e) => setEditProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
+                  placeholder="e.g. 9876543210"
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Gender</Label>
+                <Select
+                  value={editProfileForm.gender}
+                  onValueChange={(val) => setEditProfileForm((prev) => ({ ...prev, gender: val }))}
+                >
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Male">Male</SelectItem>
+                    <SelectItem value="Female">Female</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                    <SelectItem value="Prefer not to say">Prefer not to say</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Date of Birth</Label>
+                <Input
+                  type="date"
+                  value={editProfileForm.date_of_birth}
+                  onChange={(e) => setEditProfileForm((prev) => ({ ...prev, date_of_birth: e.target.value }))}
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Blood Group</Label>
+                <Select
+                  value={editProfileForm.blood_group}
+                  onValueChange={(val) => setEditProfileForm((prev) => ({ ...prev, blood_group: val }))}
+                >
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Select blood group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="A+">A+</SelectItem>
+                    <SelectItem value="A-">A-</SelectItem>
+                    <SelectItem value="B+">B+</SelectItem>
+                    <SelectItem value="B-">B-</SelectItem>
+                    <SelectItem value="O+">O+</SelectItem>
+                    <SelectItem value="O-">O-</SelectItem>
+                    <SelectItem value="AB+">AB+</SelectItem>
+                    <SelectItem value="AB-">AB-</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Marital Status</Label>
+                <Select
+                  value={editProfileForm.marital_status}
+                  onValueChange={(val) => setEditProfileForm((prev) => ({ ...prev, marital_status: val }))}
+                >
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Select marital status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Single">Single</SelectItem>
+                    <SelectItem value="Married">Married</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-xs font-semibold">Current Residential Address</Label>
+                <Textarea
+                  value={editProfileForm.address}
+                  onChange={(e) => setEditProfileForm((prev) => ({ ...prev, address: e.target.value }))}
+                  placeholder="Enter full address"
+                  className="text-xs min-h-[70px]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Emergency Contact Person</Label>
+                <Input
+                  value={editProfileForm.emergency_contact_name}
+                  onChange={(e) => setEditProfileForm((prev) => ({ ...prev, emergency_contact_name: e.target.value }))}
+                  placeholder="e.g. Suman Sharma (Spouse)"
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Emergency Contact Phone</Label>
+                <Input
+                  value={editProfileForm.emergency_contact_phone}
+                  onChange={(e) => setEditProfileForm((prev) => ({ ...prev, emergency_contact_phone: e.target.value }))}
+                  placeholder="e.g. +91 98765 43211"
+                  className="text-xs"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="pt-3 border-t flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditProfileOpen(false)}
+                disabled={isSavingProfile}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isSavingProfile}
+                className="gap-1.5 bg-primary text-white"
+              >
+                {isSavingProfile && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+                {isSavingProfile ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Daily Check-In & Check-Out Geo-Location History Dialog */}
       <DailyGeoAttendanceHistoryDialog
