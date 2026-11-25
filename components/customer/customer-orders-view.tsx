@@ -88,11 +88,26 @@ interface Order {
 
 export function CustomerOrdersView() {
   const { user } = useAuthStore();
+  const isSellerUser = Boolean(
+    user?.has_business_profile ||
+    user?.has_professional_profile ||
+    user?.role_codes?.includes("business_owner") ||
+    user?.role_codes?.includes("professional_provider") ||
+    user?.role_codes?.includes("institution_admin") ||
+    user?.role_codes?.includes("platform_admin") ||
+    user?.is_super_admin
+  );
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<"purchases" | "sales">("purchases");
   const [activeTab, setActiveTab] = useState("all");
+
+  useEffect(() => {
+    if (!isSellerUser && scope === "sales") {
+      setScope("purchases");
+    }
+  }, [isSellerUser, scope]);
 
   // Dialogs
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -285,38 +300,40 @@ export function CustomerOrdersView() {
         </p>
       </div>
 
-      {/* Scope Switcher: My Purchases vs Store Orders Received */}
-      <div className="flex items-center border-b pb-1 gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setScope("purchases");
-            setActiveTab("all");
-          }}
-          className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
-            scope === "purchases"
-              ? "border-[#d9232e] text-[#d9232e]"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <ShoppingCart className="size-3.5" /> My Purchases (Orders Placed)
-        </button>
+      {/* Scope Switcher: My Purchases vs Store Orders Received (Only for Sellers) */}
+      {isSellerUser && (
+        <div className="flex items-center border-b pb-1 gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setScope("purchases");
+              setActiveTab("all");
+            }}
+            className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+              scope === "purchases"
+                ? "border-[#d9232e] text-[#d9232e]"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ShoppingCart className="size-3.5" /> My Purchases (Orders Placed)
+          </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setScope("sales");
-            setActiveTab("all");
-          }}
-          className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
-            scope === "sales"
-              ? "border-[#d9232e] text-[#d9232e]"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Store className="size-3.5" /> Store Orders Received (Merchant Sales)
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => {
+              setScope("sales");
+              setActiveTab("all");
+            }}
+            className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+              scope === "sales"
+                ? "border-[#d9232e] text-[#d9232e]"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Store className="size-3.5" /> Store Orders Received (Merchant Sales)
+          </button>
+        </div>
+      )}
 
       {/* Filter Bar & Tabs */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
