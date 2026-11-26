@@ -694,17 +694,6 @@ export function PublicBusinessProfileClient({
     return allReviews.slice(0, 3);
   }, [allReviews]);
 
-  const reviewCount = allReviews.length;
-  const avgRating = useMemo(() => {
-    if (allReviews.length === 0) return "4.8";
-    const sum = allReviews.reduce((acc, r) => acc + Number(r.rating || 5), 0);
-    return (sum / allReviews.length).toFixed(1);
-  }, [allReviews]);
-
-  const latestReviews = useMemo(() => {
-    return allReviews.slice(0, 3);
-  }, [allReviews]);
-
   function handleShare() {
     if (navigator.share) {
       navigator
