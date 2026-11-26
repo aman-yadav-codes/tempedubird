@@ -305,84 +305,14 @@ export function PublicProfessionalProfileClient({
   // Local state for dynamically submitted reviews
   const [submittedReviews, setSubmittedReviews] = useState<any[]>([]);
 
-  // Default verified reviews for professional profile
-  const defaultProfessionalReviews = useMemo(() => [
-    {
-      id: "prof-rev-1",
-      user_name: "Rahul Verma",
-      reviewer_role: "Verified Client",
-      is_verified_user: true,
-      rating: 5,
-      title: "Actionable & Thorough Consultation",
-      comment: "Excellent consultation! Very thorough, knowledgeable, and provided actionable solutions for our project.",
-      review: "Excellent consultation! Very thorough, knowledgeable, and provided actionable solutions for our project.",
-      created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-    },
-    {
-      id: "prof-rev-2",
-      user_name: "Sneha Nair",
-      reviewer_role: "Verified Client",
-      is_verified_user: true,
-      rating: 5,
-      title: "High Domain Expertise",
-      comment: "Highly professional and punctual. Explained everything with clarity and great domain expertise.",
-      review: "Highly professional and punctual. Explained everything with clarity and great domain expertise.",
-      created_at: new Date(Date.now() - 86400000 * 7).toISOString(),
-    },
-    {
-      id: "prof-rev-3",
-      user_name: "Anand Rathi",
-      reviewer_role: "Verified Client",
-      is_verified_user: true,
-      rating: 5,
-      title: "Prompt & Solution Oriented",
-      comment: `Engaged ${professional.name} for specialized advisory. Delivered exactly on time and exceeded expectations.`,
-      review: `Engaged ${professional.name} for specialized advisory. Delivered exactly on time and exceeded expectations.`,
-      created_at: new Date(Date.now() - 86400000 * 12).toISOString(),
-    },
-    {
-      id: "prof-rev-4",
-      user_name: "Kavita Rao",
-      reviewer_role: "Verified Client",
-      is_verified_user: true,
-      rating: 5,
-      title: "Extremely Helpful & Knowledgeable",
-      comment: "Patiently answered every single query and mapped out a clear roadmap. Great working relationship.",
-      review: "Patiently answered every single query and mapped out a clear roadmap. Great working relationship.",
-      created_at: new Date(Date.now() - 86400000 * 18).toISOString(),
-    },
-    {
-      id: "prof-rev-5",
-      user_name: "Gaurav Sen",
-      reviewer_role: "Verified Client",
-      is_verified_user: true,
-      rating: 4,
-      title: "Good Experience",
-      comment: "Structured consultation approach and clear deliverables. Very satisfied with the outcome.",
-      review: "Structured consultation approach and clear deliverables. Very satisfied with the outcome.",
-      created_at: new Date(Date.now() - 86400000 * 24).toISOString(),
-    },
-    {
-      id: "prof-rev-6",
-      user_name: "Divya Balaji",
-      reviewer_role: "Regular Client",
-      is_verified_user: true,
-      rating: 5,
-      title: "Reliable Specialist",
-      comment: "Third time consulting with them. Consistently top tier insights and dependable communication.",
-      review: "Third time consulting with them. Consistently top tier insights and dependable communication.",
-      created_at: new Date(Date.now() - 86400000 * 32).toISOString(),
-    },
-  ], [professional.name]);
-
   const allReviews = useMemo(() => {
-    const base = Array.isArray(reviews) && reviews.length > 0 ? reviews : defaultProfessionalReviews;
+    const base = Array.isArray(reviews) ? reviews : [];
     return [...submittedReviews, ...base];
-  }, [reviews, submittedReviews, defaultProfessionalReviews]);
+  }, [reviews, submittedReviews]);
 
   const reviewCount = allReviews.length;
   const avgRating = useMemo(() => {
-    if (allReviews.length === 0) return "4.9";
+    if (allReviews.length === 0) return "0.0";
     const sum = allReviews.reduce((acc, r) => acc + Number(r.rating || 5), 0);
     return (sum / allReviews.length).toFixed(1);
   }, [allReviews]);
@@ -707,20 +637,33 @@ export function PublicProfessionalProfileClient({
                 </div>
 
                 {/* Ratings */}
-                <div className="flex items-center gap-2 pt-1 text-xs">
-                  <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-200/80">
-                    <Star className="size-3.5 fill-amber-500 text-amber-500" />
-                    <span>{avgRating}</span>
+                {reviewCount > 0 ? (
+                  <div className="flex items-center gap-2 pt-1 text-xs">
+                    <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-200/80">
+                      <Star className="size-3.5 fill-amber-500 text-amber-500" />
+                      <span>{avgRating}</span>
+                    </div>
+                    <span className="text-muted-foreground">({reviewCount} reviews)</span>
+                    <button
+                      type="button"
+                      onClick={() => setFeedbackOpen(true)}
+                      className="text-primary hover:underline font-semibold ml-2 cursor-pointer"
+                    >
+                      Write a Review
+                    </button>
                   </div>
-                  <span className="text-muted-foreground">({reviewCount} reviews)</span>
-                  <button
-                    type="button"
-                    onClick={() => setFeedbackOpen(true)}
-                    className="text-primary hover:underline font-semibold ml-2 cursor-pointer"
-                  >
-                    Write a Review
-                  </button>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-2 pt-1 text-xs">
+                    <span className="text-muted-foreground">No client reviews yet</span>
+                    <button
+                      type="button"
+                      onClick={() => setFeedbackOpen(true)}
+                      className="text-primary hover:underline font-semibold ml-1 cursor-pointer"
+                    >
+                      Write a Review
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1009,83 +952,89 @@ export function PublicProfessionalProfileClient({
                     </CardContent>
                   </Card>
 
-                  {/* Latest Reviews Card (Annotated by User) */}
-                  <Card className="rounded-2xl border shadow-xs">
-                    <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-                      <CardTitle className="text-base font-bold flex items-center gap-2">
-                        <Star className="size-4 text-amber-500 fill-amber-500" />
-                        <span>Latest Reviews</span>
-                      </CardTitle>
-                      <Badge variant="outline" className="text-[11px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/60 flex items-center gap-1">
-                        <Star className="size-3 fill-amber-500 text-amber-500" />
-                        {avgRating} ({reviewCount})
-                      </Badge>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-xs">
-                      {latestReviews.map((rev: any, idx: number) => (
-                        <div key={rev.id || idx} className="py-2 border-b last:border-b-0 border-border/50 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-foreground truncate max-w-[140px]">
-                              {rev.user_name || rev.title || "Verified Client"}
-                            </span>
-                            <div className="flex items-center gap-0.5 text-amber-500">
-                              {Array.from({ length: Math.max(0, Math.min(5, Math.round(Number(rev.rating) || 5))) }).map((_, i) => (
-                                <Star key={i} className="size-3 fill-amber-500 text-amber-500" />
-                              ))}
+                  {/* Latest Reviews Card (Only if reviews exist) */}
+                  {allReviews.length > 0 && (
+                    <Card className="rounded-2xl border shadow-xs">
+                      <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                        <CardTitle className="text-base font-bold flex items-center gap-2">
+                          <Star className="size-4 text-amber-500 fill-amber-500" />
+                          <span>Latest Reviews</span>
+                        </CardTitle>
+                        <Badge variant="outline" className="text-[11px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/60 flex items-center gap-1">
+                          <Star className="size-3 fill-amber-500 text-amber-500" />
+                          {avgRating} ({reviewCount})
+                        </Badge>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-xs">
+                        {latestReviews.map((rev: any, idx: number) => (
+                          <div key={rev.id || idx} className="py-2 border-b last:border-b-0 border-border/50 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-foreground truncate max-w-[140px]">
+                                {rev.user_name || rev.title || "Verified Client"}
+                              </span>
+                              <div className="flex items-center gap-0.5 text-amber-500">
+                                {Array.from({ length: Math.max(0, Math.min(5, Math.round(Number(rev.rating) || 5))) }).map((_, i) => (
+                                  <Star key={i} className="size-3 fill-amber-500 text-amber-500" />
+                                ))}
+                              </div>
                             </div>
+                            <p className="text-muted-foreground line-clamp-2 text-[11px] leading-relaxed">
+                              &quot;{rev.review || rev.comment || "Great experience and highly professional guidance."}&quot;
+                            </p>
                           </div>
-                          <p className="text-muted-foreground line-clamp-2 text-[11px] leading-relaxed">
-                            &quot;{rev.review || "Great experience and highly professional guidance."}&quot;
-                          </p>
+                        ))}
+
+                        <div className="pt-1 flex items-center justify-between gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setActiveTab("reviews")}
+                            className="text-xs font-bold text-primary hover:underline p-0 h-auto cursor-pointer"
+                          >
+                            View all reviews ({reviewCount}) &rarr;
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setFeedbackOpen(true)}
+                            className="h-7 text-[11px] px-2.5 font-semibold cursor-pointer"
+                          >
+                            Write a Review
+                          </Button>
                         </div>
-                      ))}
+                      </CardContent>
+                    </Card>
+                  )}
 
-                      <div className="pt-1 flex items-center justify-between gap-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setActiveTab("reviews")}
-                          className="text-xs font-bold text-primary hover:underline p-0 h-auto cursor-pointer"
-                        >
-                          View all reviews ({reviewCount}) &rarr;
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setFeedbackOpen(true)}
-                          className="h-7 text-[11px] px-2.5 font-semibold cursor-pointer"
-                        >
-                          Write a Review
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Consultation Hours */}
-                  <Card className="rounded-2xl border shadow-xs">
-                    <CardHeader>
-                      <CardTitle className="text-base font-bold flex items-center gap-2">
-                        <Clock className="size-4 text-primary" />
-                        <span>Working &amp; Consultation Hours</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2 text-xs">
-                      <div className="flex items-center justify-between py-1 border-b border-border/50">
-                        <span className="font-semibold text-foreground">Weekdays</span>
-                        <span className="text-muted-foreground">10:00 AM – 6:00 PM</span>
-                      </div>
-                      <div className="flex items-center justify-between py-1 border-b border-border/50">
-                        <span className="font-semibold text-foreground">Saturday</span>
-                        <span className="text-muted-foreground">10:00 AM – 2:00 PM</span>
-                      </div>
-                      <div className="flex items-center justify-between py-1">
-                        <span className="font-semibold text-foreground">Sunday</span>
-                        <span className="text-rose-500 font-medium">By Appointment Only</span>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  {/* Consultation Hours (Only if working_hours provided) */}
+                  {Boolean(professional.working_hours || professional.opening_hours) && (
+                    <Card className="rounded-2xl border shadow-xs">
+                      <CardHeader>
+                        <CardTitle className="text-base font-bold flex items-center gap-2">
+                          <Clock className="size-4 text-primary" />
+                          <span>Working &amp; Consultation Hours</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-xs">
+                        {(() => {
+                          const wh = professional.working_hours || professional.opening_hours;
+                          if (typeof wh === "object" && wh !== null) {
+                            return Object.entries(wh).map(([day, hrs]: [string, any]) => (
+                              <div key={day} className="flex items-center justify-between py-1 border-b last:border-b-0 border-border/50">
+                                <span className="font-semibold capitalize text-foreground">{day}</span>
+                                <span className="text-muted-foreground">{typeof hrs === "string" ? hrs : `${hrs?.open || "10:00 AM"} – ${hrs?.close || "06:00 PM"}`}</span>
+                              </div>
+                            ));
+                          }
+                          return (
+                            <p className="text-muted-foreground whitespace-pre-line">{String(wh)}</p>
+                          );
+                        })()}
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               </div>
             </TabsContent>

@@ -207,7 +207,10 @@ export function PublicBusinessProfileClient({
       setLiveGalleryMedia(business.gallery_media);
       return;
     }
-    const targetInstId = business.institution_profile_id || business.id || 160;
+    const targetInstId = (business.institution_profile_id && business.institution_profile_id > 0)
+      ? business.institution_profile_id
+      : (business.id && business.id > 0 ? business.id : null);
+    if (!targetInstId) return;
     fetch(`/api/public/gallery?institutionId=${targetInstId}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -287,13 +290,8 @@ export function PublicBusinessProfileClient({
     }
 
     const gathered = [business.banner_url, business.logo_url].filter(Boolean) as string[];
-    const list = gathered.length > 0 ? gathered : [
-      "/uploads/media/1794989894186_maashardadeepak1_f470fd16.jpeg",
-      "/uploads/media/1794995530624_WhatsApp_Image_2023-02-14_at_4_dae08d2f.jpeg",
-      "/uploads/media/1794995534700_WhatsApp_Image_2023-02-14_at_4_25db5c09.jpeg",
-      "/uploads/media/1794995538760_WhatsApp_Image_2023-02-14_at_4_be01f0f8.jpeg",
-      "/uploads/media/1794995542834_WhatsApp_Image_2023-02-14_at_4_325552bf.jpeg",
-    ];
+    const list = gathered;
+    if (list.length === 0) return [];
 
     return list.map((url, idx) => {
       const fallback = curatedSlideCaptions[idx % curatedSlideCaptions.length];
@@ -679,147 +677,22 @@ export function PublicBusinessProfileClient({
   // Local state for dynamically submitted reviews
   const [submittedReviews, setSubmittedReviews] = useState<any[]>([]);
 
-  // Default verified reviews matching the storefront
-  const defaultStoreReviews = useMemo(() => [
-    {
-      id: "seed-rev-1",
-      user_name: "Aarav Sharma",
-      reviewer_role: "Verified Customer",
-      is_verified_user: true,
-      rating: 5,
-      title: "Exceptional Quality & Fresh Produce",
-      comment: `Everything was delivered super fresh and cleanly packed. Truly the best shopping experience from ${business.name}!`,
-      review: `Everything was delivered super fresh and cleanly packed. Truly the best shopping experience from ${business.name}!`,
-      created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    },
-    {
-      id: "seed-rev-2",
-      user_name: "Sneha Kapoor",
-      reviewer_role: "Verified Customer",
-      is_verified_user: true,
-      rating: 5,
-      title: "Prompt Service and Friendly Staff",
-      comment: "Extremely professional, polite staff and fast delivery. Pricing is very honest and quality is top tier.",
-      review: "Extremely professional, polite staff and fast delivery. Pricing is very honest and quality is top tier.",
-      created_at: new Date(Date.now() - 86400000 * 4).toISOString(),
-    },
-    {
-      id: "seed-rev-3",
-      user_name: "Vikram Malhotra",
-      reviewer_role: "Regular Shopper",
-      is_verified_user: true,
-      rating: 5,
-      title: "Highly Recommended Local Store",
-      comment: "Very punctual and thorough. Best experience in the area, all items match description accurately.",
-      review: "Very punctual and thorough. Best experience in the area, all items match description accurately.",
-      created_at: new Date(Date.now() - 86400000 * 6).toISOString(),
-    },
-    {
-      id: "seed-rev-4",
-      user_name: "Pooja Sundaram",
-      reviewer_role: "Verified Customer",
-      is_verified_user: true,
-      rating: 5,
-      title: "Great Pricing & Genuine Products",
-      comment: "Ordered organic staples and grocery essentials. Authentic quality and well within market prices.",
-      review: "Ordered organic staples and grocery essentials. Authentic quality and well within market prices.",
-      created_at: new Date(Date.now() - 86400000 * 8).toISOString(),
-    },
-    {
-      id: "seed-rev-5",
-      user_name: "Rahul Deshmukh",
-      reviewer_role: "Verified Buyer",
-      is_verified_user: true,
-      rating: 4,
-      title: "Good Experience",
-      comment: "Convenient ordering and quick checkout. Products received in intact sealed packaging.",
-      review: "Convenient ordering and quick checkout. Products received in intact sealed packaging.",
-      created_at: new Date(Date.now() - 86400000 * 11).toISOString(),
-    },
-    {
-      id: "seed-rev-6",
-      user_name: "Ananya Iyer",
-      reviewer_role: "Verified Customer",
-      is_verified_user: true,
-      rating: 5,
-      title: "Super Convenient & Reliable",
-      comment: "My go-to store every week. Never faced any issue with stock availability or billing.",
-      review: "My go-to store every week. Never faced any issue with stock availability or billing.",
-      created_at: new Date(Date.now() - 86400000 * 14).toISOString(),
-    },
-    {
-      id: "seed-rev-7",
-      user_name: "Karan Johar Verma",
-      reviewer_role: "Verified Customer",
-      is_verified_user: true,
-      rating: 5,
-      title: "Excellent Service",
-      comment: "Staff is helpful and responsive over call / chat. Highly satisfied with the prompt response.",
-      review: "Staff is helpful and responsive over call / chat. Highly satisfied with the prompt response.",
-      created_at: new Date(Date.now() - 86400000 * 18).toISOString(),
-    },
-    {
-      id: "seed-rev-8",
-      user_name: "Meera Nair",
-      reviewer_role: "Verified Buyer",
-      is_verified_user: true,
-      rating: 5,
-      title: "Fresh & Well Organized",
-      comment: "Clean store setup, all items clearly labeled with units and weight. Made shopping very simple.",
-      review: "Clean store setup, all items clearly labeled with units and weight. Made shopping very simple.",
-      created_at: new Date(Date.now() - 86400000 * 22).toISOString(),
-    },
-    {
-      id: "seed-rev-9",
-      user_name: "Rohan Gupta",
-      reviewer_role: "Verified Customer",
-      is_verified_user: true,
-      rating: 4,
-      title: "Very Satisfied",
-      comment: "Quick dispatch and proper billing invoice provided. Will definitely order again.",
-      review: "Quick dispatch and proper billing invoice provided. Will definitely order again.",
-      created_at: new Date(Date.now() - 86400000 * 25).toISOString(),
-    },
-    {
-      id: "seed-rev-10",
-      user_name: "Tanvi Patel",
-      reviewer_role: "Verified Customer",
-      is_verified_user: true,
-      rating: 5,
-      title: "Seamless Experience",
-      comment: "Smooth checkout and very polite delivery agent. Five stars well deserved!",
-      review: "Smooth checkout and very polite delivery agent. Five stars well deserved!",
-      created_at: new Date(Date.now() - 86400000 * 30).toISOString(),
-    },
-    {
-      id: "seed-rev-11",
-      user_name: "Suresh Reddy",
-      reviewer_role: "Regular Customer",
-      is_verified_user: true,
-      rating: 5,
-      title: "Consistent Quality",
-      comment: "Have been purchasing from them regularly. The quality has remained consistently high.",
-      review: "Have been purchasing from them regularly. The quality has remained consistently high.",
-      created_at: new Date(Date.now() - 86400000 * 35).toISOString(),
-    },
-    {
-      id: "seed-rev-12",
-      user_name: "Deepika Chawla",
-      reviewer_role: "Verified Customer",
-      is_verified_user: true,
-      rating: 5,
-      title: "Top-notch customer care",
-      comment: "Had a small query about the order which was resolved within 5 minutes. Outstanding!",
-      review: "Had a small query about the order which was resolved within 5 minutes. Outstanding!",
-      created_at: new Date(Date.now() - 86400000 * 40).toISOString(),
-    },
-  ], [business.name]);
-
-  // Combined full reviews list: submitted reviews + DB reviews (or default verified reviews if DB has none)
+  // Combined full reviews list: submitted reviews + DB reviews
   const allReviews = useMemo(() => {
-    const base = Array.isArray(reviews) && reviews.length > 0 ? reviews : defaultStoreReviews;
+    const base = Array.isArray(reviews) ? reviews : [];
     return [...submittedReviews, ...base];
-  }, [reviews, submittedReviews, defaultStoreReviews]);
+  }, [reviews, submittedReviews]);
+
+  const reviewCount = allReviews.length;
+  const avgRating = useMemo(() => {
+    if (allReviews.length === 0) return "0.0";
+    const sum = allReviews.reduce((acc, r) => acc + Number(r.rating || 5), 0);
+    return (sum / allReviews.length).toFixed(1);
+  }, [allReviews]);
+
+  const latestReviews = useMemo(() => {
+    return allReviews.slice(0, 3);
+  }, [allReviews]);
 
   const reviewCount = allReviews.length;
   const avgRating = useMemo(() => {
@@ -1221,20 +1094,33 @@ export function PublicBusinessProfileClient({
                 </a>
 
                 {/* Ratings */}
-                <div className="flex items-center gap-2 pt-1 text-xs">
-                  <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-200/80">
-                    <Star className="size-3.5 fill-amber-500 text-amber-500" />
-                    <span>{avgRating}</span>
+                {reviewCount > 0 ? (
+                  <div className="flex items-center gap-2 pt-1 text-xs">
+                    <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-200/80">
+                      <Star className="size-3.5 fill-amber-500 text-amber-500" />
+                      <span>{avgRating}</span>
+                    </div>
+                    <span className="text-muted-foreground">({reviewCount} customer reviews)</span>
+                    <button
+                      type="button"
+                      onClick={() => setFeedbackOpen(true)}
+                      className="text-primary hover:underline font-semibold ml-2 cursor-pointer"
+                    >
+                      Write a Review
+                    </button>
                   </div>
-                  <span className="text-muted-foreground">({reviewCount} customer reviews)</span>
-                  <button
-                    type="button"
-                    onClick={() => setFeedbackOpen(true)}
-                    className="text-primary hover:underline font-semibold ml-2 cursor-pointer"
-                  >
-                    Write a Review
-                  </button>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-2 pt-1 text-xs">
+                    <span className="text-muted-foreground">No customer reviews yet</span>
+                    <button
+                      type="button"
+                      onClick={() => setFeedbackOpen(true)}
+                      className="text-primary hover:underline font-semibold ml-1 cursor-pointer"
+                    >
+                      Write a Review
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1406,10 +1292,12 @@ export function PublicBusinessProfileClient({
                 <Info className="size-3.5" />
                 <span>About</span>
               </TabsTrigger>
-              <TabsTrigger value="gallery" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                <Camera className="size-3.5" />
-                <span>Photo Gallery ({galleryImages.length})</span>
-              </TabsTrigger>
+              {galleryImages.length > 0 && (
+                <TabsTrigger value="gallery" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
+                  <Camera className="size-3.5" />
+                  <span>Photo Gallery ({galleryImages.length})</span>
+                </TabsTrigger>
+              )}
             </TabsList>
             )}
 
@@ -1434,29 +1322,39 @@ export function PublicBusinessProfileClient({
 
                       {/* Featured Highlights */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3 border-t">
-                        <div className="p-3 rounded-xl bg-muted/40 border">
-                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
-                            Business Type
-                          </span>
-                          <span className="text-xs font-bold text-foreground mt-0.5 block">
-                            {business.business_type || "Enterprise"}
-                          </span>
-                        </div>
-                        <div className="p-3 rounded-xl bg-muted/40 border">
-                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
-                            Established
-                          </span>
-                          <span className="text-xs font-bold text-foreground mt-0.5 block">
-                            {business.established_year ? `Year ${business.established_year}` : "Verified Member"}
-                          </span>
-                        </div>
+                        {business.business_type && (
+                          <div className="p-3 rounded-xl bg-muted/40 border">
+                            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                              Business Type
+                            </span>
+                            <span className="text-xs font-bold text-foreground mt-0.5 block">
+                              {business.business_type}
+                            </span>
+                          </div>
+                        )}
+                        {business.established_year ? (
+                          <div className="p-3 rounded-xl bg-muted/40 border">
+                            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                              Established
+                            </span>
+                            <span className="text-xs font-bold text-foreground mt-0.5 block">
+                              Year {business.established_year}
+                            </span>
+                          </div>
+                        ) : null}
                         <div className="p-3 rounded-xl bg-muted/40 border">
                           <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
                             Verification
                           </span>
-                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 block flex items-center gap-1">
-                            <ShieldCheck className="size-3.5" /> Verified
-                          </span>
+                          {business.is_verified ? (
+                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 block flex items-center gap-1">
+                              <ShieldCheck className="size-3.5" /> Verified
+                            </span>
+                          ) : (
+                            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-0.5 block flex items-center gap-1">
+                              <AlertCircle className="size-3.5" /> Pending Verification
+                            </span>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -1691,27 +1589,24 @@ export function PublicBusinessProfileClient({
 
                   {/* ================= MISSION, VISION & STRATEGIC GOALS ================= */}
                   {(() => {
-                    const missionText =
-                      business.mission?.trim() ||
-                      "At Maa Sharda Institute Pvt. Ltd., our mission is to provide quality, accessible, and career-oriented education empowering students through personalized mentorship and academic excellence.";
-                    const visionText =
-                      business.vision?.trim() ||
-                      "Our vision is to become a trusted and leading educational institution in Varanasi and beyond, fostering academic brilliance and moral leadership.";
-                    const goalText =
-                      business.goal?.trim() ||
-                      business.strategic_goals?.trim() ||
-                      "Academic Excellence: Provide high-quality education through effective teaching and modern learning practices.\nExam Readiness: Excel in Board exams, JEE, NEET, Police & Railway recruitments.\nHolistic Growth: Foster an inspiring, supportive, analytical, and disciplined academic environment.";
+                    const missionText = business.mission?.trim() || "";
+                    const visionText = business.vision?.trim() || "";
+                    const goalText = (business.goal?.trim() || business.strategic_goals?.trim() || "");
+
+                    if (!missionText && !visionText && !goalText) return null;
 
                     const parsedGoals = goalText
-                      .split("\n")
-                      .map((g: string) => g.trim())
-                      .filter(Boolean)
-                      .map((goalLine: string, idx: number) => {
-                        const colonIdx = goalLine.indexOf(":");
-                        const title = colonIdx > -1 ? goalLine.slice(0, colonIdx).trim() : `Goal ${idx + 1}`;
-                        const desc = colonIdx > -1 ? goalLine.slice(colonIdx + 1).trim() : goalLine;
-                        return { title, desc };
-                      });
+                      ? goalText
+                          .split("\n")
+                          .map((g: string) => g.trim())
+                          .filter(Boolean)
+                          .map((goalLine: string, idx: number) => {
+                            const colonIdx = goalLine.indexOf(":");
+                            const title = colonIdx > -1 ? goalLine.slice(0, colonIdx).trim() : `Goal ${idx + 1}`;
+                            const desc = colonIdx > -1 ? goalLine.slice(colonIdx + 1).trim() : goalLine;
+                            return { title, desc };
+                          })
+                      : [];
 
                     return (
                       <div className="space-y-4 pt-1">
@@ -1721,145 +1616,125 @@ export function PublicBusinessProfileClient({
                               <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
                                 Core Principles
                               </Badge>
-                              <span className="text-xs text-muted-foreground font-medium hidden sm:inline">• Academic Philosophy</span>
+                              <span className="text-xs text-muted-foreground font-medium hidden sm:inline">• Values & Philosophy</span>
                             </div>
                             <h3 className="text-lg font-black text-foreground tracking-tight mt-1">
                               Our Mission, Vision & Strategic Goals
                             </h3>
                           </div>
-                          <Button variant="ghost" size="sm" asChild className="h-7 text-xs font-bold text-primary hover:text-primary gap-1">
-                            <Link href="/about#mission-vision">
-                              <span>Details</span>
-                              <ChevronRight className="size-3.5" />
-                            </Link>
-                          </Button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* 1. Mission Card */}
-                          <Card className="rounded-2xl border shadow-xs overflow-hidden border-blue-200/80 dark:border-blue-900/50 bg-gradient-to-br from-blue-50/60 via-card to-card dark:from-blue-950/20 hover:shadow-md transition-all flex flex-col justify-between">
-                            <div>
-                              <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="size-9 rounded-xl bg-blue-600/10 text-blue-600 flex items-center justify-center shadow-xs">
-                                    <Target className="size-5" />
-                                  </div>
-                                  <div>
-                                    <CardTitle className="text-sm font-bold text-foreground">Our Mission</CardTitle>
-                                    <CardDescription className="text-[11px]">Core purpose & daily commitment</CardDescription>
-                                  </div>
-                                </div>
-                                <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/50">
-                                  <Link href="/about#mission-vision">
-                                    <span>Details</span>
-                                    <ChevronRight className="size-3 ml-0.5" />
-                                  </Link>
-                                </Button>
-                              </CardHeader>
-                              <CardContent className="p-4 space-y-3">
-                                <blockquote className="border-l-3 border-blue-600 pl-3 py-1 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line bg-blue-50/30 dark:bg-blue-950/20 rounded-r-lg">
-                                  &ldquo;{missionText}&rdquo;
-                                </blockquote>
-                              </CardContent>
-                            </div>
-                            <div className="p-4 pt-0">
-                              <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
-                                <span className="flex items-center gap-1 text-blue-600 font-semibold">
-                                  <CheckCircle2 className="size-3.5" /> Purpose-driven
-                                </span>
-                                <span className="font-medium text-foreground">{business.name}</span>
-                              </div>
-                            </div>
-                          </Card>
-
-                          {/* 2. Vision Card */}
-                          <Card className="rounded-2xl border shadow-xs overflow-hidden border-purple-200/80 dark:border-purple-900/50 bg-gradient-to-br from-purple-50/60 via-card to-card dark:from-purple-950/20 hover:shadow-md transition-all flex flex-col justify-between">
-                            <div>
-                              <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="size-9 rounded-xl bg-purple-600/10 text-purple-600 flex items-center justify-center shadow-xs">
-                                    <Compass className="size-5" />
-                                  </div>
-                                  <div>
-                                    <CardTitle className="text-sm font-bold text-foreground">Our Vision</CardTitle>
-                                    <CardDescription className="text-[11px]">Future horizon & long-term impact</CardDescription>
-                                  </div>
-                                </div>
-                                <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/50">
-                                  <Link href="/about#mission-vision">
-                                    <span>Details</span>
-                                    <ChevronRight className="size-3 ml-0.5" />
-                                  </Link>
-                                </Button>
-                              </CardHeader>
-                              <CardContent className="p-4 space-y-3">
-                                <blockquote className="border-l-3 border-purple-600 pl-3 py-1 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line bg-purple-50/30 dark:bg-purple-950/20 rounded-r-lg">
-                                  &ldquo;{visionText}&rdquo;
-                                </blockquote>
-                              </CardContent>
-                            </div>
-                            <div className="p-4 pt-0">
-                              <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
-                                <span className="flex items-center gap-1 text-purple-600 font-semibold">
-                                  <CheckCircle2 className="size-3.5" /> Future-focused
-                                </span>
-                                <span className="font-medium text-foreground">{business.name}</span>
-                              </div>
-                            </div>
-                          </Card>
-                        </div>
-
-                        {/* 3. Strategic Goals Card */}
-                        <Card className="rounded-2xl border shadow-xs overflow-hidden border-amber-200/80 dark:border-amber-900/50 bg-gradient-to-br from-amber-50/40 via-card to-card dark:from-amber-950/20 hover:shadow-md transition-all">
-                          <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
-                            <div className="flex items-center gap-2.5">
-                              <div className="size-9 rounded-xl bg-amber-600/10 text-amber-600 flex items-center justify-center shadow-xs">
-                                <Award className="size-5" />
-                              </div>
-                              <div>
-                                <CardTitle className="text-sm font-bold text-foreground">Our Strategic Goals & Milestones</CardTitle>
-                                <CardDescription className="text-[11px]">Actionable benchmarks for comprehensive learner success</CardDescription>
-                              </div>
-                            </div>
-                            <Button variant="ghost" size="sm" asChild className="h-7 text-[11px] px-2 font-bold text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/50">
-                              <Link href="/about#mission-vision">
-                                <span>View All</span>
-                                <ChevronRight className="size-3 ml-0.5" />
-                              </Link>
-                            </Button>
-                          </CardHeader>
-                          <CardContent className="p-4 space-y-3">
-                            {parsedGoals.length > 0 ? (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {parsedGoals.map((g, idx) => (
-                                  <div key={idx} className="p-3 rounded-xl bg-card border border-border/60 shadow-2xs space-y-1">
-                                    <div className="flex items-center gap-1.5 text-amber-600 font-bold text-xs">
-                                      <Sparkles className="size-3.5 shrink-0" />
-                                      <span className="truncate">{g.title}</span>
+                        {(missionText || visionText) && (
+                          <div className={`grid grid-cols-1 ${missionText && visionText ? "md:grid-cols-2" : ""} gap-4`}>
+                            {/* 1. Mission Card */}
+                            {missionText && (
+                              <Card className="rounded-2xl border shadow-xs overflow-hidden border-blue-200/80 dark:border-blue-900/50 bg-gradient-to-br from-blue-50/60 via-card to-card dark:from-blue-950/20 hover:shadow-md transition-all flex flex-col justify-between">
+                                <div>
+                                  <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="size-9 rounded-xl bg-blue-600/10 text-blue-600 flex items-center justify-center shadow-xs">
+                                        <Target className="size-5" />
+                                      </div>
+                                      <div>
+                                        <CardTitle className="text-sm font-bold text-foreground">Our Mission</CardTitle>
+                                        <CardDescription className="text-[11px]">Core purpose & daily commitment</CardDescription>
+                                      </div>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-3">
-                                      {g.desc}
-                                    </p>
+                                  </CardHeader>
+                                  <CardContent className="p-4 space-y-3">
+                                    <blockquote className="border-l-3 border-blue-600 pl-3 py-1 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line bg-blue-50/30 dark:bg-blue-950/20 rounded-r-lg">
+                                      &ldquo;{missionText}&rdquo;
+                                    </blockquote>
+                                  </CardContent>
+                                </div>
+                                <div className="p-4 pt-0">
+                                  <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                                    <span className="flex items-center gap-1 text-blue-600 font-semibold">
+                                      <CheckCircle2 className="size-3.5" /> Purpose-driven
+                                    </span>
+                                    <span className="font-medium text-foreground">{business.name}</span>
                                   </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <blockquote className="border-l-3 border-amber-600 pl-3 py-1 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line bg-amber-50/30 dark:bg-amber-950/20 rounded-r-lg">
-                                &ldquo;{goalText}&rdquo;
-                              </blockquote>
+                                </div>
+                              </Card>
                             )}
 
-                            <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
-                              <span className="flex items-center gap-1 text-amber-600 font-semibold">
-                                <CheckCircle2 className="size-3.5" /> Active Strategy
-                              </span>
-                              <Link href="/about#mission-vision" className="font-bold text-primary hover:underline flex items-center gap-0.5 text-xs">
-                                <span>Read complete roadmap</span>
-                                <ChevronRight className="size-3" />
-                              </Link>
-                            </div>
-                          </CardContent>
-                        </Card>
+                            {/* 2. Vision Card */}
+                            {visionText && (
+                              <Card className="rounded-2xl border shadow-xs overflow-hidden border-purple-200/80 dark:border-purple-900/50 bg-gradient-to-br from-purple-50/60 via-card to-card dark:from-purple-950/20 hover:shadow-md transition-all flex flex-col justify-between">
+                                <div>
+                                  <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="size-9 rounded-xl bg-purple-600/10 text-purple-600 flex items-center justify-center shadow-xs">
+                                        <Compass className="size-5" />
+                                      </div>
+                                      <div>
+                                        <CardTitle className="text-sm font-bold text-foreground">Our Vision</CardTitle>
+                                        <CardDescription className="text-[11px]">Future horizon & long-term impact</CardDescription>
+                                      </div>
+                                    </div>
+                                  </CardHeader>
+                                  <CardContent className="p-4 space-y-3">
+                                    <blockquote className="border-l-3 border-purple-600 pl-3 py-1 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line bg-purple-50/30 dark:bg-purple-950/20 rounded-r-lg">
+                                      &ldquo;{visionText}&rdquo;
+                                    </blockquote>
+                                  </CardContent>
+                                </div>
+                                <div className="p-4 pt-0">
+                                  <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                                    <span className="flex items-center gap-1 text-purple-600 font-semibold">
+                                      <CheckCircle2 className="size-3.5" /> Future-focused
+                                    </span>
+                                    <span className="font-medium text-foreground">{business.name}</span>
+                                  </div>
+                                </div>
+                              </Card>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 3. Strategic Goals Card */}
+                        {goalText && (
+                          <Card className="rounded-2xl border shadow-xs overflow-hidden border-amber-200/80 dark:border-amber-900/50 bg-gradient-to-br from-amber-50/40 via-card to-card dark:from-amber-950/20 hover:shadow-md transition-all">
+                            <CardHeader className="pb-3 border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between space-y-0">
+                              <div className="flex items-center gap-2.5">
+                                <div className="size-9 rounded-xl bg-amber-600/10 text-amber-600 flex items-center justify-center shadow-xs">
+                                  <Award className="size-5" />
+                                </div>
+                                <div>
+                                  <CardTitle className="text-sm font-bold text-foreground">Our Strategic Goals & Milestones</CardTitle>
+                                  <CardDescription className="text-[11px]">Actionable benchmarks and goals</CardDescription>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="p-4 space-y-3">
+                              {parsedGoals.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                  {parsedGoals.map((g, idx) => (
+                                    <div key={idx} className="p-3 rounded-xl bg-card border border-border/60 shadow-2xs space-y-1">
+                                      <div className="flex items-center gap-1.5 text-amber-600 font-bold text-xs">
+                                        <Sparkles className="size-3.5 shrink-0" />
+                                        <span className="truncate">{g.title}</span>
+                                      </div>
+                                      <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-3">
+                                        {g.desc}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <blockquote className="border-l-3 border-amber-600 pl-3 py-1 italic text-xs leading-relaxed text-foreground/90 whitespace-pre-line bg-amber-50/30 dark:bg-amber-950/20 rounded-r-lg">
+                                  &ldquo;{goalText}&rdquo;
+                                </blockquote>
+                              )}
+
+                              <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                                <span className="flex items-center gap-1 text-amber-600 font-semibold">
+                                  <CheckCircle2 className="size-3.5" /> Active Strategy
+                                </span>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
                       </div>
                     );
                   })()}
@@ -1867,79 +1742,87 @@ export function PublicBusinessProfileClient({
 
                 {/* Right 1 Col: Reviews & Business Hours */}
                 <div className="space-y-6">
-                  {/* Latest Customer Reviews Card (Annotated by User) */}
-                  <Card className="rounded-2xl border shadow-xs">
-                    <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-                      <CardTitle className="text-base font-bold flex items-center gap-2">
-                        <Star className="size-4 text-amber-500 fill-amber-500" />
-                        <span>Latest Reviews</span>
-                      </CardTitle>
-                      <Badge variant="outline" className="text-[11px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/60 flex items-center gap-1">
-                        <Star className="size-3 fill-amber-500 text-amber-500" />
-                        {avgRating} ({reviewCount})
-                      </Badge>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-xs">
-                      {latestReviews.map((rev: any, idx: number) => (
-                        <div key={rev.id || idx} className="py-2 border-b last:border-b-0 border-border/50 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-foreground truncate max-w-[140px]">
-                              {rev.user_name || rev.title || "Verified Customer"}
-                            </span>
-                            <div className="flex items-center gap-0.5 text-amber-500">
-                              {Array.from({ length: Math.max(0, Math.min(5, Math.round(Number(rev.rating) || 5))) }).map((_, i) => (
-                                <Star key={i} className="size-3 fill-amber-500 text-amber-500" />
-                              ))}
+                  {/* Latest Customer Reviews Card (Only if reviews exist) */}
+                  {allReviews.length > 0 && (
+                    <Card className="rounded-2xl border shadow-xs">
+                      <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                        <CardTitle className="text-base font-bold flex items-center gap-2">
+                          <Star className="size-4 text-amber-500 fill-amber-500" />
+                          <span>Latest Reviews</span>
+                        </CardTitle>
+                        <Badge variant="outline" className="text-[11px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/60 flex items-center gap-1">
+                          <Star className="size-3 fill-amber-500 text-amber-500" />
+                          {avgRating} ({reviewCount})
+                        </Badge>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-xs">
+                        {latestReviews.map((rev: any, idx: number) => (
+                          <div key={rev.id || idx} className="py-2 border-b last:border-b-0 border-border/50 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-foreground truncate max-w-[140px]">
+                                {rev.user_name || rev.title || "Verified Customer"}
+                              </span>
+                              <div className="flex items-center gap-0.5 text-amber-500">
+                                {Array.from({ length: Math.max(0, Math.min(5, Math.round(Number(rev.rating) || 5))) }).map((_, i) => (
+                                  <Star key={i} className="size-3 fill-amber-500 text-amber-500" />
+                                ))}
+                              </div>
                             </div>
+                            <p className="text-muted-foreground line-clamp-2 text-[11px] leading-relaxed">
+                              "{rev.review || rev.comment || "Great experience and highly professional service."}"
+                            </p>
                           </div>
-                          <p className="text-muted-foreground line-clamp-2 text-[11px] leading-relaxed">
-                            "{rev.review || "Great experience and highly professional service."}"
-                          </p>
+                        ))}
+
+                        <div className="pt-1 flex items-center justify-between gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setAllReviewsOpen(true)}
+                            className="text-xs font-bold text-primary hover:underline p-0 h-auto cursor-pointer"
+                          >
+                            View all reviews ({reviewCount}) &rarr;
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setFeedbackOpen(true)}
+                            className="h-7 text-[11px] px-2.5 font-semibold cursor-pointer"
+                          >
+                            Write a Review
+                          </Button>
                         </div>
-                      ))}
+                      </CardContent>
+                    </Card>
+                  )}
 
-                      <div className="pt-1 flex items-center justify-between gap-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setAllReviewsOpen(true)}
-                          className="text-xs font-bold text-primary hover:underline p-0 h-auto cursor-pointer"
-                        >
-                          View all reviews ({reviewCount}) &rarr;
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setFeedbackOpen(true)}
-                          className="h-7 text-[11px] px-2.5 font-semibold cursor-pointer"
-                        >
-                          Write a Review
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  {/* Operating Hours Card (Only if opening_hours provided) */}
+                  {(() => {
+                    if (!business.opening_hours || typeof business.opening_hours !== "object") return null;
+                    const dayOrder = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+                    const dayMap = new Map<string, any>();
+                    Object.entries(business.opening_hours).forEach(([d, val]) => {
+                      const key = d.toLowerCase();
+                      if (dayOrder.includes(key) && !dayMap.has(key)) {
+                        dayMap.set(key, val);
+                      }
+                    });
+                    if (dayMap.size === 0) return null;
+                    const entries = Array.from(dayMap.entries()).sort(([a], [b]) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
 
-                  {/* Operating Hours Card */}
-                  <Card className="rounded-2xl border shadow-xs">
-                    <CardHeader>
-                      <CardTitle className="text-base font-bold flex items-center gap-2">
-                        <Clock className="size-4 text-primary" />
-                        <span>Business Hours</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2 text-xs">
-                      {business.opening_hours && typeof business.opening_hours === "object" && Object.keys(business.opening_hours).length > 0 ? (
-                        (() => {
-                          const dayOrder = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-                          const entries = Object.entries(business.opening_hours).sort(([a], [b]) => {
-                            const idxA = dayOrder.indexOf(a.toLowerCase());
-                            const idxB = dayOrder.indexOf(b.toLowerCase());
-                            return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
-                          });
-                          return entries.map(([day, hrs]: [string, any]) => {
-                            const isClosed = typeof hrs === "object" ? Boolean(hrs?.is_closed) : String(hrs).toLowerCase().includes("closed");
+                    return (
+                      <Card className="rounded-2xl border shadow-xs">
+                        <CardHeader>
+                          <CardTitle className="text-base font-bold flex items-center gap-2">
+                            <Clock className="size-4 text-primary" />
+                            <span>Business Hours</span>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 text-xs">
+                          {entries.map(([day, hrs]) => {
+                            const isClosed = typeof hrs === "object" ? Boolean(hrs?.is_closed || hrs?.isClosed) : String(hrs).toLowerCase().includes("closed");
                             const timeText = typeof hrs === "string"
                               ? hrs
                               : isClosed
@@ -1953,29 +1836,14 @@ export function PublicBusinessProfileClient({
                                 </span>
                               </div>
                             );
-                          });
-                        })()
-                      ) : (
-                        <div className="space-y-1.5 text-muted-foreground">
-                          <div className="flex items-center justify-between py-1 border-b border-border/50">
-                            <span className="font-semibold text-foreground">Monday – Friday</span>
-                            <span>9:00 AM – 7:00 PM</span>
-                          </div>
-                          <div className="flex items-center justify-between py-1 border-b border-border/50">
-                            <span className="font-semibold text-foreground">Saturday</span>
-                            <span>10:00 AM – 5:00 PM</span>
-                          </div>
-                          <div className="flex items-center justify-between py-1">
-                            <span className="font-semibold text-foreground">Sunday</span>
-                            <span className="text-rose-500 font-medium">Closed</span>
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                          })}
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
 
-                  {/* Owner / Leadership Details Card */}
-                  {Boolean(business.owner_name || business.founder_name || business.name) && (
+                  {/* Owner / Leadership Details Card (Only if founder/owner info provided) */}
+                  {Boolean(business.founder_name || business.owner_name || business.founder_about || business.owner_about || business.founder_image_url || business.owner_image_url) && (
                     <Card className="rounded-2xl border shadow-xs overflow-hidden">
                       <CardHeader className="pb-3 border-b border-border/50 bg-muted/20">
                         <CardTitle className="text-base font-bold flex items-center justify-between">
@@ -1983,9 +1851,11 @@ export function PublicBusinessProfileClient({
                             <Users className="size-4 text-primary" />
                             <span>Business Owner / Leadership</span>
                           </span>
-                          <Badge variant="outline" className="text-[10px] font-semibold bg-primary/5 text-primary border-primary/20">
-                            Verified
-                          </Badge>
+                          {business.is_verified && (
+                            <Badge variant="outline" className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                              Verified
+                            </Badge>
+                          )}
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-4 space-y-4">
@@ -1994,7 +1864,7 @@ export function PublicBusinessProfileClient({
                             const resolvedOwnerImg =
                               business.owner_image_url ||
                               business.founder_image_url ||
-                              "/uploads/media/deepak_yadav_founder.jpg";
+                              null;
                             return (
                               <div className="relative size-14 rounded-full overflow-hidden border-2 border-primary/20 shrink-0 bg-muted group">
                                 {resolvedOwnerImg ? (
@@ -2018,9 +1888,11 @@ export function PublicBusinessProfileClient({
                             <h4 className="text-sm font-bold text-foreground truncate">
                               {business.owner_name || business.founder_name || "Business Owner"}
                             </h4>
-                            <p className="text-xs font-medium text-muted-foreground truncate">
-                              {business.owner_designation || business.founder_title || "Founder & Business Owner"}
-                            </p>
+                            {(business.owner_designation || business.founder_title) && (
+                              <p className="text-xs font-medium text-muted-foreground truncate">
+                                {business.owner_designation || business.founder_title}
+                              </p>
+                            )}
                             {business.name && (
                               <p className="text-[11px] text-muted-foreground/80 truncate">
                                 {business.name}
@@ -3870,77 +3742,95 @@ export function PublicBusinessProfileClient({
 
                       {/* Featured Highlights Grid */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-4 border-t">
-                        <div className="p-3.5 rounded-xl bg-muted/40 border">
-                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
-                            Business Type
-                          </span>
-                          <span className="text-xs font-bold text-foreground mt-0.5 block">
-                            {business.business_type || "Enterprise"}
-                          </span>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-muted/40 border">
-                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
-                            Established
-                          </span>
-                          <span className="text-xs font-bold text-foreground mt-0.5 block">
-                            {business.established_year ? `Year ${business.established_year}` : "Verified Member"}
-                          </span>
-                        </div>
+                        {business.business_type && (
+                          <div className="p-3.5 rounded-xl bg-muted/40 border">
+                            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                              Business Type
+                            </span>
+                            <span className="text-xs font-bold text-foreground mt-0.5 block">
+                              {business.business_type}
+                            </span>
+                          </div>
+                        )}
+                        {business.established_year ? (
+                          <div className="p-3.5 rounded-xl bg-muted/40 border">
+                            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                              Established
+                            </span>
+                            <span className="text-xs font-bold text-foreground mt-0.5 block">
+                              Year {business.established_year}
+                            </span>
+                          </div>
+                        ) : null}
                         <div className="p-3.5 rounded-xl bg-muted/40 border">
                           <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
                             Verification
                           </span>
-                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 block flex items-center gap-1">
-                            <ShieldCheck className="size-3.5" /> Verified Store
-                          </span>
+                          {business.is_verified ? (
+                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 block flex items-center gap-1">
+                              <ShieldCheck className="size-3.5" /> Verified Store
+                            </span>
+                          ) : (
+                            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-0.5 block flex items-center gap-1">
+                              <AlertCircle className="size-3.5" /> Pending Verification
+                            </span>
+                          )}
                         </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  {/* Mission, Vision & Strategic Goals Card */}
-                  <Card className="rounded-2xl border shadow-xs">
-                    <CardHeader className="pb-3 border-b">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
-                          Core Principles
-                        </Badge>
-                        <span className="text-xs text-muted-foreground font-medium">• Philosophy & Goals</span>
-                      </div>
-                      <CardTitle className="text-lg font-bold mt-1">Our Mission, Vision & Strategic Goals</CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-4 space-y-4">
-                      <div className="p-4 rounded-xl bg-primary/5 border border-primary/15 space-y-2">
-                        <div className="flex items-center gap-2 font-bold text-sm text-foreground">
-                          <Target className="size-4 text-primary" />
-                          <span>Our Mission</span>
+                  {/* Mission, Vision & Strategic Goals Card (Only if data provided) */}
+                  {Boolean(business.mission?.trim() || business.vision?.trim() || business.goal?.trim() || business.strategic_goals?.trim()) && (
+                    <Card className="rounded-2xl border shadow-xs">
+                      <CardHeader className="pb-3 border-b">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border-primary/20">
+                            Core Principles
+                          </Badge>
+                          <span className="text-xs text-muted-foreground font-medium">• Philosophy & Goals</span>
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed pl-6">
-                          {business.mission?.trim() || `To deliver dependable products, transparent services, and exceptional value to every customer at ${business.name}.`}
-                        </p>
-                      </div>
+                        <CardTitle className="text-lg font-bold mt-1">Our Mission, Vision & Strategic Goals</CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-4 space-y-4">
+                        {business.mission?.trim() && (
+                          <div className="p-4 rounded-xl bg-primary/5 border border-primary/15 space-y-2">
+                            <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                              <Target className="size-4 text-primary" />
+                              <span>Our Mission</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed pl-6 whitespace-pre-line">
+                              {business.mission.trim()}
+                            </p>
+                          </div>
+                        )}
 
-                      <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/15 space-y-2">
-                        <div className="flex items-center gap-2 font-bold text-sm text-foreground">
-                          <Compass className="size-4 text-amber-500" />
-                          <span>Our Vision</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed pl-6">
-                          {business.vision?.trim() || `To become the most trusted and preferred local establishment in ${business.city || "the region"}, setting higher benchmarks in quality and reliability.`}
-                        </p>
-                      </div>
+                        {business.vision?.trim() && (
+                          <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/15 space-y-2">
+                            <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                              <Compass className="size-4 text-amber-500" />
+                              <span>Our Vision</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed pl-6 whitespace-pre-line">
+                              {business.vision.trim()}
+                            </p>
+                          </div>
+                        )}
 
-                      <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/15 space-y-2">
-                        <div className="flex items-center gap-2 font-bold text-sm text-foreground">
-                          <Award className="size-4 text-emerald-500" />
-                          <span>Strategic Goals & Commitments</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed pl-6 whitespace-pre-line">
-                          {business.goal?.trim() || business.strategic_goals?.trim() || `• Customer Centricity: Providing high satisfaction with genuine products and services.\n• Community Engagement: Fostering long-term customer trust.\n• Continual Growth: Expanding catalog offerings and modern service convenience.`}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
+                        {(business.goal?.trim() || business.strategic_goals?.trim()) && (
+                          <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/15 space-y-2">
+                            <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                              <Award className="size-4 text-emerald-500" />
+                              <span>Strategic Goals & Commitments</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed pl-6 whitespace-pre-line">
+                              {business.goal?.trim() || business.strategic_goals?.trim()}
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
 
                 {/* Right 1 Col: Key Info, Business Details & Operating Hours */}
@@ -4459,7 +4349,7 @@ export function PublicBusinessProfileClient({
                 const resolvedOwnerImg =
                   business.owner_image_url ||
                   business.founder_image_url ||
-                  "/uploads/media/deepak_yadav_founder.jpg";
+                  null;
                 return (
                   <div className="relative size-16 rounded-full overflow-hidden border-2 border-primary/20 shrink-0 bg-muted">
                     {resolvedOwnerImg ? (
