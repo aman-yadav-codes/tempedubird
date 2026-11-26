@@ -64,6 +64,7 @@ import {
   Car,
   Home,
   BedDouble,
+  UtensilsCrossed,
 } from "lucide-react";
 import { useAuthStore, useCartStore } from "@/store";
 import { toast } from "sonner";
@@ -80,7 +81,7 @@ import { CompactServiceCard } from "@/components/shared/compact-service-card";
 
 interface DiscoveryItem {
   id: number;
-  resultType: "business" | "professional" | "product" | "service" | "course" | "job" | "property" | "vehicle" | "event";
+  resultType: "business" | "professional" | "product" | "service" | "course" | "job" | "property" | "vehicle" | "event" | "dish" | "room";
   name: string;
   title?: string;
   brand?: string | null;
@@ -289,6 +290,8 @@ export const DEFAULT_ALL_VERTICALS = [
   { type: "course", label: "Courses" },
   { type: "property", label: "Properties" },
   { type: "vehicle", label: "Vehicles" },
+  { type: "dish", label: "Dishes" },
+  { type: "room", label: "Rooms" },
   { type: "event", label: "Events" },
   { type: "professional", label: "Professionals" },
   { type: "service", label: "Services" },
@@ -316,7 +319,7 @@ function CustomerExplorePageContent({
   const searchParams = useSearchParams();
   const urlQ = searchParams?.get("q") || searchParams?.get("query") || searchParams?.get("search") || initialQuery || "";
   const rawType = (searchParams?.get("type") as any) || initialType || "all";
-  const urlType = ["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event"].includes(rawType) ? rawType : "all";
+  const urlType = ["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event", "dish", "room"].includes(rawType) ? rawType : "all";
   const urlCountry = searchParams?.get("country") || "";
   const urlCity = searchParams?.get("city") || searchParams?.get("location") || initialCity || "";
   const rawCatParam = searchParams?.get("category") || searchParams?.get("category_slug") || initialCategory || "";
@@ -335,7 +338,7 @@ function CustomerExplorePageContent({
   const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
 
   const [query, setQuery] = useState(urlQ);
-  const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job" | "property" | "vehicle" | "event">(urlType);
+  const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job" | "property" | "vehicle" | "event" | "dish" | "room">(urlType);
   const [country, setCountry] = useState<string>(urlCountry);
   const [city, setCity] = useState<string>(
     extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || ""
@@ -476,7 +479,7 @@ function CustomerExplorePageContent({
     }
 
     const effectiveType = (urlType && urlType !== "all") ? urlType : (initialType || urlType || "all");
-    if (["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event"].includes(effectiveType)) {
+    if (["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event", "dish", "room"].includes(effectiveType)) {
       setActiveType(effectiveType as any);
     }
     if (urlBizCat) {
@@ -542,6 +545,8 @@ function CustomerExplorePageContent({
   const [properties, setProperties] = useState<DiscoveryItem[]>([]);
   const [vehicles, setVehicles] = useState<DiscoveryItem[]>([]);
   const [events, setEvents] = useState<DiscoveryItem[]>([]);
+  const [dishes, setDishes] = useState<DiscoveryItem[]>([]);
+  const [rooms, setRooms] = useState<DiscoveryItem[]>([]);
 
   // Filter: Sort By, Keyword Search, Brand
   const [sortBy, setSortBy] = useState<string>("featured");
@@ -1006,6 +1011,60 @@ function CustomerExplorePageContent({
     return list;
   }, [events, productNameSearch, sortBy]);
 
+  const filteredDishes = useMemo(() => {
+    let list = [...dishes];
+    if (productNameSearch) {
+      const q = productNameSearch.toLowerCase();
+      list = list.filter(
+        (d) =>
+          (d.name || d.title || "").toLowerCase().includes(q) ||
+          (d.description || "").toLowerCase().includes(q) ||
+          (d.category_name || "").toLowerCase().includes(q) ||
+          (d.subcategory_name || "").toLowerCase().includes(q) ||
+          (d.business_name || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (sortBy === "price_asc") {
+      list.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    } else if (sortBy === "price_desc") {
+      list.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [dishes, productNameSearch, sortBy]);
+
+  const filteredRooms = useMemo(() => {
+    let list = [...rooms];
+    if (productNameSearch) {
+      const q = productNameSearch.toLowerCase();
+      list = list.filter(
+        (r) =>
+          (r.name || r.title || "").toLowerCase().includes(q) ||
+          (r.description || "").toLowerCase().includes(q) ||
+          (r.category_name || "").toLowerCase().includes(q) ||
+          (r.subcategory_name || "").toLowerCase().includes(q) ||
+          (r.business_name || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (sortBy === "price_asc") {
+      list.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    } else if (sortBy === "price_desc") {
+      list.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [rooms, productNameSearch, sortBy]);
+
   const totalFilteredCount = useMemo(() => {
     switch (activeType) {
       case "business":
@@ -1026,6 +1085,10 @@ function CustomerExplorePageContent({
         return filteredVehicles.length;
       case "event":
         return filteredEvents.length;
+      case "dish":
+        return filteredDishes.length;
+      case "room":
+        return filteredRooms.length;
       default:
         return (
           filteredBusinesses.length +
@@ -1036,7 +1099,9 @@ function CustomerExplorePageContent({
           filteredJobs.length +
           filteredProperties.length +
           filteredVehicles.length +
-          filteredEvents.length
+          filteredEvents.length +
+          filteredDishes.length +
+          filteredRooms.length
         );
     }
   }, [
@@ -1203,6 +1268,8 @@ function CustomerExplorePageContent({
         setProperties(data.data.properties || []);
         setVehicles(data.data.vehicles || []);
         setEvents(data.data.events || []);
+        setDishes(data.data.dishes || []);
+        setRooms(data.data.rooms || []);
       }
     } catch (err) {
       console.error(err);
@@ -1439,6 +1506,8 @@ function CustomerExplorePageContent({
       case "property": return "Properties";
       case "vehicle": return "Vehicles";
       case "event": return "Events";
+      case "dish": return "Dishes";
+      case "room": return "Rooms";
       default: return "Explore";
     }
   };
@@ -2672,6 +2741,249 @@ function CustomerExplorePageContent({
                               }}
                             >
                               Register / Enquire
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Dishes Section */}
+              {(activeType === "all" || activeType === "dish") && filteredDishes.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <UtensilsCrossed className="size-4 text-rose-600" />
+                      Popular Dishes & Menus ({filteredDishes.length})
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredDishes.map((d) => {
+                      const dishUrl = `/dishes/${d.slug || d.id}`;
+                      return (
+                        <Card
+                          key={d.id}
+                          onClick={() => router.push(dishUrl)}
+                          className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between cursor-pointer group"
+                        >
+                          <div>
+                            <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
+                              <Link href={dishUrl} className="block w-full h-full">
+                                {d.image_url || d.default_image_url ? (
+                                  <img
+                                    src={d.image_url || d.default_image_url || ""}
+                                    alt={d.title || d.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-rose-50 text-rose-600">
+                                    <UtensilsCrossed className="size-12 opacity-60" />
+                                  </div>
+                                )}
+                              </Link>
+                              <div className="absolute top-2.5 right-2.5 pointer-events-none">
+                                <Badge className="bg-rose-600 text-white font-bold text-[10px] px-2 py-0.5">
+                                  {d.price ? `₹${Number(d.price).toLocaleString()}` : "Price on Request"}
+                                </Badge>
+                              </div>
+                              {d.city && (
+                                <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
+                                  <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                    <MapPin className="size-2.5" />
+                                    {d.city}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                            <CardContent className="p-4 space-y-2">
+                              <h3 className="font-bold text-slate-900 text-sm line-clamp-1 group-hover:text-rose-600 transition-colors">
+                                <Link href={dishUrl}>
+                                  {d.title || d.name}
+                                </Link>
+                              </h3>
+                              {d.business_name && (
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                  <Building2 className="size-3 text-slate-400 shrink-0" />
+                                  <Link
+                                    href={d.business_slug ? `/business/${d.business_slug}` : d.business_id ? `/business/${d.business_id}` : "#"}
+                                    onClick={(ev) => ev.stopPropagation()}
+                                    className="truncate font-medium text-slate-700 hover:text-rose-600 hover:underline transition-colors"
+                                  >
+                                    {d.business_name}
+                                  </Link>
+                                </div>
+                              )}
+                              {d.description && (
+                                <p className="text-xs text-slate-600 line-clamp-2">
+                                  {d.description}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
+                                {d.subcategory_name || d.category_name ? (
+                                  <span className="bg-rose-50 text-rose-700 font-semibold px-2 py-0.5 rounded flex items-center gap-1">
+                                    <Tag className="size-3" />
+                                    {d.subcategory_name || d.category_name}
+                                  </span>
+                                ) : null}
+                                {d.spice_level && (
+                                  <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded text-[10px] font-bold">
+                                    {d.spice_level}
+                                  </span>
+                                )}
+                              </div>
+                            </CardContent>
+                          </div>
+                          <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
+                            {d.phone && (
+                              <a
+                                href={`tel:${d.phone}`}
+                                onClick={(ev) => ev.stopPropagation()}
+                                className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                              >
+                                <Phone className="size-3" /> Call
+                              </a>
+                            )}
+                            <Button
+                              size="sm"
+                              className="flex-1 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                setEnquiryModalItem({ ...d, resultType: "dish", dishId: d.id });
+                                setEnquiryForm({
+                                  name: user?.full_name || "",
+                                  email: user?.email || "",
+                                  phone: user?.phone || "",
+                                  message: `Hi, I would like to order or enquire about "${d.title || d.name}". Please confirm availability.`,
+                                  preferredDate: "",
+                                  preferredTime: "",
+                                });
+                              }}
+                            >
+                              Order / Enquire
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Rooms Section */}
+              {(activeType === "all" || activeType === "room") && filteredRooms.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <BedDouble className="size-4 text-indigo-600" />
+                      Hotel Rooms & Stays ({filteredRooms.length})
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredRooms.map((r) => {
+                      const roomUrl = `/rooms/${r.slug || r.id}`;
+                      return (
+                        <Card
+                          key={r.id}
+                          onClick={() => router.push(roomUrl)}
+                          className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between cursor-pointer group"
+                        >
+                          <div>
+                            <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
+                              <Link href={roomUrl} className="block w-full h-full">
+                                {r.image_url || r.default_image_url ? (
+                                  <img
+                                    src={r.image_url || r.default_image_url || ""}
+                                    alt={r.title || r.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-indigo-50 text-indigo-600">
+                                    <BedDouble className="size-12 opacity-60" />
+                                  </div>
+                                )}
+                              </Link>
+                              <div className="absolute top-2.5 right-2.5 pointer-events-none">
+                                <Badge className="bg-indigo-600 text-white font-bold text-[10px] px-2 py-0.5">
+                                  {r.price ? `₹${Number(r.price).toLocaleString()} / night` : "Check Rates"}
+                                </Badge>
+                              </div>
+                              {r.city && (
+                                <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
+                                  <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                    <MapPin className="size-2.5" />
+                                    {r.city}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                            <CardContent className="p-4 space-y-2">
+                              <h3 className="font-bold text-slate-900 text-sm line-clamp-1 group-hover:text-indigo-600 transition-colors">
+                                <Link href={roomUrl}>
+                                  {r.title || r.name}
+                                </Link>
+                              </h3>
+                              {r.business_name && (
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                  <Building2 className="size-3 text-slate-400 shrink-0" />
+                                  <Link
+                                    href={r.business_slug ? `/business/${r.business_slug}` : r.business_id ? `/business/${r.business_id}` : "#"}
+                                    onClick={(ev) => ev.stopPropagation()}
+                                    className="truncate font-medium text-slate-700 hover:text-indigo-600 hover:underline transition-colors"
+                                  >
+                                    {r.business_name}
+                                  </Link>
+                                </div>
+                              )}
+                              {r.description && (
+                                <p className="text-xs text-slate-600 line-clamp-2">
+                                  {r.description}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
+                                {r.subcategory_name || r.category_name ? (
+                                  <span className="bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded flex items-center gap-1">
+                                    <Tag className="size-3" />
+                                    {r.subcategory_name || r.category_name}
+                                  </span>
+                                ) : null}
+                                {r.max_adults && (
+                                  <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
+                                    <Users className="size-3" />
+                                    Up to {r.max_adults} Guests
+                                  </span>
+                                )}
+                              </div>
+                            </CardContent>
+                          </div>
+                          <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
+                            {r.phone && (
+                              <a
+                                href={`tel:${r.phone}`}
+                                onClick={(ev) => ev.stopPropagation()}
+                                className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                              >
+                                <Phone className="size-3" /> Call Hotel
+                              </a>
+                            )}
+                            <Button
+                              size="sm"
+                              className="flex-1 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                setEnquiryModalItem({ ...r, resultType: "room", roomId: r.id });
+                                setEnquiryForm({
+                                  name: user?.full_name || "",
+                                  email: user?.email || "",
+                                  phone: user?.phone || "",
+                                  message: `Hi, I would like to check availability and book "${r.title || r.name}". Please confirm tariff and dates.`,
+                                  preferredDate: "",
+                                  preferredTime: "",
+                                });
+                              }}
+                            >
+                              Book / Enquire
                             </Button>
                           </CardFooter>
                         </Card>

@@ -467,6 +467,8 @@ export function buildDiscoverySeoUrl({
   else if (normType === "property" || normType === "properties") prefix = "/properties";
   else if (normType === "vehicle" || normType === "vehicles") prefix = "/vehicles";
   else if (normType === "event" || normType === "events") prefix = "/events";
+  else if (normType === "dish" || normType === "dishes") prefix = "/dishes";
+  else if (normType === "room" || normType === "rooms") prefix = "/rooms";
   else if (!normType || normType === "all") {
     prefix = "/businesses";
   }
@@ -501,6 +503,35 @@ export const KNOWN_CATEGORY_SLUG_LABELS: Record<string, string> = {
   "residential-real-estate": "Residential Real Estate",
   "industrial-warehousing-estates": "Industrial & Warehousing Estates",
   "plots-development-lands": "Plots & Development Lands",
+  // Dishes
+  "all-dishes": "Dishes & Food Menu",
+  "dish-bakery-desserts-confectionery": "Bakery, Desserts & Confectionery",
+  "dish-beverages-brews-mocktails": "Beverages, Brews & Mocktails",
+  "dish-main-course-curries-breads": "Main Course Curries & Breads",
+  "dish-starters-appetizers": "Starters & Appetizers",
+  "bakery-desserts-and-confectionery": "Bakery, Desserts & Confectionery",
+  "bakery-desserts-confectionery": "Bakery, Desserts & Confectionery",
+  "beverages-brews-and-mocktails": "Beverages, Brews & Mocktails",
+  "beverages-brews-mocktails": "Beverages, Brews & Mocktails",
+  "main-course-curries-and-breads": "Main Course Curries & Breads",
+  "main-course-curries-breads": "Main Course Curries & Breads",
+  "starters-and-appetizers": "Starters & Appetizers",
+  "starters-appetizers": "Starters & Appetizers",
+  // Rooms & Stays
+  "all-rooms": "Rooms & Stays",
+  "room-budget-dormitory-stays": "Budget & Dormitory Stays",
+  "room-hotel-guest-rooms": "Hotel Guest Rooms",
+  "room-luxury-suites-penthouses": "Luxury Suites & Penthouses",
+  "room-resort-cottages-heritage-chalets": "Resort Cottages & Heritage Chalets",
+  "room-backpacker-mixed-bunk-dorms": "Backpacker Mixed Bunk Dorms",
+  "budget-and-dormitory-stays": "Budget & Dormitory Stays",
+  "budget-dormitory-stays": "Budget & Dormitory Stays",
+  "hotel-guest-rooms": "Hotel Guest Rooms",
+  "luxury-suites-and-penthouses": "Luxury Suites & Penthouses",
+  "luxury-suites-penthouses": "Luxury Suites & Penthouses",
+  "resort-cottages-and-heritage-chalets": "Resort Cottages & Heritage Chalets",
+  "resort-cottages-heritage-chalets": "Resort Cottages & Heritage Chalets",
+  "backpacker-mixed-bunk-dorms": "Backpacker Mixed Bunk Dorms",
   // Vehicles
   "all-vehicles": "Vehicles & Mobility",
   "vehicle-passenger-cars-suvs": "Passenger Cars & SUVs",
@@ -594,8 +625,8 @@ export function formatCategorySlug(slug?: string | null): string {
   if (KNOWN_CATEGORY_SLUG_LABELS[trimmed]) {
     return KNOWN_CATEGORY_SLUG_LABELS[trimmed];
   }
-  // Strip known vertical prefixes (e.g. property-, vehicle-, event-, job-, etc.)
-  const stripped = trimmed.replace(/^(property|vehicle|event|job|service|product|business)-/, "");
+  // Strip known vertical prefixes (e.g. property-, vehicle-, event-, job-, dish-, room-, etc.)
+  const stripped = trimmed.replace(/^(property|vehicle|event|job|service|product|business|dish|room)-/, "");
   if (KNOWN_CATEGORY_SLUG_LABELS[stripped]) {
     return KNOWN_CATEGORY_SLUG_LABELS[stripped];
   }
