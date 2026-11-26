@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -69,7 +70,22 @@ import {
   DollarSign,
   Info,
   Check,
+  Edit2,
+  ChevronDown,
+  MoreHorizontal,
+  MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/store";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -87,6 +103,33 @@ export type ListingVertical =
   | "dish"
   | "event"
   | "property";
+
+export const getPublicUrl = (type: ListingVertical, item: any): string => {
+  switch (type) {
+    case "business":
+      return item.slug ? `/institutes/${item.slug}` : `/institutes/${item.id}`;
+    case "professional":
+      return item.slug ? `/professionals/${item.slug}` : `/professionals/${item.id}`;
+    case "course":
+      return `/courses/${item.id}`;
+    case "job":
+      return `/jobs/${item.id}`;
+    case "products":
+      return `/products/${item.id}`;
+    case "services":
+      return `/services/${item.id}`;
+    case "room":
+    case "vehicle":
+    case "dish":
+    case "event":
+    case "property":
+      return item.slug
+        ? `/explore?q=${encodeURIComponent(item.slug)}`
+        : `/explore?type=${type}&q=${encodeURIComponent(item.name || item.title || "")}`;
+    default:
+      return `/explore?q=${encodeURIComponent(item.name || item.title || "")}`;
+  }
+};
 
 interface TabMeta {
   id: ListingVertical;
@@ -110,9 +153,36 @@ const TAB_CONFIG: TabMeta[] = [
   { id: "property", label: "Properties", icon: Home, color: "text-green-600", badgeClass: "bg-green-50 text-green-700 dark:bg-green-950/50 dark:text-green-400" },
 ];
 
-export default function PlatformListingsManagementPage() {
+function PlatformListingsManagementPageContent() {
   const { accessToken } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<ListingVertical>("business");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const urlTab = (searchParams?.get("tab") || searchParams?.get("vertical") || searchParams?.get("type")) as ListingVertical | null;
+
+  const [activeTab, setActiveTab] = useState<ListingVertical>(() => {
+    if (urlTab && TAB_CONFIG.some((t) => t.id === urlTab)) {
+      return urlTab;
+    }
+    return "business";
+  });
+
+  // Sync activeTab when URL tab parameter changes
+  useEffect(() => {
+    if (urlTab && TAB_CONFIG.some((t) => t.id === urlTab) && urlTab !== activeTab) {
+      setActiveTab(urlTab);
+    }
+  }, [urlTab, activeTab]);
+
+  const handleTabChange = useCallback((newTab: ListingVertical) => {
+    setActiveTab(newTab);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      params.set("tab", newTab);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  }, [pathname, router]);
   const [items, setItems] = useState<any[]>([]);
   const [counts, setCounts] = useState<Record<ListingVertical, number>>({
     business: 0,
@@ -135,6 +205,12 @@ export default function PlatformListingsManagementPage() {
 
   // Inspection Modal
   const [selectedProfile, setSelectedProfile] = useState<{
+    type: ListingVertical;
+    data: any;
+  } | null>(null);
+
+  // Edit Modal
+  const [editingListing, setEditingListing] = useState<{
     type: ListingVertical;
     data: any;
   } | null>(null);
@@ -340,14 +416,20 @@ export default function PlatformListingsManagementPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">Listings</h1>
+          <div className="flex items-center gap-2.5">
+            <div className={`p-1.5 rounded-lg bg-muted flex items-center justify-center`}>
+              {(() => {
+                const CurrentIcon = currentTabMeta.icon;
+                return <CurrentIcon className={`size-5 ${currentTabMeta.color}`} />;
+              })()}
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">{currentTabMeta.label}</h1>
             <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
-              11 Verticals
+              {counts[activeTab]?.toLocaleString() || items.length} Total
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Centralized platform directory: Manage businesses, professionals, courses, jobs, products, services, rooms, vehicles, dishes, events, and properties.
+          <p className="text-sm text-muted-foreground mt-1">
+            Centralized platform directory: Manage, edit details, and activate or suspend {currentTabMeta.label.toLowerCase()} listings.
           </p>
         </div>
 
@@ -385,39 +467,6 @@ export default function PlatformListingsManagementPage() {
             <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-        </div>
-      </div>
-
-      {/* 11 Horizontal Scrollable Tabs */}
-      <div className="overflow-x-auto pb-1 scrollbar-thin">
-        <div className="flex items-center gap-1.5 min-w-max p-1 bg-muted/70 rounded-lg">
-          {TAB_CONFIG.map((t) => {
-            const Icon = t.icon;
-            const count = counts[t.id] ?? 0;
-            const isActive = activeTab === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setActiveTab(t.id)}
-                className={`px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
-                  isActive
-                    ? "bg-background text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-                }`}
-              >
-                <Icon className={`size-3.5 ${t.color}`} />
-                <span>{t.label}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                    isActive ? t.badgeClass : "bg-muted-foreground/15 text-muted-foreground"
-                  }`}
-                >
-                  {count.toLocaleString()}
-                </span>
-              </button>
-            );
-          })}
         </div>
       </div>
 
@@ -473,25 +522,22 @@ export default function PlatformListingsManagementPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="text-xs">Listing Name & ID</TableHead>
-                <TableHead className="text-xs">Category & Location</TableHead>
                 <TableHead className="text-xs">Business / Contact</TableHead>
                 <TableHead className="text-xs">Price & Details</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Featured</TableHead>
                 <TableHead className="text-xs text-right">Admin Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-36 text-center text-xs text-muted-foreground">
+                  <TableCell colSpan={4} className="h-36 text-center text-xs text-muted-foreground">
                     <Loader2 className="size-5 animate-spin mx-auto mb-2 text-primary" />
                     Loading {currentTabMeta.label.toLowerCase()}...
                   </TableCell>
                 </TableRow>
               ) : items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-36 text-center text-xs text-muted-foreground">
+                  <TableCell colSpan={4} className="h-36 text-center text-xs text-muted-foreground">
                     <Info className="size-6 mx-auto mb-2 opacity-50" />
                     No {currentTabMeta.label.toLowerCase()} found matching criteria.
                   </TableCell>
@@ -505,6 +551,7 @@ export default function PlatformListingsManagementPage() {
                   const locationText = [item.city, item.state, item.country_code].filter(Boolean).join(", ") || "India";
                   const businessName = item.business_name || item.owner_name || "Platform Direct";
                   const contactText = item.phone || item.email || item.owner_phone || "—";
+                  const publicUrl = getPublicUrl(activeTab, item);
                   
                   // Format price text
                   let priceText = "—";
@@ -516,61 +563,85 @@ export default function PlatformListingsManagementPage() {
                     priceText = item.salary_range;
                   }
 
-                  const isActive = item.is_active ?? (item.status === "active" || item.status === "published");
+                  const isActive = item.is_active !== undefined && item.is_active !== null
+                    ? Boolean(item.is_active)
+                    : (["active", "published", "open"].includes(String(item.status || "").toLowerCase()));
                   const isVerified = Boolean(item.is_verified);
                   const isFeatured = Boolean(item.is_featured);
 
                   return (
                     <TableRow key={item.id} className="hover:bg-muted/40 transition-colors">
-                      {/* Name & ID */}
+                      {/* Name & ID - on click open new page show detail of listing */}
                       <TableCell className="font-medium text-xs">
                         <div className="flex items-center gap-2.5">
                           {item.image_url || item.logo_url || item.avatar_url || item.featured_image ? (
                             <img
                               src={item.image_url || item.logo_url || item.avatar_url || item.featured_image}
                               alt={itemTitle}
-                              className="size-8 rounded-lg object-cover border"
+                              className="size-8 rounded-lg object-cover border shrink-0"
                             />
                           ) : (
-                            <div className={`size-8 rounded-lg flex items-center justify-center font-bold text-xs ${currentTabMeta.badgeClass}`}>
+                            <div className={`size-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${currentTabMeta.badgeClass}`}>
                               <Icon className="size-4" />
                             </div>
                           )}
-                          <div className="max-w-[220px]">
-                            <p className="font-semibold text-foreground truncate" title={itemTitle}>
+                          <div className="max-w-[280px]">
+                            <a
+                              href={publicUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`font-bold truncate block cursor-pointer transition-colors hover:underline ${
+                                isActive ? "!text-emerald-600 dark:!text-emerald-400 hover:!text-emerald-700" : "!text-rose-600 dark:!text-rose-400 hover:!text-rose-700"
+                              }`}
+                              title={`${itemTitle} (Click to open listing details in new tab)`}
+                            >
                               {itemTitle}
-                            </p>
-                            <span className="text-[10px] text-muted-foreground truncate block">
-                              #{item.id} • {itemSubtitle}
-                            </span>
+                            </a>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span className="text-[10px] text-muted-foreground truncate">
+                                #{item.id} • {categoryText}
+                              </span>
+                              {isActive ? (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 bg-emerald-50 text-emerald-700 border-emerald-200">
+                                  Active
+                                </Badge>
+                              ) : (
+                                <Badge variant="destructive" className="text-[9px] py-0 px-1">
+                                  Suspended
+                                </Badge>
+                              )}
+                              {isFeatured && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 bg-amber-50 text-amber-700 border-amber-200">
+                                  Featured
+                                </Badge>
+                              )}
+                              {isVerified && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 bg-blue-50 text-blue-700 border-blue-200">
+                                  Verified
+                                </Badge>
+                              )}
+                              {item.verification_status === "pending" && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 bg-amber-50 text-amber-700 border-amber-200">
+                                  Pending
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </TableCell>
 
-                      {/* Category & Location */}
-                      <TableCell className="text-xs space-y-0.5">
-                        <Badge variant="secondary" className="text-[10px] truncate max-w-[160px]">
-                          {categoryText}
-                        </Badge>
-                        {item.subcategory_name && (
-                          <span className="text-[10px] text-muted-foreground block truncate">
-                            {item.subcategory_name}
-                          </span>
-                        )}
-                        <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                          <MapPin className="size-3 text-muted-foreground shrink-0" />
-                          <span className="truncate">{locationText}</span>
-                        </p>
-                      </TableCell>
-
                       {/* Business & Contact */}
                       <TableCell className="text-xs space-y-0.5">
-                        <p className="font-medium text-foreground truncate max-w-[150px]" title={businessName}>
+                        <p className="font-medium text-foreground truncate max-w-[170px]" title={businessName}>
                           {businessName}
                         </p>
                         <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                           <Phone className="size-2.5 text-muted-foreground shrink-0" />
                           <span className="truncate">{contactText}</span>
+                        </p>
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <MapPin className="size-2.5 text-muted-foreground shrink-0" />
+                          <span className="truncate">{locationText}</span>
                         </p>
                       </TableCell>
 
@@ -590,127 +661,131 @@ export default function PlatformListingsManagementPage() {
                         ) : null}
                       </TableCell>
 
-                      {/* Status */}
-                      <TableCell className="text-xs space-y-0.5">
-                        {isActive ? (
-                          <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
-                            Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="text-[10px]">
-                            Suspended
-                          </Badge>
-                        )}
-                        {isVerified && (
-                          <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 block w-fit mt-0.5">
-                            Verified
-                          </Badge>
-                        )}
-                        {item.verification_status === "pending" && (
-                          <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 block w-fit mt-0.5">
-                            Pending
-                          </Badge>
-                        )}
-                      </TableCell>
-
-                      {/* Featured */}
-                      <TableCell className="text-xs">
-                        {activeTab === "business" || activeTab === "professional" || ["room", "vehicle", "dish", "event", "property"].includes(activeTab) ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              handleAction(activeTab, item.id, "feature", {
-                                isFeatured: !isFeatured,
-                              })
-                            }
-                            className={`h-6 text-[10px] px-2 cursor-pointer ${
-                              isFeatured ? "text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/40" : "text-muted-foreground"
-                            }`}
-                          >
-                            <Sparkles className="size-3 mr-1" />
-                            {isFeatured ? "Featured" : "Standard"}
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground text-[10px]">Standard</span>
-                        )}
-                      </TableCell>
-
-                      {/* Admin Actions */}
-                      <TableCell className="text-xs text-right space-x-1 whitespace-nowrap">
-                        {activeTab === "business" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="View Public Profile Page"
-                            onClick={() =>
-                              window.open(item.slug ? `/institutes/${item.slug}` : `/institutes/${item.id}`, "_blank")
-                            }
-                            className="h-7 px-2 text-xs text-muted-foreground hover:text-primary cursor-pointer"
-                          >
-                            <ExternalLink className="size-3.5 mr-1" /> View
-                          </Button>
-                        )}
-
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedProfile({ type: activeTab, data: item })}
-                          className="h-7 text-xs cursor-pointer"
-                        >
-                          <Eye className="size-3 mr-1" /> Inspect
-                        </Button>
-
-                        {/* Verification / Approval buttons for pending businesses */}
-                        {item.verification_status === "pending" ? (
-                          <>
+                      {/* Admin Actions - Dropdown with everything from Image 2 */}
+                      <TableCell className="text-xs text-right whitespace-nowrap">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
                             <Button
-                              variant="default"
+                              variant="outline"
                               size="sm"
-                              onClick={() => handleAction(activeTab, item.id, "approve")}
-                              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                              className="h-7 px-2.5 text-xs gap-1 cursor-pointer font-medium hover:bg-muted"
                             >
-                              Approve
+                              <span>Actions</span>
+                              <ChevronDown className="size-3 text-muted-foreground" />
                             </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleAction(activeTab, item.id, "reject")}
-                              className="h-7 text-xs cursor-pointer"
-                            >
-                              Reject
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            variant={isActive ? "destructive" : "secondary"}
-                            size="sm"
-                            onClick={() =>
-                              handleAction(activeTab, item.id, "toggle_status", {
-                                isActive: !isActive,
-                              })
-                            }
-                            className="h-7 text-xs cursor-pointer"
-                          >
-                            {isActive ? "Suspend" : "Activate"}
-                          </Button>
-                        )}
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52 text-xs">
+                            <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                              Listing Actions
+                            </DropdownMenuLabel>
 
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setDeleteConfirm({
-                              type: activeTab,
-                              id: item.id,
-                              name: itemTitle,
-                            })
-                          }
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 cursor-pointer"
-                          title="Delete Listing"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
+                            <DropdownMenuItem
+                              onClick={() => window.open(publicUrl, "_blank")}
+                              className="cursor-pointer text-xs"
+                            >
+                              <ExternalLink className="size-3.5 mr-2 text-muted-foreground" /> View Public Page
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
+                              onClick={() => setEditingListing({ type: activeTab, data: item })}
+                              className="cursor-pointer text-xs"
+                            >
+                              <Edit2 className="size-3.5 mr-2 text-muted-foreground" /> Edit Details
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
+                              onClick={() => setSelectedProfile({ type: activeTab, data: item })}
+                              className="cursor-pointer text-xs"
+                            >
+                              <Eye className="size-3.5 mr-2 text-muted-foreground" /> Inspect Listing
+                            </DropdownMenuItem>
+
+                            <DropdownMenuSeparator />
+
+                            {/* Status Toggle */}
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleAction(activeTab, item.id, "toggle_status", {
+                                  isActive: !isActive,
+                                })
+                              }
+                              className={`cursor-pointer text-xs ${
+                                isActive ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400 font-medium"
+                              }`}
+                            >
+                              {isActive ? (
+                                <>
+                                  <XCircle className="size-3.5 mr-2" /> Suspend Listing
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="size-3.5 mr-2" /> Activate Listing
+                                </>
+                              )}
+                            </DropdownMenuItem>
+
+                            {/* Featured Toggle */}
+                            {(activeTab === "business" || activeTab === "professional" || ["room", "vehicle", "dish", "event", "property"].includes(activeTab)) && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleAction(activeTab, item.id, "feature", {
+                                    isFeatured: !isFeatured,
+                                  })
+                                }
+                                className="cursor-pointer text-xs"
+                              >
+                                <Sparkles className={`size-3.5 mr-2 ${isFeatured ? "text-muted-foreground" : "text-amber-500"}`} />
+                                {isFeatured ? "Remove Featured" : "Mark as Featured"}
+                              </DropdownMenuItem>
+                            )}
+
+                            {/* Approval / Verification */}
+                            {item.verification_status === "pending" ? (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleAction(activeTab, item.id, "approve")}
+                                  className="cursor-pointer text-xs text-emerald-600 font-semibold"
+                                >
+                                  <CheckCircle2 className="size-3.5 mr-2" /> Approve Listing
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleAction(activeTab, item.id, "reject")}
+                                  className="cursor-pointer text-xs text-rose-600 font-semibold"
+                                >
+                                  <XCircle className="size-3.5 mr-2" /> Reject Listing
+                                </DropdownMenuItem>
+                              </>
+                            ) : (activeTab === "business" || activeTab === "professional") ? (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleAction(activeTab, item.id, "verify", {
+                                    isVerified: !isVerified,
+                                  })
+                                }
+                                className="cursor-pointer text-xs"
+                              >
+                                <ShieldCheck className={`size-3.5 mr-2 ${isVerified ? "text-muted-foreground" : "text-blue-500"}`} />
+                                {isVerified ? "Remove Verification" : "Mark Verified"}
+                              </DropdownMenuItem>
+                            ) : null}
+
+                            <DropdownMenuSeparator />
+
+                            <DropdownMenuItem
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  type: activeTab,
+                                  id: item.id,
+                                  name: itemTitle,
+                                })
+                              }
+                              className="cursor-pointer text-xs text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-950/30 font-medium"
+                            >
+                              <Trash2 className="size-3.5 mr-2" /> Delete Permanently
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   );
@@ -1171,6 +1246,18 @@ export default function PlatformListingsManagementPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <Button
                         size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const toEdit = { type: selectedProfile.type, data: selectedProfile.data };
+                          setSelectedProfile(null);
+                          setEditingListing(toEdit);
+                        }}
+                        className="h-8 text-xs font-semibold col-span-2 cursor-pointer bg-background hover:bg-muted"
+                      >
+                        <Edit2 className="size-3 mr-1" /> Edit Listing Details
+                      </Button>
+                      <Button
+                        size="sm"
                         variant={selectedProfile.data.is_featured ? "secondary" : "outline"}
                         onClick={() =>
                           handleAction(selectedProfile.type, selectedProfile.data.id, "feature", {
@@ -1317,6 +1404,299 @@ export default function PlatformListingsManagementPage() {
         initialData={createBusinessInitialData}
         onSuccess={() => loadListings()}
       />
+
+      {/* Edit Listing Dialog for all 11 verticals */}
+      <EditListingDialog
+        editingListing={editingListing}
+        onClose={() => setEditingListing(null)}
+        onSave={async (type, id, data) => {
+          await handleAction(type, id, "edit", { data });
+        }}
+      />
     </div>
+  );
+}
+
+interface EditListingDialogProps {
+  editingListing: { type: ListingVertical; data: any } | null;
+  onClose: () => void;
+  onSave: (type: ListingVertical, id: number, payload: Record<string, any>) => Promise<void>;
+}
+
+function EditListingDialog({ editingListing, onClose, onSave }: EditListingDialogProps) {
+  const item = editingListing?.data;
+  const type = editingListing?.type;
+
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    category: "",
+    subcategory: "",
+    city: "",
+    phone: "",
+    price: "",
+    extra: "",
+    isActive: true,
+    isFeatured: false,
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (item && type) {
+      const name = item.name || item.title || item.course_name || item.custom_name || item.custom_title || "";
+      const description = item.description || item.about || item.custom_description || "";
+      const category = item.category_name || item.stream || item.department || "";
+      const subcategory = item.subcategory_name || item.board_or_university || item.employment_type || item.subtitle || "";
+      const city = item.city || item.location || "";
+      const phone = item.phone || "";
+      const price = item.price !== undefined && item.price !== null ? String(item.price) : item.fee_amount !== undefined && item.fee_amount !== null ? String(item.fee_amount) : item.salary_range || "";
+      const extra = (
+        item.stock !== undefined ? String(item.stock) :
+        item.duration ? String(item.duration) :
+        item.openings_count ? String(item.openings_count) :
+        item.experience_years ? String(item.experience_years) : ""
+      );
+      const isActive = item.is_active !== undefined ? Boolean(item.is_active) : true;
+      const isFeatured = Boolean(item.is_featured);
+
+      setFormData({
+        name,
+        description,
+        category,
+        subcategory,
+        city,
+        phone,
+        price,
+        extra,
+        isActive,
+        isFeatured,
+      });
+    }
+  }, [item, type]);
+
+  if (!editingListing || !item || !type) return null;
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payload: Record<string, any> = {
+        name: formData.name,
+        title: formData.name,
+        description: formData.description,
+        about: formData.description,
+        city: formData.city,
+        location: formData.city,
+        phone: formData.phone,
+        price: formData.price,
+        fee_amount: formData.price,
+        salary_range: formData.price,
+        category_name: formData.category,
+        stream: formData.category,
+        department: formData.category,
+        subcategory_name: formData.subcategory,
+        board_or_university: formData.subcategory,
+        employment_type: formData.subcategory,
+        is_active: formData.isActive,
+        is_featured: formData.isFeatured,
+      };
+
+      if (type === "products") {
+        payload.stock = Number(formData.extra) || 0;
+        payload.inventory_count = Number(formData.extra) || 0;
+      } else if (type === "services") {
+        payload.duration = Number(formData.extra) || 60;
+        payload.duration_minutes = Number(formData.extra) || 60;
+      } else if (type === "course") {
+        payload.duration = formData.extra;
+      } else if (type === "job") {
+        payload.openings_count = Number(formData.extra) || 1;
+      } else if (type === "professional") {
+        payload.experience_years = Number(formData.extra) || 0;
+      }
+
+      await onSave(type, item.id, payload);
+      onClose();
+    } catch {
+      // Handled in onSave
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getExtraLabel = () => {
+    switch (type) {
+      case "products": return "Inventory Stock Count";
+      case "services": return "Duration (Minutes)";
+      case "course": return "Duration (e.g. 6 Months, 2 Years)";
+      case "job": return "Openings Count";
+      case "professional": return "Experience (Years)";
+      default: return null;
+    }
+  };
+
+  const extraLabel = getExtraLabel();
+  const supportsFeatured = ["business", "professional", "room", "vehicle", "dish", "event", "property"].includes(type);
+
+  return (
+    <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <form onSubmit={handleFormSubmit}>
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="capitalize text-xs font-semibold">
+                {type}
+              </Badge>
+              <DialogTitle className="text-lg font-bold">Edit Listing Details</DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Modify listing information, pricing, location, and visibility settings.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4 text-xs">
+            <div className="sm:col-span-2 space-y-1.5">
+              <Label className="text-xs font-semibold">Listing Title / Name *</Label>
+              <Input
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+                className="h-9 text-xs"
+                placeholder="Listing title or business name"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Category / Stream / Department</Label>
+              <Input
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                className="h-9 text-xs"
+                placeholder="e.g. Retail, Medical, IT"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Subcategory / Specialization</Label>
+              <Input
+                value={formData.subcategory}
+                onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
+                className="h-9 text-xs"
+                placeholder="e.g. Full-time, CBSE, Luxury"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">City / Location</Label>
+              <Input
+                value={formData.city}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                className="h-9 text-xs"
+                placeholder="City name, e.g. Varanasi"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Contact Phone</Label>
+              <Input
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className="h-9 text-xs"
+                placeholder="Primary phone number"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Price / Fee / Salary Range</Label>
+              <Input
+                value={formData.price}
+                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                className="h-9 text-xs"
+                placeholder="e.g. 500 or 15000-25000"
+              />
+            </div>
+
+            {extraLabel && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">{extraLabel}</Label>
+                <Input
+                  value={formData.extra}
+                  onChange={(e) => setFormData({ ...formData, extra: e.target.value })}
+                  className="h-9 text-xs"
+                  placeholder={extraLabel}
+                />
+              </div>
+            )}
+
+            <div className="sm:col-span-2 space-y-1.5">
+              <Label className="text-xs font-semibold">Description / About</Label>
+              <Textarea
+                rows={4}
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="text-xs"
+                placeholder="Comprehensive description or overview of this listing"
+              />
+            </div>
+
+            {/* Visibility & Status toggles */}
+            <div className="sm:col-span-2 border rounded-lg p-3 bg-muted/30 space-y-3">
+              <h4 className="text-xs font-semibold text-foreground">Status & Frontend Visibility</h4>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-xs text-foreground">Listing Active</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    When active, this listing appears across public search, explore, and category feeds. Suspended listings are hidden from frontend users.
+                  </p>
+                </div>
+                <Switch
+                  checked={formData.isActive}
+                  onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+                />
+              </div>
+
+              {supportsFeatured && (
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <div>
+                    <p className="font-medium text-xs text-foreground">Featured Listing</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Featured listings receive badge highlights and top placement in search results.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={formData.isFeatured}
+                    onCheckedChange={(checked) => setFormData({ ...formData, isFeatured: checked })}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+            <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" disabled={saving} className="bg-red-600 hover:bg-red-700 text-white font-semibold">
+              {saving ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : null}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+export default function PlatformListingsManagementPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-8 flex items-center justify-center min-h-[400px]">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    }>
+      <PlatformListingsManagementPageContent />
+    </Suspense>
   );
 }

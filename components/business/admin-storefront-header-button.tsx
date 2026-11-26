@@ -65,6 +65,16 @@ export function AdminStorefrontHeaderButton() {
 
   if (!user || isPlatformAdmin) return null;
 
+  // Rule: Do not show Store Front button if user has not added any business profile yet
+  const hasBusiness = Boolean(
+    activeInstitution?.id ||
+    user?.has_business_profile ||
+    user?.has_professional_profile ||
+    (Array.isArray(user?.memberships) && user.memberships.length > 0)
+  );
+
+  if (!hasBusiness) return null;
+
   const effectiveHref = directUrl || (activeInstitution?.slug ? `/institutes/${activeInstitution.slug}` : "");
 
   const handleClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {

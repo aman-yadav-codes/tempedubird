@@ -92,7 +92,8 @@ export async function GET(req: Request) {
     // A. Primary: Google Places Autocomplete API
     if (GOOGLE_API_KEY) {
       try {
-        const countryFilter = country && country.toLowerCase() !== "all" ? `&components=country:${country.toLowerCase()}` : "";
+        const isGlobal = !country || ["all", "global", "worldwide", "any"].includes(country.toLowerCase().trim());
+        const countryFilter = !isGlobal && country ? `&components=country:${country.toLowerCase().trim()}` : "";
         const googleRes = await fetch(
           `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
             trimmedInput
@@ -119,7 +120,8 @@ export async function GET(req: Request) {
 
     // B. Fallback: OpenStreetMap Nominatim
     try {
-      const countryFilter = country && country.toLowerCase() !== "all" ? `&countrycodes=${country.toLowerCase()}` : "";
+      const isGlobalNom = !country || ["all", "global", "worldwide", "any"].includes(country.toLowerCase().trim());
+      const countryFilter = !isGlobalNom && country ? `&countrycodes=${country.toLowerCase().trim()}` : "";
       const nomRes = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6${countryFilter}&q=${encodeURIComponent(
           trimmedInput

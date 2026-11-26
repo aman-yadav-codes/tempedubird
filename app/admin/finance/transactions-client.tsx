@@ -60,6 +60,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { DocumentFileUpload, type UploadedDocumentFile } from "@/components/shared/document-file-upload";
 import { useAuthStore } from "@/store";
+import { useActiveInstitution } from "@/hooks/use-active-institution";
 
 type Transaction = {
   transaction_id: string;
@@ -131,6 +132,11 @@ export function TransactionsClient({ initialType, defaultAction }: TransactionsC
   const urlType = searchParams?.get("type") as "all" | "income" | "expense" | null;
   const urlAction = searchParams?.get("action");
   const { accessToken } = useAuthStore();
+  const { activeInstitutionId } = useActiveInstitution();
+  const authHeader = useMemo<Record<string, string>>(
+    () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    [accessToken]
+  );
   const [expenseFiles, setExpenseFiles] = useState<UploadedDocumentFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -246,11 +252,17 @@ export function TransactionsClient({ initialType, defaultAction }: TransactionsC
       if (paymentMethodFilter !== "all") params.set("paymentMethod", paymentMethodFilter);
       if (fromDate) params.set("fromDate", fromDate);
       if (toDate) params.set("toDate", toDate);
+      if (activeInstitutionId) params.set("institutionId", String(activeInstitutionId));
       params.set("page", String(currentPage));
       params.set("limit", "20");
 
-      const res = await fetch(`/api/admin/finance/transactions?${params.toString()}`);
-      if (!res.ok) throw new Error("Failed to load transactions");
+      const res = await fetch(`/api/admin/finance/transactions?${params.toString()}`, {
+        headers: authHeader,
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to load transactions");
+      }
       const data = await res.json();
 
       setTransactions(data.transactions || []);
@@ -269,7 +281,7 @@ export function TransactionsClient({ initialType, defaultAction }: TransactionsC
     } finally {
       setLoading(false);
     }
-  }, [typeFilter, searchQuery, paymentStatusFilter, paymentMethodFilter, fromDate, toDate, currentPage]);
+  }, [typeFilter, searchQuery, paymentStatusFilter, paymentMethodFilter, fromDate, toDate, currentPage, activeInstitutionId, authHeader]);
 
   useEffect(() => {
     fetchTransactions();
@@ -396,8 +408,14 @@ export function TransactionsClient({ initialType, defaultAction }: TransactionsC
 
       const res = await fetch("/api/admin/finance/transactions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        headers: {
+          ...authHeader,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...payload,
+          institutionId: activeInstitutionId || undefined,
+        }),
       });
 
       const data = await res.json();
@@ -446,8 +464,14 @@ export function TransactionsClient({ initialType, defaultAction }: TransactionsC
 
       const res = await fetch("/api/admin/finance/transactions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        headers: {
+          ...authHeader,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...payload,
+          institutionId: activeInstitutionId || undefined,
+        }),
       });
 
       const data = await res.json();
@@ -471,7 +495,10 @@ export function TransactionsClient({ initialType, defaultAction }: TransactionsC
       setSubmitting(true);
       const res = await fetch(`/api/admin/finance/transactions/${selectedTxn.transaction_id}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          ...authHeader,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(paymentForm),
       });
 
@@ -496,6 +523,7 @@ export function TransactionsClient({ initialType, defaultAction }: TransactionsC
     try {
       const res = await fetch(`/api/admin/finance/transactions/${txn.transaction_id}`, {
         method: "DELETE",
+        headers: authHeader,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to cancel transaction");

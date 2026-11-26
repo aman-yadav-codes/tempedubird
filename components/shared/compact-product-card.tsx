@@ -125,13 +125,12 @@ export function CompactProductCard({
   };
 
   const productSlugOrId = p.slug || p.id;
+  const productDetailUrl = `/products/${productSlugOrId}`;
 
   const handleOpenDetails = (e: React.MouseEvent) => {
-    e.preventDefault();
     if (onOpenDetails) {
+      e.preventDefault();
       onOpenDetails(p);
-    } else {
-      router.push(`/products/${productSlugOrId}`);
     }
   };
 
@@ -145,16 +144,26 @@ export function CompactProductCard({
   return (
     <div
       id={`product-compact-${p.id}`}
-      className={`p-3 rounded-xl border transition-all flex items-center gap-3.5 group relative bg-card hover:bg-muted/30 ${
+      onClick={(e) => {
+        if (!e.defaultPrevented) {
+          if (onOpenDetails) {
+            onOpenDetails(p);
+          } else {
+            router.push(productDetailUrl);
+          }
+        }
+      }}
+      className={`p-3 rounded-xl border transition-all flex items-center gap-3.5 group relative bg-card hover:bg-muted/30 cursor-pointer ${
         isHighlighted
           ? "ring-2 ring-primary border-primary bg-primary/10 shadow-sm"
           : "shadow-2xs hover:shadow-xs border-border/70"
       } ${className}`}
     >
       {/* 1. Left Thumbnail Image */}
-      <div
+      <Link
+        href={productDetailUrl}
         onClick={handleOpenDetails}
-        className="relative size-16 rounded-lg bg-muted shrink-0 overflow-hidden border cursor-pointer group/img"
+        className="relative size-16 rounded-lg bg-muted shrink-0 overflow-hidden border cursor-pointer group/img block"
         title={`View ${productTitle}`}
       >
         <Image
@@ -167,13 +176,13 @@ export function CompactProductCard({
         {isHighlighted && (
           <span className="absolute top-1 right-1 size-2 rounded-full bg-primary ring-2 ring-background" />
         )}
-      </div>
+      </Link>
 
       {/* 2. Middle Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
           <Link
-            href={buildProductSeoUrl({ ...p, seller_info: effectiveBusiness })}
+            href={productDetailUrl}
             onClick={handleOpenDetails}
             className="text-xs font-bold text-foreground truncate hover:text-primary transition-colors cursor-pointer block"
             title={productTitle}
@@ -185,9 +194,20 @@ export function CompactProductCard({
           )}
         </div>
 
-        <p className="text-[11px] text-muted-foreground truncate" title={brandName}>
-          {brandName}
-        </p>
+        {effectiveBusiness.slug || effectiveBusiness.id ? (
+          <Link
+            href={effectiveBusiness.slug ? `/business/${effectiveBusiness.slug}` : `/business/${effectiveBusiness.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-[11px] text-muted-foreground font-semibold hover:text-primary hover:underline truncate block"
+            title={effectiveBusiness.name || brandName}
+          >
+            {effectiveBusiness.name || brandName}
+          </Link>
+        ) : (
+          <p className="text-[11px] text-muted-foreground truncate" title={brandName}>
+            {brandName}
+          </p>
+        )}
 
         {/* Pricing */}
         <div className="flex items-center justify-between mt-1">

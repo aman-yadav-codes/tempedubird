@@ -32,6 +32,14 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   BookOpen,
   Plus,
   Search,
@@ -50,6 +58,7 @@ import {
   X,
   FolderTree,
   GraduationCap,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
@@ -439,13 +448,11 @@ export default function MasterCoursesPage() {
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead className="w-[70px] text-xs">ID</TableHead>
-                    <TableHead className="text-xs min-w-[220px]">Course Name &amp; Code</TableHead>
-                    <TableHead className="text-xs">Category</TableHead>
+                    <TableHead className="text-xs min-w-[240px]">Course Details</TableHead>
                     <TableHead className="text-xs">Authority &amp; Affiliation</TableHead>
                     <TableHead className="text-xs">Duration &amp; Seats</TableHead>
                     <TableHead className="text-xs">Medium</TableHead>
-                    <TableHead className="text-xs text-center">Status</TableHead>
-                    <TableHead className="text-xs text-right">Actions</TableHead>
+                    <TableHead className="text-xs text-right w-[120px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -453,27 +460,47 @@ export default function MasterCoursesPage() {
                     <TableRow key={c.id} className="hover:bg-muted/20 text-xs">
                       <TableCell className="font-mono text-muted-foreground">#{c.id}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2.5">
-                          <div className="size-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                        <div className="flex items-start gap-2.5">
+                          <div className="size-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
                             <BookOpen className="size-4" />
                           </div>
-                          <div>
-                            <div className="font-bold text-foreground leading-tight">{c.name}</div>
-                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
+                          <div className="space-y-1">
+                            <a
+                              href={`/courses/${c.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`font-bold leading-tight flex items-center gap-1 group hover:underline ${
+                                (c.is_active !== undefined && c.is_active !== null ? Boolean(c.is_active) : true)
+                                  ? "!text-emerald-600 dark:!text-emerald-400 hover:!text-emerald-700"
+                                  : "!text-rose-600 dark:!text-rose-400 hover:!text-rose-700"
+                              }`}
+                            >
+                              <span>{c.name}</span>
+                              <ExternalLink className="size-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </a>
+
+                            <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                               {c.code && <span className="font-mono bg-muted/60 px-1 rounded">{c.code}</span>}
-                              <span className="truncate max-w-[150px]">{c.slug}</span>
+                              <span className="truncate max-w-[150px] text-muted-foreground font-mono">/{c.slug}</span>
+
+                              {c.category_name && (
+                                <Badge variant="outline" className="text-[9px] bg-amber-50/50 text-amber-800 border-amber-200 py-0 px-1.5 h-4">
+                                  {c.category_name}
+                                </Badge>
+                              )}
+
+                              {c.is_active ? (
+                                <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[9px] py-0 px-1.5 h-4 gap-0.5">
+                                  <CheckCircle2 className="size-2.5" /> Active
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-muted-foreground text-[9px] py-0 px-1.5 h-4 gap-0.5">
+                                  <XCircle className="size-2.5" /> Inactive
+                                </Badge>
+                              )}
                             </div>
                           </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {c.category_name ? (
-                          <Badge variant="outline" className="text-[11px] bg-amber-50/50 text-amber-800 border-amber-200">
-                            {c.category_name}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-[11px]">—</span>
-                        )}
                       </TableCell>
                       <TableCell>
                         <div className="leading-tight">
@@ -501,45 +528,63 @@ export default function MasterCoursesPage() {
                       <TableCell>
                         <span className="text-xs font-medium">{c.medium || "English"}</span>
                       </TableCell>
-                      <TableCell className="text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(c)}
-                          className="cursor-pointer"
-                          title="Click to toggle status"
-                        >
-                          {c.is_active ? (
-                            <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px]">
-                              Active
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary" className="text-[10px]">
-                              Inactive
-                            </Badge>
-                          )}
-                        </button>
-                      </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7"
-                            onClick={() => openEditDialog(c)}
-                            title="Edit Course"
-                          >
-                            <Edit2 className="size-3.5 text-muted-foreground hover:text-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 hover:bg-rose-50 hover:text-rose-600"
-                            onClick={() => handleDelete(c.id)}
-                            title="Delete Course"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-7 text-xs font-medium gap-1 px-2">
+                              <span>Actions</span>
+                              <ChevronDown className="size-3 opacity-60" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              Course Actions
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem asChild>
+                              <a
+                                href={`/courses/${c.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="cursor-pointer flex items-center gap-2"
+                              >
+                                <ExternalLink className="size-3.5 text-blue-500" />
+                                <span>View Public Page</span>
+                              </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openEditDialog(c)}
+                              className="cursor-pointer flex items-center gap-2"
+                            >
+                              <Edit2 className="size-3.5 text-primary" />
+                              <span>Edit Course</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleToggleStatus(c)}
+                              className="cursor-pointer flex items-center gap-2"
+                            >
+                              {c.is_active ? (
+                                <>
+                                  <XCircle className="size-3.5 text-amber-500" />
+                                  <span>Deactivate Course</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="size-3.5 text-emerald-500" />
+                                  <span>Activate Course</span>
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(c.id)}
+                              className="cursor-pointer flex items-center gap-2 text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="size-3.5 text-destructive" />
+                              <span>Delete Course</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}

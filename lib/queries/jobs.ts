@@ -4,6 +4,9 @@ export type StaffJobPosting = {
   id: number;
   institution_id: number | null;
   institution_name?: string | null;
+  institution_slug?: string | null;
+  business_id?: number | null;
+  business_slug?: string | null;
   title: string;
   slug?: string | null;
   department: string;
@@ -316,10 +319,14 @@ export async function getJobsList(params: {
     SELECT 
       j.*,
       i.name AS institution_name,
+      i.slug AS institution_slug,
+      bp.id AS business_id,
+      bp.slug AS business_slug,
       u.full_name AS created_by_name,
       COALESCE(app_counts.total_apps, 0)::int AS applications_count
     FROM staff_job_postings j
     LEFT JOIN institution_profiles i ON i.id = j.institution_id
+    LEFT JOIN business_profiles bp ON bp.institution_profile_id = j.institution_id
     LEFT JOIN users u ON u.id = j.created_by
     LEFT JOIN (
       SELECT job_id, COUNT(*)::int AS total_apps
@@ -345,28 +352,92 @@ export async function getJobById(idOrSlug: number | string) {
 
   const isNum = typeof idOrSlug === "number" || /^\d+$/.test(String(idOrSlug));
   const numId = isNum ? Number(idOrSlug) : -1;
-  const strSlug = String(idOrSlug);
+  const strSlug = String(idOrSlug).toLowerCase().trim();
+  let withoutLocation = strSlug;
+  const lastInIndex = strSlug.lastIndexOf("-in-");
+  if (lastInIndex !== -1) {
+    withoutLocation = strSlug.substring(0, lastInIndex);
+  }
 
   const query = `
     SELECT 
       j.*,
       i.name AS institution_name,
+      i.slug AS institution_slug,
+      bp.id AS business_id,
+      bp.slug AS business_slug,
       u.full_name AS created_by_name,
       COALESCE(app_counts.total_apps, 0)::int AS applications_count
     FROM staff_job_postings j
     LEFT JOIN institution_profiles i ON i.id = j.institution_id
+    LEFT JOIN business_profiles bp ON bp.institution_profile_id = j.institution_id
     LEFT JOIN users u ON u.id = j.created_by
     LEFT JOIN (
       SELECT job_id, COUNT(*)::int AS total_apps
       FROM staff_job_applications
       GROUP BY job_id
     ) app_counts ON app_counts.job_id = j.id
-    WHERE j.id = $1 OR j.slug = $2
+    WHERE j.id = $1 
+       OR j.slug = $2 
+       OR j.slug = $3 
+       OR j.slug ILIKE $2 
+       OR j.slug ILIKE $3
     LIMIT 1
   `;
 
-  const res = await db.query(query, [numId, strSlug]);
-  return (res.rows[0] as StaffJobPosting) || null;
+  const res = await db.query(query, [numId, strSlug, withoutLocation]);
+  if (res.rows[0]) {
+    return res.rows[0] as StaffJobPosting;
+  }
+
+  // Fallback: Check master_jobs table
+  try {
+    const mjQuery = `
+      SELECT 
+        mj.id,
+        NULL::int AS institution_id,
+        COALESCE(bc.name, 'EduBird Business Partner') AS institution_name,
+        NULL::varchar AS institution_slug,
+        bc.id AS business_id,
+        bc.slug AS business_slug,
+        mj.title,
+        mj.slug,
+        mj.department,
+        mj.employment_type,
+        mj.experience_level,
+        mj.work_mode,
+        mj.location,
+        mj.salary_range,
+        mj.openings_count,
+        NULL::timestamp AS deadline,
+        mj.description,
+        mj.requirements,
+        mj.benefits,
+        'Active' AS status,
+        NULL::int AS created_by,
+        'Career Operations' AS created_by_name,
+        mj.created_at,
+        mj.updated_at,
+        0::int AS applications_count
+      FROM master_jobs mj
+      LEFT JOIN categories bc ON bc.id = mj.business_category_id
+      WHERE (mj.id = $1 
+         OR mj.slug = $2 
+         OR mj.slug = $3 
+         OR mj.slug ILIKE $2 
+         OR mj.slug ILIKE $3)
+        AND (mj.is_deleted IS NULL OR mj.is_deleted = FALSE)
+      LIMIT 1
+    `;
+    const mjRes = await db.query(mjQuery, [numId, strSlug, withoutLocation]);
+    if (mjRes.rows[0]) {
+      return mjRes.rows[0] as StaffJobPosting;
+    }
+  } catch (mjErr) {
+    console.warn("Could not query master_jobs in getJobById:", mjErr);
+  }
+
+  return null;
 }
 
 export async function createJobPosting(data: {

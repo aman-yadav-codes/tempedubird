@@ -34,6 +34,17 @@ import {
   Settings,
   Calendar,
   Building,
+  Car,
+  Globe,
+  LayoutGrid,
+  ShoppingBag,
+  Landmark,
+  TrendingUp,
+  Utensils,
+  Wrench,
+  Dumbbell,
+  Laptop,
+  Scissors,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,8 +58,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useUserCountry } from "@/hooks/use-user-country";
-import { resolveCountryFromLocation } from "@/lib/utils/geo-location";
-import { getCatalogCountryMeta } from "@/lib/config/country-config";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -60,7 +69,8 @@ import {
 import { useAuthStore, useCartStore } from "@/store";
 import { toast } from "sonner";
 import { AuthModalDialog } from "@/components/auth/auth-modal-dialog";
-import { buildDiscoverySeoUrl } from "@/lib/utils/seo-slug";
+import { buildDiscoverySeoUrl, extractCleanCity } from "@/lib/utils/seo-slug";
+import { getCatalogCountryMeta } from "@/lib/config/country-config";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { parseSearchIntent } from "@/lib/utils/search-intent";
 import { ProductStoresDialog } from "@/components/public/product-stores-dialog";
@@ -98,29 +108,43 @@ interface SearchResultsState {
   notes: SearchResultItem[];
 }
 
+const BUSINESS_MEGA_CATEGORIES = [
+  { label: "Automotive & Transport", categorySlug: "automotive-and-transport", icon: Car, bgClass: "bg-sky-100", iconClass: "text-sky-600" },
+  { label: "Education & Coaching", categorySlug: "education-and-coaching", icon: GraduationCap, bgClass: "bg-amber-100", iconClass: "text-amber-600" },
+  { label: "Fitness & Sports", categorySlug: "fitness-and-sports", icon: Dumbbell, bgClass: "bg-indigo-100", iconClass: "text-indigo-600" },
+  { label: "Food, Dining & Cafes", categorySlug: "food-dining-and-cafes", icon: Utensils, bgClass: "bg-red-100", iconClass: "text-red-600" },
+  { label: "Healthcare & Medical", categorySlug: "healthcare-and-medical", icon: Shield, bgClass: "bg-rose-100", iconClass: "text-rose-600" },
+  { label: "Home Services & Maintenance", categorySlug: "home-services-and-maintenance", icon: Wrench, bgClass: "bg-teal-100", iconClass: "text-teal-600" },
+  { label: "Hospitality & Events", categorySlug: "hospitality-and-events", icon: Sparkles, bgClass: "bg-purple-100", iconClass: "text-purple-600" },
+  { label: "IT & Digital Agencies", categorySlug: "it-and-digital-agencies", icon: Laptop, bgClass: "bg-violet-100", iconClass: "text-violet-600" },
+  { label: "Professional & Financial Services", categorySlug: "professional-and-financial-services", icon: Landmark, bgClass: "bg-emerald-100", iconClass: "text-emerald-600" },
+  { label: "Real Estate & Construction", categorySlug: "real-estate-and-construction", icon: Building, bgClass: "bg-orange-100", iconClass: "text-orange-600" },
+  { label: "Retail & Shopping", categorySlug: "retail-and-shopping", icon: ShoppingBag, bgClass: "bg-blue-100", iconClass: "text-blue-600" },
+  { label: "Salons & Personal Care", categorySlug: "salons-and-personal-care", icon: Scissors, bgClass: "bg-pink-100", iconClass: "text-pink-600" },
+];
+
 const TOP_NAV_ITEMS = [
   {
     label: "Business",
     type: "business",
-    icon: Building2,
-    subcategories: [
-      { label: "All Businesses", categorySlug: "all-businesses" },
-      { label: "Verified Enterprises", categorySlug: "verified-enterprises" },
-      { label: "Retail Stores & Supermarkets", categorySlug: "retail-and-shopping" },
-      { label: "Coaching Institutes", categorySlug: "education-and-coaching" },
-      { label: "Clinics & Healthcare", categorySlug: "healthcare-and-medical" },
-    ],
+    icon: LayoutGrid,
+    isSpecialCategory: true,
+    subcategories: BUSINESS_MEGA_CATEGORIES,
   },
   {
-    label: "Products",
+    label: "Shopping",
     type: "product",
-    icon: Package,
+    icon: ShoppingBag,
     subcategories: [
       { label: "All Products", categorySlug: "all-products" },
-      { label: "Electronics & Tech", categorySlug: "electronics-and-gadgets" },
-      { label: "Fashion & Apparel", categorySlug: "uniforms-and-apparel" },
-      { label: "Home & Kitchen", categorySlug: "kitchenware-and-appliances" },
-      { label: "Groceries & Fresh", categorySlug: "packaged-foods-and-gourmet-groceries" },
+      { label: "Electronics & Gadgets", categorySlug: "electronics-and-gadgets" },
+      { label: "Automobiles & Electric Vehicles", categorySlug: "automobiles-cars-and-electric-vehicles" },
+      { label: "Building Materials & Construction", categorySlug: "building-materials-and-construction-hardware" },
+      { label: "Books & Study Materials", categorySlug: "books-and-study-materials" },
+      { label: "Fashion Accessories & Apparel", categorySlug: "fashion-accessories-and-footwear" },
+      { label: "Bakery & Gourmet Foods", categorySlug: "packaged-foods-and-gourmet-groceries" },
+      { label: "Event Supplies & Decor", categorySlug: "event-decor-and-celebration-supplies" },
+      { label: "Kitchenware & Appliances", categorySlug: "kitchenware-and-appliances" },
     ],
   },
   {
@@ -129,10 +153,29 @@ const TOP_NAV_ITEMS = [
     icon: UserCheck,
     subcategories: [
       { label: "All Professionals", categorySlug: "all-professionals" },
-      { label: "Doctors & Healthcare", categorySlug: "doctors-and-healthcare" },
-      { label: "Teachers & Mentors", categorySlug: "academic-tutors-and-education-specialists" },
-      { label: "Legal & Financial Advisors", categorySlug: "legal-law-and-compliance-experts" },
-      { label: "Tech & Software Consultants", categorySlug: "software-it-and-technology-specialists" },
+      { label: "Doctors & Healthcare Specialists", categorySlug: "doctors-and-healthcare-specialists" },
+      { label: "Academic Tutors & Educators", categorySlug: "academic-tutors-and-education-specialists" },
+      { label: "Chartered Accountants & Financial", categorySlug: "chartered-accountants-and-financial-advisors" },
+      { label: "Legal & Law Experts", categorySlug: "legal-law-and-compliance-experts" },
+      { label: "Design, Architecture & Creative", categorySlug: "design-architecture-and-creative-experts" },
+      { label: "Business & Strategy Consultants", categorySlug: "business-strategy-and-management-consultants" },
+      { label: "Fitness & Wellness Trainers", categorySlug: "fitness-wellness-and-sports-trainers" },
+      { label: "Beauty & Styling Artists", categorySlug: "beauty-hair-and-styling-artists" },
+    ],
+  },
+  {
+    label: "Jobs",
+    type: "job",
+    icon: Briefcase,
+    subcategories: [
+      { label: "All Job Openings", categorySlug: "all-job-openings" },
+      { label: "Administration & HR", categorySlug: "administration-hr" },
+      { label: "Automotive Engineering & Operations", categorySlug: "job-automotive-engineering-operations" },
+      { label: "Finance & Accounting", categorySlug: "finance-accounting" },
+      { label: "Healthcare & Medical Services", categorySlug: "job-healthcare-medical-services" },
+      { label: "Hospitality & Restaurant Culinary", categorySlug: "job-hospitality-restaurant-culinary" },
+      { label: "Real Estate & Construction", categorySlug: "job-real-estate-construction" },
+      { label: "Retail & Store Operations", categorySlug: "hospitality-retail-store-operations" },
     ],
   },
   {
@@ -142,21 +185,11 @@ const TOP_NAV_ITEMS = [
     subcategories: [
       { label: "All Courses", categorySlug: "all-courses" },
       { label: "Competitive Exams (JEE / NEET)", categorySlug: "competitive-exams-jee-neet" },
-      { label: "Skill & Coding Bootcamps", categorySlug: "skill-and-coding-bootcamps" },
-      { label: "School Coaching (8th-12th)", categorySlug: "school-coaching-8th-12th" },
-      { label: "Degree & Diploma Programs", categorySlug: "degree-and-diploma-programs" },
-    ],
-  },
-  {
-    label: "Jobs",
-    type: "job",
-    icon: Briefcase,
-    subcategories: [
-      { label: "All Job Openings", categorySlug: "all-job-openings" },
-      { label: "Full-Time Roles", categorySlug: "full-time-roles" },
-      { label: "Part-Time & Internships", categorySlug: "part-time-and-internships" },
-      { label: "Teaching & Faculty", categorySlug: "teaching-and-faculty" },
-      { label: "Retail & Operations", categorySlug: "retail-and-operations" },
+      { label: "App & Software Development", categorySlug: "app-development-training" },
+      { label: "Class 11 & 12 Board Curriculum", categorySlug: "class-11-to-12" },
+      { label: "Class 6 to 10 Foundation", categorySlug: "class-6-to-8" },
+      { label: "Bachelors Degree Programs", categorySlug: "bachelors" },
+      { label: "Skill & Certification Bootcamps", categorySlug: "skill-and-coding-bootcamps" },
     ],
   },
   {
@@ -165,10 +198,22 @@ const TOP_NAV_ITEMS = [
     icon: Building,
     subcategories: [
       { label: "All Properties", categorySlug: "all-properties" },
-      { label: "Commercial & Office Spaces", categorySlug: "commercial-office" },
-      { label: "Residential Apartments", categorySlug: "residential-apartments" },
-      { label: "Coaching & Training Centers", categorySlug: "coaching-training-centers" },
-      { label: "Retail Shops & Showrooms", categorySlug: "retail-shops-showrooms" },
+      { label: "Commercial Properties", categorySlug: "property-commercial-properties" },
+      { label: "Residential Real Estate", categorySlug: "property-residential-real-estate" },
+      { label: "Industrial & Warehousing Estates", categorySlug: "property-industrial-warehousing-estates" },
+      { label: "Plots & Development Lands", categorySlug: "property-plots-development-lands" },
+    ],
+  },
+  {
+    label: "Vehicle",
+    type: "vehicle",
+    icon: Car,
+    subcategories: [
+      { label: "All Vehicles", categorySlug: "all-vehicles" },
+      { label: "Passenger Cars & SUVs", categorySlug: "vehicle-passenger-cars-suvs" },
+      { label: "Commercial & Transport Vehicles", categorySlug: "vehicle-commercial-transport-vehicles" },
+      { label: "Two-Wheelers & Motorcycles", categorySlug: "vehicle-two-wheelers-motorcycles" },
+      { label: "Luxury & Exotic Automobiles", categorySlug: "vehicle-luxury-exotic-automobiles" },
     ],
   },
   {
@@ -177,10 +222,23 @@ const TOP_NAV_ITEMS = [
     icon: Calendar,
     subcategories: [
       { label: "All Events", categorySlug: "all-events" },
-      { label: "Conferences & Seminars", categorySlug: "conferences-seminars" },
-      { label: "Workshops & Masterclasses", categorySlug: "workshops-masterclasses" },
-      { label: "Campus Drives & Job Fairs", categorySlug: "campus-drives-job-fairs" },
-      { label: "Cultural & Exhibitions", categorySlug: "cultural-exhibitions" },
+      { label: "Corporate & Industry Events", categorySlug: "event-corporate-industry-events" },
+      { label: "Live Entertainment & Cultural Shows", categorySlug: "event-live-entertainment-cultural-shows" },
+      { label: "Sports & Fitness Tournaments", categorySlug: "event-sports-fitness-tournaments" },
+      { label: "Weddings & Social Galas", categorySlug: "event-weddings-social-galas" },
+    ],
+  },
+  {
+    label: "Financial",
+    type: "service",
+    icon: Landmark,
+    subcategories: [
+      { label: "All Financial Services", categorySlug: "all-financial-services" },
+      { label: "Chartered Accountants & Financial", categorySlug: "chartered-accountants-and-financial-advisors" },
+      { label: "Business Loans & Commercial Finance", categorySlug: "business-loans-financing" },
+      { label: "Insurance & Risk Advisory", categorySlug: "insurance-risk-advisory" },
+      { label: "Investment & Wealth Management", categorySlug: "wealth-investment-management" },
+      { label: "Legal, Tax & Corporate Compliance", categorySlug: "legal-law-and-compliance-experts" },
     ],
   },
 ];
@@ -251,7 +309,7 @@ export function PlatformAdminHeader() {
         }, 500);
         return () => clearTimeout(timer);
       }
-    } catch {}
+    } catch { }
   }, []);
 
   // Debounced Google Places Autocomplete for Location Modal
@@ -266,7 +324,7 @@ export function PlatformAdminHeader() {
     const timer = setTimeout(async () => {
       setIsLoadingLocationSuggestions(true);
       try {
-        const res = await fetch(`/api/public/places/autocomplete?input=${encodeURIComponent(trimmed)}&country=${encodeURIComponent(country.code || "")}`);
+        const res = await fetch(`/api/public/places/autocomplete?input=${encodeURIComponent(trimmed)}`);
         const data = await res.json();
         if (data?.predictions && Array.isArray(data.predictions)) {
           setLocationSuggestions(data.predictions);
@@ -284,6 +342,78 @@ export function PlatformAdminHeader() {
     return () => clearTimeout(timer);
   }, [customLocationInput]);
 
+  // Dynamic main categories fetched from database for all navigation verticals
+  const [verticalCategories, setVerticalCategories] = useState<Record<string, Array<{ label: string; categorySlug: string }>>>({});
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadMainCategories() {
+      try {
+        const res = await fetch("/api/public/categories?type=all&onlyRoot=true&limit=300");
+        if (!res.ok) return;
+        const json = await res.json();
+        const list = json.data || json.categories || [];
+
+        const mapped: Record<string, Array<{ label: string; categorySlug: string }>> = {
+          business: [],
+          product: [],
+          professional: [],
+          course: [],
+          job: [],
+          property: [],
+          vehicle: [],
+          event: [],
+        };
+
+        list.forEach((c: any) => {
+          const catType = String(c.category_type || "").toLowerCase();
+          const item = { label: c.name, categorySlug: c.slug };
+
+          if (catType === "business") {
+            mapped.business.push(item);
+          } else if (catType === "product") {
+            mapped.product.push(item);
+          } else if (catType === "professional") {
+            mapped.professional.push(item);
+          } else if (catType === "course" || catType === "academic") {
+            mapped.course.push(item);
+          } else if (catType === "job" || catType === "jobs") {
+            mapped.job.push(item);
+          } else if (catType === "property" || catType === "properties") {
+            mapped.property.push(item);
+          } else if (catType === "vehicle" || catType === "vehicles") {
+            mapped.vehicle.push(item);
+          } else if (catType === "event" || catType === "events") {
+            mapped.event.push(item);
+          }
+        });
+
+        if (isMounted) {
+          setVerticalCategories(mapped);
+        }
+      } catch (err) {
+        console.warn("Failed to load header navigation categories:", err);
+      }
+    }
+
+    loadMainCategories();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const getItemSubcategories = (item: (typeof TOP_NAV_ITEMS)[0]) => {
+    if (item.label === "Financial" || (item as any).isSpecialCategory) {
+      return item.subcategories;
+    }
+    const fromDb = verticalCategories[item.type];
+    if (fromDb && fromDb.length > 0) {
+      const allItem = { label: `All ${item.label === "Vehicle" ? "Vehicles" : item.label}`, categorySlug: `all-${item.type}` };
+      return [allItem, ...fromDb];
+    }
+    return item.subcategories;
+  };
+
   const withLocation = (url: string) => {
     if (!location || location === "All Locations") return url;
     const separator = url.includes("?") ? "&" : "?";
@@ -297,12 +427,8 @@ export function PlatformAdminHeader() {
     if (sub?.href) return sub.href;
     if ("href" in item && (item as any).href && !sub) return (item as any).href;
 
-    // Use clean city part for canonical SEO URLs (e.g. "Pandeypur Chauraha, Varanasi" -> "Varanasi")
-    let locCity = location && location !== "All Locations" ? location : null;
-    if (locCity && locCity.includes(",")) {
-      const parts = locCity.split(",").map((p) => p.trim()).filter(Boolean);
-      locCity = parts[parts.length - 1] || parts[0];
-    }
+    // Use clean canonical city (e.g. "Pandeypur Chauraha, Varanasi, Uttar Pradesh, India" -> "Varanasi")
+    const locCity = extractCleanCity(location) || null;
 
     return buildDiscoverySeoUrl({
       type: item.type,
@@ -457,60 +583,133 @@ export function PlatformAdminHeader() {
           </Link>
         </div>
 
-        {/* Center: Top Navigation Menu (Business, Products, Professionals, Courses, Jobs, Property, Events) */}
+        {/* Center: Top Navigation Menu (Categories, Shopping, Events, Courses, Property, Vehicle, Financial) */}
         <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
-          {TOP_NAV_ITEMS.map((item) => (
-            <DropdownMenu key={item.label}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-800 hover:text-sky-600 hover:bg-sky-50/80 transition-colors cursor-pointer outline-none group"
-                >
-                  <span>{item.label}</span>
-                  <ChevronDown className="size-3 text-slate-400 group-hover:text-sky-600 transition-transform group-data-[state=open]:rotate-180" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 p-1.5 space-y-0.5 z-50 rounded-xl shadow-xl border-sky-100">
-                <div className="px-2.5 py-1.5 mb-1 bg-sky-50 rounded-md flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
-                    Explore {item.label}
-                  </span>
-                  <Link
-                    href={getNavHref(item)}
-                    className="text-[10px] text-sky-600 hover:underline font-bold"
-                  >
-                    View All →
-                  </Link>
-                </div>
-                {item.subcategories.map((sub) => (
-                  <DropdownMenuItem key={sub.label} asChild>
-                    <Link
-                      href={getNavHref(item, sub)}
-                      className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50"
+          {TOP_NAV_ITEMS.map((item) => {
+            if ((item as any).isSpecialCategory) {
+              return (
+                <DropdownMenu key={item.label}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white shadow-xs cursor-pointer outline-none transition-colors group"
                     >
-                      {sub.label}
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ))}
+                      <LayoutGrid className="size-3.5" />
+                      <span>{item.label}</span>
+                      <ChevronDown className="size-3 text-sky-200 group-hover:text-white transition-transform group-data-[state=open]:rotate-180" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[720px] max-w-[95vw] p-4 z-50 rounded-2xl shadow-2xl border-sky-100 bg-white">
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <div className="size-6 rounded-md bg-sky-100 text-sky-600 flex items-center justify-center">
+                          <LayoutGrid className="size-3.5" />
+                        </div>
+                        <span className="text-sm font-bold text-slate-900">
+                          Business Categories
+                        </span>
+                      </div>
+                      <span className="text-xs text-sky-600 italic font-medium">
+                        Find the right business, faster!
+                      </span>
+                    </div>
+
+                    {/* 3-Column Categories Grid matching mockup */}
+                    <div className="grid grid-cols-3 gap-x-3 gap-y-1">
+                      {BUSINESS_MEGA_CATEGORIES.map((cat) => {
+                        const CatIcon = cat.icon;
+                        const navHref = getNavHref(item, cat);
+                        return (
+                          <DropdownMenuItem key={cat.label} asChild className="p-0 focus:bg-transparent">
+                            <Link
+                              href={navHref}
+                              className="flex items-center justify-between p-2 rounded-xl hover:bg-sky-50 text-slate-700 hover:text-sky-600 transition-colors group cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={`size-6 rounded-md ${cat.bgClass} flex items-center justify-center shrink-0`}>
+                                  <CatIcon className={`size-3 ${cat.iconClass}`} />
+                                </div>
+                                <span className="text-xs font-medium truncate">
+                                  {cat.label}
+                                </span>
+                              </div>
+                              <ChevronRight className="size-3 text-slate-300 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-all shrink-0 ml-1" />
+                            </Link>
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </div>
+
+                    {/* Footer Banner */}
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between bg-sky-50/70 -mx-4 -mb-4 px-4 py-2.5 rounded-b-2xl">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                        <TrendingUp className="size-4 text-sky-600" />
+                        <span>Explore 12 Business Categories to Grow Your Business</span>
+                      </div>
+                      <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
+                        <Link
+                          href={getNavHref(item)}
+                          className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-xs cursor-pointer transition-colors"
+                        >
+                          View All Categories →
+                        </Link>
+                      </DropdownMenuItem>
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            }
+
+            return (
+              <DropdownMenu key={item.label}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-800 hover:text-sky-600 hover:bg-sky-50/80 transition-colors cursor-pointer outline-none group"
+                  >
+                    <span>{item.label}</span>
+                    <ChevronDown className="size-3 text-slate-400 group-hover:text-sky-600 transition-transform group-data-[state=open]:rotate-180" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64 max-h-[420px] overflow-y-auto p-1.5 space-y-0.5 z-50 rounded-xl shadow-xl border-sky-100 scrollbar-thin">
+                  <div className="sticky top-0 z-10 px-2.5 py-1.5 mb-1 bg-sky-50/95 backdrop-blur-xs rounded-md flex items-center justify-between border-b border-sky-100 shadow-2xs">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
+                      Explore {item.label}
+                    </span>
+                    <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
+                      <Link
+                        href={getNavHref(item)}
+                        className="text-[10px] text-sky-600 hover:underline font-bold cursor-pointer"
+                      >
+                        View All →
+                      </Link>
+                    </DropdownMenuItem>
+                  </div>
+                  {getItemSubcategories(item).map((sub) => {
+                    const navHref = getNavHref(item, sub);
+                    return (
+                      <DropdownMenuItem
+                        key={sub.label}
+                        asChild
+                      >
+                        <Link
+                          href={navHref}
+                          className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50 block w-full"
+                        >
+                          {sub.label}
+                        </Link>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          })}
         </nav>
 
-        {/* Right: + Add Listing, Cart, Country Flag, Location Selector, User Profile */}
+        {/* Right: Cart, Country Flag, Location Selector, User Profile */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          {/* + Add Listing Button: Red pill border with red text matching mockup */}
-          <Link href="/packages">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8.5 px-3.5 rounded-full border border-rose-500/80 bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 font-bold text-xs gap-1.5 cursor-pointer shadow-2xs shrink-0 transition-all"
-            >
-              <Plus className="size-3.5 text-rose-600" />
-              <span>Add Listing</span>
-            </Button>
-          </Link>
-
           {/* Cart Button with vibrant Red Count Badge */}
           <button
             type="button"
@@ -553,9 +752,8 @@ export function PlatformAdminHeader() {
                       description: `Currency: ${c.currencyCode} (${c.currencySymbol})`,
                     });
                   }}
-                  className={`cursor-pointer text-xs font-medium gap-2.5 py-2 px-2.5 rounded-lg flex items-center justify-between ${
-                    country.code === c.code ? "bg-sky-50 text-sky-700 font-bold" : ""
-                  }`}
+                  className={`cursor-pointer text-xs font-medium gap-2.5 py-2 px-2.5 rounded-lg flex items-center justify-between ${country.code === c.code ? "bg-sky-50 text-sky-700 font-bold" : ""
+                    }`}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">{c.flag}</span>
@@ -601,59 +799,61 @@ export function PlatformAdminHeader() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-xl shadow-xl border-sky-100">
-              <DropdownMenuLabel className="px-3 py-1.5 text-xs text-muted-foreground font-semibold truncate">
-                {user ? (user.full_name || user.email) : "Guest User"}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/packages"
-                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
-                >
-                  <Package className="size-4 text-amber-500" />
-                  <span>My Packages</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/workspace"
-                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
-                >
-                  <Store className="size-4 text-sky-500" />
-                  <span>My Store</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/platformadmin/my-profile"
-                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
-                >
-                  <User className="size-4 text-sky-500" />
-                  <span>Profile</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/workspace/settings"
-                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
-                >
-                  <Settings className="size-4 text-sky-500" />
-                  <span>Settings</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               {user ? (
-                <DropdownMenuItem
-                  onClick={() => {
-                    clearAuth();
-                    toast.success("Signed out successfully");
-                    router.push("/");
-                  }}
-                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-rose-600 hover:text-rose-700 rounded-lg hover:bg-rose-50"
-                >
-                  <LogOut className="size-4 text-rose-500" />
-                  <span>Sign Out</span>
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuLabel className="px-3 py-1.5 text-xs text-muted-foreground font-semibold truncate">
+                    {user.full_name || user.email}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href="/packages"
+                      className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                    >
+                      <Package className="size-4 text-amber-500" />
+                      <span>My Packages</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href="/workspace"
+                      className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                    >
+                      <Store className="size-4 text-sky-500" />
+                      <span>My Store</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href="/platformadmin/my-profile"
+                      className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                    >
+                      <User className="size-4 text-sky-500" />
+                      <span>Profile</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href="/workspace/settings"
+                      className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                    >
+                      <Settings className="size-4 text-sky-500" />
+                      <span>Settings</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      clearAuth();
+                      toast.success("Signed out successfully");
+                      router.push("/");
+                    }}
+                    className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-rose-600 hover:text-rose-700 rounded-lg hover:bg-rose-50"
+                  >
+                    <LogOut className="size-4 text-rose-500" />
+                    <span>Sign Out</span>
+                  </DropdownMenuItem>
+                </>
               ) : (
                 <DropdownMenuItem
                   onClick={() => {
@@ -775,11 +975,10 @@ export function PlatformAdminHeader() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("all")}
-                  className={`px-2.5 py-1 rounded-full font-bold transition-all cursor-pointer whitespace-nowrap text-[11px] ${
-                    activeTab === "all"
-                      ? "bg-primary text-primary-foreground shadow-xs"
-                      : "bg-background text-muted-foreground border hover:bg-muted"
-                  }`}
+                  className={`px-2.5 py-1 rounded-full font-bold transition-all cursor-pointer whitespace-nowrap text-[11px] ${activeTab === "all"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "bg-background text-muted-foreground border hover:bg-muted"
+                    }`}
                 >
                   All ({counts.all})
                 </button>
@@ -788,11 +987,10 @@ export function PlatformAdminHeader() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("products")}
-                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                      activeTab === "products"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-background text-muted-foreground border hover:bg-muted"
-                    }`}
+                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeTab === "products"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-background text-muted-foreground border hover:bg-muted"
+                      }`}
                   >
                     <Package className="size-3" />
                     <span>Products ({counts.products})</span>
@@ -803,11 +1001,10 @@ export function PlatformAdminHeader() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("services")}
-                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                      activeTab === "services"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-background text-muted-foreground border hover:bg-muted"
-                    }`}
+                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeTab === "services"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-background text-muted-foreground border hover:bg-muted"
+                      }`}
                   >
                     <Briefcase className="size-3" />
                     <span>Services ({counts.services})</span>
@@ -818,11 +1015,10 @@ export function PlatformAdminHeader() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("businesses")}
-                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                      activeTab === "businesses"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-background text-muted-foreground border hover:bg-muted"
-                    }`}
+                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeTab === "businesses"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-background text-muted-foreground border hover:bg-muted"
+                      }`}
                   >
                     <Building2 className="size-3" />
                     <span>Businesses ({counts.businesses})</span>
@@ -833,11 +1029,10 @@ export function PlatformAdminHeader() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("professionals")}
-                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                      activeTab === "professionals"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-background text-muted-foreground border hover:bg-muted"
-                    }`}
+                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeTab === "professionals"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-background text-muted-foreground border hover:bg-muted"
+                      }`}
                   >
                     <UserCheck className="size-3" />
                     <span>Professionals ({counts.professionals})</span>
@@ -848,11 +1043,10 @@ export function PlatformAdminHeader() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("categories")}
-                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${
-                      activeTab === "categories"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "bg-background text-muted-foreground border hover:bg-muted"
-                    }`}
+                    className={`px-2.5 py-1 rounded-full font-semibold transition-all cursor-pointer whitespace-nowrap text-[11px] flex items-center gap-1.5 ${activeTab === "categories"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-background text-muted-foreground border hover:bg-muted"
+                      }`}
                   >
                     <FolderTree className="size-3" />
                     <span>Categories ({counts.categories})</span>
@@ -892,17 +1086,16 @@ export function PlatformAdminHeader() {
                           className="flex items-start gap-2.5 min-w-0 flex-1 cursor-pointer text-left"
                         >
                           <div
-                            className={`size-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                              item.type === "product"
-                                ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-                                : item.type === "service"
+                            className={`size-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${item.type === "product"
+                              ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                              : item.type === "service"
                                 ? "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-400"
                                 : item.type === "business"
-                                ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
-                                : item.type === "professional"
-                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
-                                : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400"
-                            }`}
+                                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
+                                  : item.type === "professional"
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+                                    : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400"
+                              }`}
                           >
                             {item.type === "product" ? (
                               <Package className="size-4" />
@@ -1049,11 +1242,13 @@ export function PlatformAdminHeader() {
           }
         }}
       >
-        <DialogContent className="max-w-md bg-card border text-foreground rounded-3xl p-6 space-y-5 shadow-2xl">
-          <DialogHeader className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-xl font-black flex items-center gap-2">
-                <MapPin className="size-5 text-amber-500" />
+        <DialogContent className="sm:max-w-lg w-[calc(100vw-2rem)] bg-card border border-border/80 text-foreground rounded-3xl p-5 sm:p-6 shadow-2xl overflow-hidden gap-4">
+          <DialogHeader className="space-y-1 pb-1 border-b border-border/40">
+            <div className="flex items-center justify-between gap-2 pr-6">
+              <DialogTitle className="text-lg sm:text-xl font-black flex items-center gap-2 text-foreground">
+                <span className="p-1.5 rounded-xl bg-amber-500/10 text-amber-500">
+                  <MapPin className="size-4 sm:size-5" />
+                </span>
                 <span>Select Your Location</span>
               </DialogTitle>
               {isDetected && (
@@ -1063,31 +1258,37 @@ export function PlatformAdminHeader() {
               )}
             </div>
             <DialogDescription className="text-xs text-muted-foreground">
-              Discover verified businesses, services, products, and opportunities in your area.
+              Discover verified businesses, services, products, and opportunities in your area worldwide.
             </DialogDescription>
           </DialogHeader>
 
           {/* Currently Selected Location Pill */}
-          <div className="p-3.5 rounded-2xl bg-muted/40 border flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Active Location:</span>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-foreground flex items-center gap-1.5">
-                <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
-                <span>{location || "All Locations"}</span>
+          <div className="p-3 rounded-2xl bg-muted/40 border border-border/60 flex items-center justify-between text-xs gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground shrink-0">
+                Active:
               </span>
-              {location && location !== "All Locations" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLocation("All Locations", false);
-                    toast.success("Location set to All Locations");
-                  }}
-                  className="text-[10px] text-muted-foreground hover:text-amber-500 font-bold underline cursor-pointer ml-1"
-                >
-                  Clear
-                </button>
-              )}
+              <span className="font-extrabold text-foreground flex items-center gap-1.5 min-w-0 truncate">
+                <span className="size-2 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                <span className="truncate" title={location || "All Locations"}>
+                  {location || "All Locations"}
+                </span>
+              </span>
             </div>
+            {location && location !== "All Locations" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setLocation("All Locations", false);
+                  toast.success("Location set to All Locations");
+                }}
+                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-background hover:bg-rose-50 dark:hover:bg-rose-950/40 text-[11px] font-bold text-muted-foreground hover:text-rose-600 border border-border/60 transition-colors cursor-pointer shadow-2xs"
+                title="Reset location"
+              >
+                <X className="size-3" />
+                <span>Clear</span>
+              </button>
+            )}
           </div>
 
           {/* 1. Detect Live GPS Button */}
@@ -1099,7 +1300,7 @@ export function PlatformAdminHeader() {
               setLocationDialogOpen(false);
             }}
             disabled={isDetecting}
-            className="w-full py-5 rounded-2xl border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-foreground font-bold text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+            className="w-full py-4 sm:py-5 rounded-2xl border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-foreground font-bold text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-xs cursor-pointer transition-all"
           >
             {isDetecting ? (
               <>
@@ -1115,10 +1316,10 @@ export function PlatformAdminHeader() {
           </Button>
 
           {/* Divider */}
-          <div className="relative flex items-center justify-center">
-            <div className="w-full border-t border-border" />
-            <span className="absolute bg-card px-3 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Or Enter Location
+          <div className="relative flex items-center justify-center my-0.5">
+            <div className="w-full border-t border-border/60" />
+            <span className="absolute bg-card px-3 text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">
+              Or Enter Location Worldwide
             </span>
           </div>
 
@@ -1128,17 +1329,8 @@ export function PlatformAdminHeader() {
               e.preventDefault();
               const trimmed = customLocationInput.trim();
               if (trimmed) {
-                const resolvedCountry = resolveCountryFromLocation(trimmed);
-                setLocation(trimmed, false, resolvedCountry);
-                if (resolvedCountry) {
-                  setCountry(resolvedCountry);
-                  const cm = getCatalogCountryMeta(resolvedCountry);
-                  toast.success(`Location set to "${trimmed}"`, {
-                    description: `Country & Currency set to ${cm.name} (${cm.currencyCode} ${cm.currencySymbol})`,
-                  });
-                } else {
-                  toast.success(`Location set to "${trimmed}"`);
-                }
+                setLocation(trimmed, false);
+                toast.success(`Location set to "${trimmed}"`);
                 setCustomLocationInput("");
                 setLocationSuggestions([]);
                 setLocationDialogOpen(false);
@@ -1150,10 +1342,12 @@ export function PlatformAdminHeader() {
               <Search className="absolute left-3.5 size-4 text-muted-foreground pointer-events-none" />
               <input
                 type="text"
-                placeholder="Enter city, province, or area name..."
+                placeholder="Search any city, country, or area worldwide..."
                 value={customLocationInput}
                 onChange={(e) => setCustomLocationInput(e.target.value)}
-                className="w-full h-11 pl-10 pr-24 rounded-2xl bg-background border border-border/80 text-xs sm:text-sm font-medium focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                spellCheck={false}
+                autoComplete="off"
+                className="w-full h-11 pl-10 pr-20 rounded-2xl bg-background border border-border/80 text-xs sm:text-sm font-medium placeholder:text-muted-foreground/60 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all"
               />
               {isLoadingLocationSuggestions && (
                 <div className="absolute right-14 flex items-center justify-center pointer-events-none">
@@ -1164,7 +1358,7 @@ export function PlatformAdminHeader() {
                 type="submit"
                 size="sm"
                 disabled={!customLocationInput.trim()}
-                className="absolute right-1.5 h-8 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs cursor-pointer disabled:opacity-40"
+                className="absolute right-1.5 h-8 px-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs cursor-pointer shadow-xs disabled:opacity-40"
               >
                 Set
               </Button>
@@ -1172,13 +1366,13 @@ export function PlatformAdminHeader() {
 
             {/* Google Places Autocomplete Suggestions */}
             {locationSuggestions.length > 0 && (
-              <div className="space-y-1 max-h-60 overflow-y-auto rounded-2xl border border-border/70 bg-card p-1.5 shadow-lg animate-in fade-in-50 duration-200">
-                <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/40 pb-1">
-                  <span className="flex items-center gap-1.5">
-                    <MapPin className="size-3 text-amber-500" />
-                    Location Suggestions
+              <div className="space-y-1 max-h-56 overflow-y-auto rounded-2xl border border-border/80 bg-background/95 backdrop-blur-xs p-1.5 shadow-xl animate-in fade-in-50 duration-200">
+                <div className="flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/40 pb-1 mb-1">
+                  <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                    <Globe className="size-3" />
+                    Worldwide Suggestions
                   </span>
-                  <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full font-bold">
+                  <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full font-bold border border-amber-500/20">
                     Google Places
                   </span>
                 </div>
@@ -1195,36 +1389,66 @@ export function PlatformAdminHeader() {
                           chosenLocation = `${chosenLocation}, ${cityPart}`;
                         }
                       }
-                      const resolvedCountry = resolveCountryFromLocation(item.description || item.secondary_text || chosenLocation);
-                      setLocation(chosenLocation, false, resolvedCountry);
-                      if (resolvedCountry) {
-                        setCountry(resolvedCountry);
-                        const cm = getCatalogCountryMeta(resolvedCountry);
-                        toast.success(`Location set to "${chosenLocation}"`, {
-                          description: `Country & Currency set to ${cm.name} (${cm.currencyCode} ${cm.currencySymbol})`,
-                        });
-                      } else {
-                        toast.success(`Location set to "${chosenLocation}"`);
-                      }
+                      setLocation(chosenLocation, false);
+                      toast.success(`Location set to "${chosenLocation}"`);
                       setCustomLocationInput("");
                       setLocationSuggestions([]);
                       setLocationDialogOpen(false);
                     }}
-                    className="w-full text-left p-2.5 rounded-xl hover:bg-amber-500/10 transition-colors flex items-start gap-2.5 group cursor-pointer"
+                    className="w-full text-left p-2.5 rounded-xl hover:bg-amber-500/10 dark:hover:bg-amber-500/15 transition-all flex items-start gap-2.5 group cursor-pointer"
                   >
-                    <div className="size-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-amber-500 group-hover:text-black transition-colors">
+                    <div className="size-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-amber-500 group-hover:text-black transition-colors shadow-2xs">
                       <MapPin className="size-3.5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold text-foreground group-hover:text-amber-600 transition-colors truncate">
+                      <div className="text-xs font-bold text-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors truncate">
                         {item.name}
                       </div>
-                      <div className="text-[11px] text-muted-foreground truncate">
+                      <div className="text-[11px] text-muted-foreground group-hover:text-foreground/80 transition-colors truncate mt-0.5">
                         {item.secondary_text || item.description}
                       </div>
                     </div>
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Quick Popular Worldwide Cities */}
+            {!customLocationInput.trim() && (
+              <div className="pt-1">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                  <Globe className="size-3 text-amber-500" />
+                  <span>Popular Locations Worldwide</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { name: "Varanasi, India", code: "IN" },
+                    { name: "Cape Town, South Africa", code: "ZA" },
+                    { name: "Johannesburg, South Africa", code: "ZA" },
+                    { name: "London, UK", code: "GB" },
+                    { name: "New York, USA", code: "US" },
+                    { name: "Dubai, UAE", code: "AE" },
+                    { name: "Sydney, Australia", code: "AU" },
+                    { name: "Toronto, Canada", code: "CA" },
+                  ].map((city) => (
+                    <button
+                      key={city.name}
+                      type="button"
+                      onClick={() => {
+                        setLocation(city.name, false, city.code);
+                        setCountry(city.code);
+                        const cm = getCatalogCountryMeta(city.code);
+                        toast.success(`Location set to "${city.name}"`, {
+                          description: `Country & Currency set to ${cm.name} (${cm.currencyCode} ${cm.currencySymbol})`,
+                        });
+                        setLocationDialogOpen(false);
+                      }}
+                      className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-muted/60 hover:bg-amber-500/15 hover:text-amber-700 dark:hover:text-amber-400 border border-border/50 transition-colors cursor-pointer"
+                    >
+                      {city.name}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </form>

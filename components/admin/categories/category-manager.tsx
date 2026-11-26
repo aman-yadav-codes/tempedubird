@@ -55,6 +55,7 @@ import {
   UtensilsCrossed,
   BedDouble,
   CalendarDays,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
@@ -748,6 +749,31 @@ export function CategoryManagerContent() {
 
         {/* TOP ACTIONS */}
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            onClick={() => {
+              const url = `/api/admin/categories/export?type=${activeTab || "all"}`;
+              window.open(url, "_blank");
+            }}
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-xs font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-50 h-9"
+            title="Download current tab categories in Excel"
+          >
+            <Download className="size-3.5 text-emerald-600" /> Download Excel
+          </Button>
+
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-xs font-bold border-blue-300 text-blue-700 hover:bg-blue-50 h-9"
+            title="Download all categories & subcategories in a single ZIP folder"
+          >
+            <a href="/downloads/categories/All_Categories_Excel.zip" download="All_Categories_Excel.zip">
+              <Download className="size-3.5 text-blue-600" /> Download All (ZIP)
+            </a>
+          </Button>
+
           {activeTab === "business" ? (
             <>
               <Button

@@ -94,6 +94,8 @@ import {
     SlidersHorizontal,
     Target,
     User,
+    CalendarCheck2,
+    Heart,
 } from "lucide-react";
 import { CreateBusinessProfileDialog } from "@/components/business/create-business-profile-dialog";
 import { toast } from "sonner";
@@ -234,6 +236,19 @@ const navItems: SidebarItem[] = [
         title: "Listings",
         url: "/admin/profiles",
         icon: Layers,
+        children: [
+            { title: "Businesses", url: "/admin/profiles?tab=business", icon: Building2 },
+            { title: "Professionals", url: "/admin/profiles?tab=professional", icon: UserCheck },
+            { title: "Courses", url: "/admin/profiles?tab=course", icon: GraduationCap },
+            { title: "Jobs", url: "/admin/profiles?tab=job", icon: Briefcase },
+            { title: "Products", url: "/admin/profiles?tab=products", icon: Package },
+            { title: "Services", url: "/admin/profiles?tab=services", icon: Layers },
+            { title: "Room & Stay", url: "/admin/profiles?tab=room", icon: BedDouble },
+            { title: "Vehicles", url: "/admin/profiles?tab=vehicle", icon: Car },
+            { title: "Dishes", url: "/admin/profiles?tab=dish", icon: UtensilsCrossed },
+            { title: "Events", url: "/admin/profiles?tab=event", icon: CalendarDays },
+            { title: "Properties", url: "/admin/profiles?tab=property", icon: Building2 },
+        ],
     },
     {
         title: "Business Type Access Management",
@@ -241,9 +256,19 @@ const navItems: SidebarItem[] = [
         icon: SlidersHorizontal,
     },
     {
-        title: "SEO Locations",
+        title: "SEO, Marketing & Analytics",
         url: "/platformadmin/seo-locations",
         icon: Globe,
+        children: [
+            { title: "SEO Locations", url: "/platformadmin/seo-locations", icon: MapPin },
+            { title: "Page Creation with SEO Tags", url: "/platformadmin/marketing/seo", icon: Tags },
+            { title: "Analytics Overview", url: "/admin/analytics?tab=overview", permissionPath: "/admin/analytics", icon: BarChart3 },
+            { title: "Option Clicks", url: "/admin/analytics?tab=clicks", permissionPath: "/admin/analytics", icon: MousePointerClick },
+            { title: "Views", url: "/admin/analytics?tab=views", permissionPath: "/admin/analytics", icon: Eye },
+            { title: "Impressions", url: "/admin/analytics?tab=impressions", permissionPath: "/admin/analytics", icon: Layers },
+            { title: "Search History", url: "/admin/analytics?tab=searches", permissionPath: "/admin/analytics", icon: Search },
+            { title: "User Journey", url: "/admin/analytics?tab=journeys", permissionPath: "/admin/analytics", icon: Compass },
+        ],
     },
     {
         title: "Articles & Blog",
@@ -418,30 +443,18 @@ const navItems: SidebarItem[] = [
         url: "/admin/sales/pipeline",
         icon: BadgeDollarSign,
         children: [
-            { title: "Orders & Bookings", url: "/admin/sales/orders", icon: ShoppingCart },
+            { title: "Enquiry", url: "/admin/sales/enquiries", icon: Mail },
+            { title: "Bookings", url: "/admin/sales/bookings", icon: CalendarCheck2 },
+            { title: "Orders", url: "/admin/sales/orders", icon: ShoppingCart },
+            { title: "Subscribers", url: "/admin/sales/subscribers", icon: Mail },
             { title: "Pipeline", url: "/admin/sales/pipeline", icon: TrendingUp },
             { title: "Leads", url: "/admin/sales/leads", icon: UserCheck },
             { title: "Proposals", url: "/admin/sales/proposals", icon: FileSignature },
-            { title: "Enquiry", url: "/admin/sales/enquiries", icon: Mail },
             { title: "Commissions", url: "/admin/sales/commissions", icon: Percent },
             { title: "Generate Documents", url: "/admin/sales/generate-documents", icon: Sparkles },
         ],
     },
-    {
-        title: "Business Records",
-        url: "/admin/business-records",
-        icon: Boxes,
-        children: [
-            { title: "Operations Hub", url: "/admin/business-records", icon: Sparkles },
-            { title: "Vehicles Inventory", url: "/admin/business-records/vehicles", icon: Car },
-            { title: "Property Listings", url: "/admin/business-records/properties", icon: Building2 },
-            { title: "Restaurant & Menu", url: "/admin/business-records/restaurants", icon: UtensilsCrossed },
-            { title: "Hotel Rooms & Stays", url: "/admin/business-records/hotels", icon: BedDouble },
-            { title: "Events & Tickets", url: "/admin/business-records/events", icon: CalendarDays },
-            { title: "Student Directory", url: "/admin/business-records/education", icon: GraduationCap },
-            { title: "Patient Directory", url: "/admin/business-records/healthcare", icon: HeartPulse },
-        ],
-    },
+
     {
         title: "Master Data",
         url: "/admin/master-data",
@@ -560,7 +573,7 @@ const navItems: SidebarItem[] = [
         icon: Settings,
         children: [
             { title: "General", url: "/admin/settings", icon: Palette },
-            { title: "Packages", url: "/admin/settings/packages", icon: Boxes },
+            { title: "Packages", url: "/workspace/subscription", icon: Boxes },
             { title: "Performance Settings", url: "/admin/settings/performance", icon: Trophy },
             { title: "Controls", url: "/admin/notifications/settings", permissionPath: "/admin/notifications/settings", icon: Settings },
             { title: "Support", url: "/admin/support", icon: LifeBuoy },
@@ -663,6 +676,29 @@ function getActiveSidebarLeaf(
                 itemTab === currentTab
             ) {
                 matches.push({ key: item.url, pathLength: item.url.length + 10 });
+            }
+            return;
+        }
+
+        if (item.url.startsWith("/admin/profiles")) {
+            const itemTab = item.url.includes("tab=")
+                ? item.url.split("tab=")[1]?.split("&")[0]
+                : "business";
+            const currentTab = searchTab || searchParam || "business";
+            const normPath = normalizeAdminPath(pathname);
+            if (
+                (normPath === "/admin/profiles" || normPath === "/platformadmin/profiles" || normPath === "/workspace/profiles") &&
+                itemTab === currentTab
+            ) {
+                matches.push({ key: item.url, pathLength: item.url.length + 15 });
+            }
+            return;
+        }
+
+        if (item.url === "/workspace/subscription") {
+            const normPath = normalizeAdminPath(pathname);
+            if (normPath === "/workspace/subscription" || normPath === "/admin/subscription" || normPath === "/admin/settings/subscription" || normPath === "/admin/settings/packages") {
+                matches.push({ key: item.url, pathLength: 999 });
             }
             return;
         }
@@ -773,7 +809,10 @@ export function AppSidebar() {
     const router = useRouter();
     const { user, accessToken, clearAuth } = useAuthStore();
     const canonicalPathname = toCanonicalAdminPath(pathname);
-    const roleHref = (url: string) => toRoleRoutePath(url, user);
+    const roleHref = (url: string) => {
+        if (url === "/workspace/subscription") return "/workspace/subscription";
+        return toRoleRoutePath(url, user);
+    };
     const [logoutOpen, setLogoutOpen] = useState(false);
     const [switchAccountOpen, setSwitchAccountOpen] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -952,10 +991,14 @@ export function AppSidebar() {
             return true;
         }
         if (isCustomer) {
-            return pathname === "/admin" ||
-                pathname.startsWith("/admin/orders") ||
-                pathname.startsWith("/admin/finance") ||
-                pathname.startsWith("/admin/my-profile");
+            const norm = normalizeAdminPath(pathname);
+            return norm === "/admin" ||
+                norm.startsWith("/admin/enquiries") ||
+                norm.startsWith("/admin/bookings") ||
+                norm.startsWith("/admin/orders") ||
+                norm.startsWith("/admin/favorites") ||
+                norm.startsWith("/admin/finance") ||
+                norm.startsWith("/admin/my-profile");
         }
         if (pathname === "/admin/account" || pathname.startsWith("/admin/account")) {
             return !isStudent && !isParent;
@@ -981,19 +1024,29 @@ export function AppSidebar() {
                         icon: LayoutDashboard,
                     },
                     {
-                        title: "My Orders",
+                        title: "Enquiry",
+                        url: "/admin/enquiries",
+                        icon: Mail,
+                    },
+                    {
+                        title: "Bookings",
+                        url: "/admin/bookings",
+                        icon: CalendarCheck2,
+                    },
+                    {
+                        title: "Orders",
                         url: "/admin/orders",
                         icon: ShoppingCart,
                     },
                     {
-                        title: "My Finance & Invoices",
-                        url: "/admin/finance",
-                        icon: CreditCard,
+                        title: "Favorites",
+                        url: "/admin/favorites",
+                        icon: Heart,
                     },
                     {
-                        title: "My Profile",
-                        url: "/admin/my-profile",
-                        icon: UserCog,
+                        title: "Finance",
+                        url: "/admin/finance",
+                        icon: CreditCard,
                     },
                 ];
             }
@@ -1019,7 +1072,15 @@ export function AppSidebar() {
                     if (item.title === "Manage Staff" || item.url.startsWith("/admin/staff")) return [];
                     if (item.title === "Finance" || item.url.startsWith("/admin/finance")) return [];
                     if (item.title === "Marketing" || item.url.startsWith("/admin/marketing")) return [];
-                    if (item.title === "Sales" || item.url.startsWith("/admin/sales")) return [];
+                    if (item.title === "Analytics" || item.url === "/admin/analytics") return [];
+                    if (item.title === "Sales" || item.url.startsWith("/admin/sales")) {
+                        return [{
+                            ...item,
+                            children: (item.children || []).filter(c =>
+                                ["Enquiry", "Bookings", "Orders", "Orders & Bookings", "Subscribers", "Subscriber", "Pipeline", "Leads"].includes(c.title)
+                            )
+                        }];
+                    }
 
                     if (item.url === "/admin/classroom/attendance") return [];
                     if (item.url === "/admin/institution/calendar") return [];
@@ -1027,16 +1088,16 @@ export function AppSidebar() {
                     if (item.url === "/admin/students") return [];
                     if (item.url === "/admin/institutions") return [];
                     if (item.url === "/admin/vendors") return [];
-                    if (item.url === "/admin/profiles") return [item];
+                    if (item.url === "/admin/profiles" || item.url.startsWith("/admin/profiles")) return [item];
                     if (item.url === "/admin/business-type-access") return [item];
-                    if (item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [item];
+                    if (item.title === "SEO, Marketing & Analytics" || item.title === "SEO & Marketing" || item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [item];
                     if (item.url === "/platformadmin/content/blog" || item.url === "/admin/content/blog") return [item];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [item];
                     if (item.url === "/admin/catalog/products") return [item];
                 } else {
-                    if (item.url === "/admin/profiles") return [];
+                    if (item.url === "/admin/profiles" || item.url.startsWith("/admin/profiles")) return [];
                     if (item.url === "/admin/business-type-access") return [];
-                    if (item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [];
+                    if (item.title === "SEO, Marketing & Analytics" || item.title === "SEO & Marketing" || item.url === "/platformadmin/seo-locations" || item.url === "/admin/seo-locations") return [];
                     if (item.url === "/platformadmin/content/blog") return [];
                     if (item.url.startsWith("/admin/categories") || item.url === "/admin/content/categories") return [];
                     if (item.url === "/admin/catalog/products") return [];
@@ -1280,7 +1341,7 @@ export function AppSidebar() {
                     return [{
                         ...item,
                         children: item.children.filter((child) => {
-                            if (child.url === "/admin/settings/packages") {
+                            if (child.url === "/workspace/subscription" || child.url === "/admin/settings/packages") {
                                 // "we need packages option in setting tab which only business owner can see and those pckages will be created by platform admin only"
                                 const isBusinessOwner = isPlatformAdmin || isInstitutionAdmin ||
                                     Boolean(user?.role_codes?.includes("business_owner")) ||
@@ -1417,13 +1478,22 @@ export function AppSidebar() {
             .join(" ");
     };
 
+    const isCustomerPortal = Boolean(
+        pathname?.startsWith("/customer") ||
+        (Array.isArray(user?.role_codes)
+            ? user.role_codes.includes("customer") && !user.role_codes.some(r => ["platform_admin", "super_admin", "admin", "institution_admin", "staff"].includes(r))
+            : (user as any)?.role === "customer" || (user as any)?.primary_role === "customer")
+    );
+
     const activeWorkspaceLogo = isPlatformAdmin
         ? null
         : isParent
             ? null
             : isStudent
                 ? (activeStudentEnrollment as any)?.institutionLogo ?? (activeStudentEnrollment as any)?.institution_logo_url ?? (studentInstitution as any)?.institution_logo ?? (studentInstitution as any)?.institution_logo_url ?? null
-                : staffInstitution?.logoUrl ?? activeInstitution?.logoUrl ?? null;
+                : isCustomerPortal
+                    ? staffInstitution?.logoUrl ?? activeInstitution?.logoUrl ?? "/images/143panda-logo.png"
+                    : staffInstitution?.logoUrl ?? activeInstitution?.logoUrl ?? null;
 
     const activeWorkspaceName = isPlatformAdmin
         ? "EduBird Platform"
@@ -1433,7 +1503,9 @@ export function AppSidebar() {
                 ? activeChild?.name ?? "EduBird"
                 : isStudent
                     ? activeStudentEnrollment?.institutionName ?? studentInstitution?.institution_name ?? "EduBird"
-                    : staffInstitution?.name ?? activeInstitution?.name ?? (isInstitutionAdmin ? (user?.full_name ? `${user.full_name} (Personal)` : "Personal Profile") : "EduBird");
+                    : isCustomerPortal
+                        ? staffInstitution?.name ?? activeInstitution?.name ?? "143Panda"
+                        : staffInstitution?.name ?? activeInstitution?.name ?? (isInstitutionAdmin ? (user?.full_name ? `${user.full_name} (Personal)` : "Personal Profile") : "EduBird");
 
     const activeWorkspaceRole = isPlatformAdmin
         ? "Platform Admin"
@@ -1445,9 +1517,11 @@ export function AppSidebar() {
                     ? activeStudentEnrollment
                         ? `${activeStudentEnrollment.programName}${activeStudentEnrollment.sectionName ? ` • ${activeStudentEnrollment.sectionName}` : ""}`
                         : "Student"
-                    : isInstitutionAdmin
-                        ? (user?.has_business_profile ? "Business Owner" : user?.has_professional_profile ? "Professional Provider" : "Business & Professional Admin")
-                        : staffInstitution?.roleName ?? activeInstitution?.roleName ?? user?.primary_role ?? (user?.role_codes?.[0] ? formatStaffRole(user.role_codes[0]) : "Staff");
+                    : isCustomerPortal
+                        ? "Customer"
+                        : isInstitutionAdmin
+                            ? (user?.has_business_profile ? "Business Owner" : user?.has_professional_profile ? "Professional Provider" : "Business & Professional Admin")
+                            : staffInstitution?.roleName ?? activeInstitution?.roleName ?? user?.primary_role ?? (user?.role_codes?.[0] ? formatStaffRole(user.role_codes[0]) : "Staff");
 
     const activeWorkspaceInitial = isPlatformAdmin ? "E" : (activeWorkspaceName[0] ?? "E").toUpperCase();
     const canSwitchInstitution = isInstitutionAdmin && !isPlatformAdmin;
@@ -1616,7 +1690,7 @@ export function AppSidebar() {
                                                     <img
                                                         src={activeWorkspaceLogo}
                                                         alt={activeWorkspaceName}
-                                                        className="h-full w-full object-cover rounded-lg"
+                                                        className={`h-full w-full rounded-lg ${String(activeWorkspaceLogo).includes("143panda") ? "object-contain p-0.5 bg-white" : "object-cover"}`}
                                                     />
                                                 ) : (
                                                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
@@ -1723,25 +1797,28 @@ export function AppSidebar() {
                             ) : (
                                 <SidebarMenuButton
                                     size="lg"
-                                    className="cursor-default hover:bg-transparent hover:text-foreground active:bg-transparent"
+                                    asChild
+                                    className="cursor-pointer hover:bg-muted/60 transition-colors"
                                 >
-                                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive/10 text-xs font-bold text-destructive-foreground overflow-hidden border border-border/40 shrink-0">
-                                        {activeWorkspaceLogo ? (
-                                            <img
-                                                src={activeWorkspaceLogo}
-                                                alt={activeWorkspaceName}
-                                                className="h-full w-full object-cover rounded-lg"
-                                            />
-                                        ) : (
-                                            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
-                                                {activeWorkspaceInitial}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="grid flex-1 text-left text-sm leading-tight">
-                                        <span className="truncate font-semibold">{activeWorkspaceName}</span>
-                                        <span className="truncate text-xs text-muted-foreground">{activeWorkspaceRole}</span>
-                                    </div>
+                                    <Link href="/" title="Open Home Page">
+                                        <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive/10 text-xs font-bold text-destructive-foreground overflow-hidden border border-border/40 shrink-0">
+                                            {activeWorkspaceLogo ? (
+                                                <img
+                                                    src={activeWorkspaceLogo}
+                                                    alt={activeWorkspaceName}
+                                                    className={`h-full w-full rounded-lg ${String(activeWorkspaceLogo).includes("143panda") ? "object-contain p-0.5 bg-white" : "object-cover"}`}
+                                                />
+                                            ) : (
+                                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-destructive text-xs font-bold text-destructive-foreground">
+                                                    {activeWorkspaceInitial}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="grid flex-1 text-left text-sm leading-tight">
+                                            <span className="truncate font-semibold">{activeWorkspaceName}</span>
+                                            <span className="truncate text-xs text-muted-foreground">{activeWorkspaceRole}</span>
+                                        </div>
+                                    </Link>
                                 </SidebarMenuButton>
                             )}
                         </SidebarMenuItem>

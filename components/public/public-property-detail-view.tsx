@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
-import { buildBusinessSeoUrl } from "@/lib/utils/seo-slug";
+import { buildBusinessSeoUrl, slugify, buildDiscoverySeoUrl } from "@/lib/utils/seo-slug";
 
 interface Props {
   property: any;
@@ -52,6 +52,8 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
   const propLocation = [property.locality, property.city, property.state].filter(Boolean).join(", ") || "Pandeypur, Varanasi";
   const ownerPhone = owner?.phone || property.phone || "+91 9876543210";
   const ownerWhatsapp = owner?.whatsapp || ownerPhone.replace(/[^0-9]/g, "");
+  const businessSlug = owner?.slug || property.business_slug || property.business_id;
+  const businessUrl = businessSlug ? `/business/${businessSlug}` : (owner ? buildBusinessSeoUrl(owner) : "#");
 
   const price = Number(property.price || property.rent_amount || 0);
 
@@ -94,11 +96,20 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
             <Link href="/" className="hover:text-primary transition-colors">Home</Link>
             <ChevronRight className="size-3" />
-            <Link href="/explore?type=business" className="hover:text-primary transition-colors">Real Estate & Properties</Link>
+            <Link href="/properties" className="hover:text-primary transition-colors">Properties</Link>
             {property.category_name && (
               <>
                 <ChevronRight className="size-3" />
-                <span className="text-foreground font-medium">{property.category_name}</span>
+                <Link
+                  href={buildDiscoverySeoUrl({
+                    type: "property",
+                    category: property.category_slug || property.category_name,
+                    location: property.city,
+                  })}
+                  className="hover:text-primary font-medium transition-colors"
+                >
+                  {property.category_name}
+                </Link>
               </>
             )}
             <ChevronRight className="size-3" />
@@ -121,12 +132,12 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
                   className="object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
-                <div className="absolute top-4 left-4 flex gap-2">
+                <div className="absolute top-4 left-4 flex gap-2 flex-wrap">
                   <Badge className="bg-emerald-600 text-white font-bold text-xs shadow-sm">
-                    {property.property_type || "Commercial Space"}
+                    {property.property_type || property.category_name || "Commercial Space"}
                   </Badge>
                   <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-xs">
-                    {property.furnishing || "Semi-Furnished"}
+                    {property.furnishing || "Ready for Possession"}
                   </Badge>
                 </div>
                 <div className="absolute bottom-4 left-4 right-4 text-white">
@@ -147,20 +158,20 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
                     <span className="text-[11px] text-muted-foreground block font-medium">Carpet Area</span>
                     <span className="text-xs font-bold text-foreground flex items-center gap-1 mt-0.5">
                       <Maximize2 className="size-3.5 text-primary" />
-                      {property.area_sqft || 1800} Sq. Ft.
+                      {Number(property.area_sqft || property.built_up_area || 1800).toLocaleString("en-IN")} Sq. Ft.
                     </span>
                   </div>
                   <div>
                     <span className="text-[11px] text-muted-foreground block font-medium">Floor Level</span>
                     <span className="text-xs font-bold text-foreground flex items-center gap-1 mt-0.5">
                       <Layers className="size-3.5 text-primary" />
-                      {property.floor_number || "1st Floor (Road Facing)"}
+                      {property.floor_number || "Ground Level"}
                     </span>
                   </div>
                   <div>
                     <span className="text-[11px] text-muted-foreground block font-medium">Suitable For</span>
-                    <span className="text-xs font-bold text-foreground truncate mt-0.5 block">
-                      {property.suitable_for || "Coaching / Corporate Office"}
+                    <span className="text-xs font-bold text-foreground truncate mt-0.5 block" title={property.suitable_for || "Commercial / Industrial Setup"}>
+                      {property.suitable_for || "Commercial / Industrial Setup"}
                     </span>
                   </div>
                   <div>
@@ -275,11 +286,25 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
                 Listed By
               </span>
               <div className="flex items-start gap-3">
-                <div className="size-12 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold text-base shrink-0">
-                  <Building2 className="size-6" />
-                </div>
+                {businessUrl !== "#" ? (
+                  <Link href={businessUrl} className="block cursor-pointer shrink-0">
+                    <div className="size-12 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors flex items-center justify-center font-bold text-base">
+                      <Building2 className="size-6" />
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="size-12 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold text-base shrink-0">
+                    <Building2 className="size-6" />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-sm text-foreground truncate">{ownerName}</h4>
+                  {businessSlug ? (
+                    <Link href={businessUrl} className="hover:text-emerald-600 hover:underline block truncate">
+                      <h4 className="font-bold text-sm text-foreground truncate">{ownerName}</h4>
+                    </Link>
+                  ) : (
+                    <h4 className="font-bold text-sm text-foreground truncate">{ownerName}</h4>
+                  )}
                   <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                     <MapPin className="size-3 text-primary shrink-0" />
                     <span className="truncate">{propLocation}</span>
@@ -290,14 +315,38 @@ export function PublicPropertyDetailView({ property, owner }: Props) {
                 </div>
               </div>
 
-              {owner && (
+              {(owner || businessSlug) && (
                 <Button asChild variant="outline" size="sm" className="w-full text-xs font-semibold">
-                  <Link href={buildBusinessSeoUrl(owner)}>
+                  <Link href={businessUrl}>
                     View Owner Profile & All Properties <ArrowRight className="size-3.5 ml-1" />
                   </Link>
                 </Button>
               )}
             </Card>
+          </div>
+        </div>
+
+        {/* Explore More Properties CTA */}
+        <div className="mt-10 p-6 rounded-2xl bg-card border shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base sm:text-lg font-bold text-foreground">
+              Looking for more properties in {property.city || "Varanasi"}?
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Browse our complete catalog of commercial spaces, retail showrooms, luxury apartments, and plots.
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <Button asChild variant="outline" size="sm" className="text-xs">
+              <Link href={`/properties/in-${property.city ? slugify(property.city) : 'varanasi'}`}>
+                Properties in {property.city || "Varanasi"}
+              </Link>
+            </Button>
+            <Button asChild size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
+              <Link href="/properties">
+                Browse All Properties <ArrowRight className="size-3.5 ml-1" />
+              </Link>
+            </Button>
           </div>
         </div>
       </div>

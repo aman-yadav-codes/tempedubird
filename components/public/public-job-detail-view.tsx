@@ -54,6 +54,20 @@ export function PublicJobDetailView({ job, employer }: Props) {
   const employerPhone = employer?.phone || "+91 9876543210";
   const employerWhatsapp = employer?.whatsapp || employerPhone.replace(/[^0-9]/g, "");
 
+  const employerUrl = employer
+    ? (employer.category_name || employer.category_slug
+        ? buildBusinessSeoUrl(employer)
+        : `/business/${employer.slug || employer.id}`)
+    : job.institution_slug
+    ? `/institutes/${job.institution_slug}`
+    : job.business_slug
+    ? `/business/${job.business_slug}`
+    : job.institution_id
+    ? `/institutes/${job.institution_id}`
+    : job.business_id
+    ? `/business/${job.business_id}`
+    : "#";
+
   const handleApplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.applicant_name || !form.applicant_phone) {
@@ -133,10 +147,16 @@ export function PublicJobDetailView({ job, employer }: Props) {
                     {job.title || job.name}
                   </h1>
                   <p className="text-sm text-muted-foreground mt-2 flex items-center gap-2">
-                    <Building2 className="size-4 text-primary" />
-                    <span className="font-semibold text-foreground">{employerName}</span>
+                    <Building2 className="size-4 text-primary shrink-0" />
+                    <Link
+                      href={employerUrl}
+                      className="font-semibold text-primary hover:underline transition-colors"
+                      title={`View ${employerName} profile`}
+                    >
+                      {employerName}
+                    </Link>
                     <span>•</span>
-                    <MapPin className="size-3.5 text-primary" />
+                    <MapPin className="size-3.5 text-primary shrink-0" />
                     <span>{jobLocation}</span>
                   </p>
                 </div>
@@ -291,11 +311,27 @@ export function PublicJobDetailView({ job, employer }: Props) {
                 Hiring Organization
               </span>
               <div className="flex items-start gap-3">
-                <div className="size-12 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold text-base shrink-0">
-                  <Building2 className="size-6" />
-                </div>
+                {employerUrl !== "#" ? (
+                  <Link href={employerUrl} className="block cursor-pointer shrink-0" title={`Visit ${employerName}`}>
+                    <div className="size-12 rounded-xl bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-colors flex items-center justify-center font-bold text-base">
+                      <Building2 className="size-6" />
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="size-12 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold text-base shrink-0">
+                    <Building2 className="size-6" />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-sm text-foreground truncate">{employerName}</h4>
+                  {employerUrl !== "#" ? (
+                    <Link href={employerUrl} className="block cursor-pointer group/emp" title={`Visit ${employerName}`}>
+                      <h4 className="font-bold text-sm text-foreground group-hover/emp:text-blue-600 group-hover/emp:underline transition-colors truncate">
+                        {employerName}
+                      </h4>
+                    </Link>
+                  ) : (
+                    <h4 className="font-bold text-sm text-foreground truncate">{employerName}</h4>
+                  )}
                   <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                     <MapPin className="size-3 text-primary shrink-0" />
                     <span className="truncate">{jobLocation}</span>
@@ -312,9 +348,9 @@ export function PublicJobDetailView({ job, employer }: Props) {
                 </p>
               )}
 
-              {employer && (
+              {employerUrl !== "#" && (
                 <Button asChild variant="outline" size="sm" className="w-full text-xs font-semibold">
-                  <Link href={buildBusinessSeoUrl(employer)}>
+                  <Link href={employerUrl}>
                     View Organization & All Vacancies <ArrowRight className="size-3.5 ml-1" />
                   </Link>
                 </Button>

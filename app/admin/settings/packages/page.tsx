@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Boxes,
   Building2,
@@ -76,6 +77,7 @@ type CurrentSubscription = {
 };
 
 export default function BusinessPackagesSettingsPage() {
+  const router = useRouter();
   const { isReady } = useAdminGuard();
   const { accessToken, user } = useAuthStore();
   const { activeInstitution, activeInstitutionId } = useActiveInstitution();
@@ -87,6 +89,12 @@ export default function BusinessPackagesSettingsPage() {
     isInstitutionAdmin ||
     Boolean(user?.role_codes?.includes("business_owner")) ||
     Boolean(user?.role_codes?.includes("institution_admin"));
+
+  useEffect(() => {
+    if (isReady && !isPlatformAdmin) {
+      router.replace("/workspace/subscription");
+    }
+  }, [isReady, isPlatformAdmin, router]);
 
   const [packages, setPackages] = useState<AdminPackage[]>([]);
   const [currentSub, setCurrentSub] = useState<CurrentSubscription | null>(null);

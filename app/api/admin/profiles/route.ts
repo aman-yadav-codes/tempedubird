@@ -550,8 +550,80 @@ export async function GET(req: Request) {
           ORDER BY br.created_at DESC
           LIMIT 100
         `;
+      } else if (type === "vehicle") {
+        query = `
+          SELECT
+            br.id,
+            br.title as name,
+            COALESCE(vd.manufacturing_year::text || ' ' || COALESCE(vd.color, ''), br.slug) as subtitle,
+            br.slug,
+            br.description,
+            br.price,
+            br.currency,
+            br.featured_image as image_url,
+            br.status,
+            br.is_active,
+            br.is_featured,
+            br.metadata,
+            br.created_at,
+            c.name as category_name,
+            subc.name as subcategory_name,
+            bp.name as business_name,
+            COALESCE(bp.city, vd.location, 'Varanasi') as city,
+            COALESCE(vd.contact_info, bp.phone) as phone,
+            vd.manufacturing_year,
+            vd.color,
+            vd.mileage,
+            vd.kilometers_driven,
+            vd.engine_capacity,
+            vd.registration_number
+          FROM business_records br
+          LEFT JOIN vehicle_details vd ON vd.record_id = br.id
+          LEFT JOIN business_profiles bp ON bp.id = br.business_id
+          LEFT JOIN categories c ON c.id = br.category_id
+          LEFT JOIN categories subc ON subc.id = br.subcategory_id
+          WHERE ${where.join(" AND ")}
+          ORDER BY br.created_at DESC
+          LIMIT 100
+        `;
+      } else if (type === "property") {
+        query = `
+          SELECT
+            br.id,
+            br.title as name,
+            COALESCE(pd.street_address, pd.city, br.slug) as subtitle,
+            br.slug,
+            br.description,
+            COALESCE(pd.rental_amount, br.price) as price,
+            br.currency,
+            br.featured_image as image_url,
+            br.status,
+            br.is_active,
+            br.is_featured,
+            br.metadata,
+            br.created_at,
+            c.name as category_name,
+            subc.name as subcategory_name,
+            bp.name as business_name,
+            COALESCE(pd.city, bp.city, 'Varanasi') as city,
+            bp.phone,
+            pd.bedrooms,
+            pd.bathrooms,
+            pd.built_up_area,
+            pd.area_unit,
+            pd.street_address,
+            pd.availability_status
+          FROM business_records br
+          LEFT JOIN property_details pd ON pd.record_id = br.id
+          LEFT JOIN business_profiles bp ON bp.id = br.business_id
+          LEFT JOIN categories c ON c.id = br.category_id
+          LEFT JOIN categories subc ON subc.id = br.subcategory_id
+          WHERE ${where.join(" AND ")}
+          ORDER BY br.created_at DESC
+          LIMIT 100
+        `;
       } else {
-        // vehicle or property
+        // Fallback for any other vertical
         query = `
           SELECT
             br.id,
@@ -651,16 +723,25 @@ export async function PATCH(req: Request) {
           [targetId]
         );
       } else if (action === "edit" && data) {
+        const allowed = [
+          "name", "about", "phone", "email", "city", "district", "state",
+          "country_code", "address", "postal_code", "is_active", "is_featured",
+          "is_verified", "verification_status", "professional_title", "experience_years"
+        ];
         const updates: string[] = ["updated_at = NOW()"];
         const params: any[] = [];
         let idx = 1;
 
         for (const [k, v] of Object.entries(data)) {
-          updates.push(`${k} = $${idx++}`);
-          params.push(v);
+          if (allowed.includes(k) && v !== undefined) {
+            updates.push(`${k} = $${idx++}`);
+            params.push(v);
+          }
         }
-        params.push(targetId);
-        await db.query(`UPDATE ${table} SET ${updates.join(", ")} WHERE id = $${idx}`, params);
+        if (updates.length > 1) {
+          params.push(targetId);
+          await db.query(`UPDATE ${table} SET ${updates.join(", ")} WHERE id = $${idx}`, params);
+        }
       }
     } else if (type === "course") {
       if (action === "toggle_status") {
@@ -668,14 +749,82 @@ export async function PATCH(req: Request) {
           Boolean(isActive),
           targetId,
         ]);
+      } else if (action === "edit" && data) {
+        const updates: string[] = ["updated_at = NOW()"];
+        const params: any[] = [];
+        let idx = 1;
+        const fieldMap: Record<string, string> = {
+          name: "course_name",
+          course_name: "course_name",
+          stream: "stream",
+          category_name: "stream",
+          board_or_university: "board_or_university",
+          subcategory_name: "board_or_university",
+          duration: "duration",
+          price: "price",
+          fee_amount: "fee_amount",
+          eligibility: "eligibility",
+          description: "description",
+          seats_available: "seats_available",
+        };
+        for (const [k, v] of Object.entries(data)) {
+          const col = fieldMap[k];
+          if (col && v !== undefined) {
+            updates.push(`${col} = $${idx++}`);
+            params.push(col === "price" || col === "fee_amount" ? String(v) : v);
+          }
+        }
+        if (data.is_active !== undefined) {
+          updates.push(`is_active = $${idx++}`);
+          params.push(Boolean(data.is_active));
+        }
+        if (updates.length > 1) {
+          params.push(targetId);
+          await db.query(`UPDATE business_courses SET ${updates.join(", ")} WHERE id = $${idx}`, params);
+        }
       }
     } else if (type === "job") {
       if (action === "toggle_status") {
-        const newStatus = isActive ? "published" : "closed";
+        const newStatus = isActive ? "Active" : "Closed";
         await db.query(`UPDATE staff_job_postings SET status = $1, updated_at = NOW() WHERE id = $2`, [
           newStatus,
           targetId,
         ]);
+      } else if (action === "edit" && data) {
+        const updates: string[] = ["updated_at = NOW()"];
+        const params: any[] = [];
+        let idx = 1;
+        const fieldMap: Record<string, string> = {
+          name: "title",
+          title: "title",
+          department: "department",
+          category_name: "department",
+          employment_type: "employment_type",
+          subcategory_name: "employment_type",
+          experience_level: "experience_level",
+          work_mode: "work_mode",
+          location: "location",
+          city: "location",
+          salary_range: "salary_range",
+          price: "salary_range",
+          openings_count: "openings_count",
+          description: "description",
+        };
+        for (const [k, v] of Object.entries(data)) {
+          const col = fieldMap[k];
+          if (col && v !== undefined) {
+            updates.push(`${col} = $${idx++}`);
+            params.push(col === "openings_count" ? Number(v) || 1 : v);
+          }
+        }
+        if (data.is_active !== undefined) {
+          updates.push(`status = $${idx++}`);
+          params.push(data.is_active ? "Active" : "Closed");
+        }
+        if (updates.length > 1) {
+          params.push(targetId);
+          await db.query(`UPDATE staff_job_postings SET ${updates.join(", ")} WHERE id = $${idx}`, params);
+        }
       }
     } else if (type === "products") {
       if (action === "toggle_status") {
@@ -683,6 +832,39 @@ export async function PATCH(req: Request) {
           Boolean(isActive),
           targetId,
         ]);
+      } else if (action === "edit" && data) {
+        const updates: string[] = ["updated_at = NOW()"];
+        const params: any[] = [];
+        let idx = 1;
+        const fieldMap: Record<string, string> = {
+          name: "custom_name",
+          custom_name: "custom_name",
+          description: "custom_description",
+          custom_description: "custom_description",
+          price: "price",
+          currency: "currency",
+          stock: "inventory_count",
+          inventory_count: "inventory_count",
+          unit: "unit",
+        };
+        for (const [k, v] of Object.entries(data)) {
+          const col = fieldMap[k];
+          if (col && v !== undefined) {
+            updates.push(`${col} = $${idx++}`);
+            params.push(col === "price" ? Number(v) || 0 : col === "inventory_count" ? Number(v) || 0 : v);
+          }
+        }
+        if (data.is_active !== undefined) {
+          const act = Boolean(data.is_active);
+          updates.push(`is_available = $${idx++}`);
+          params.push(act);
+          updates.push(`in_stock = $${idx++}`);
+          params.push(act);
+        }
+        if (updates.length > 1) {
+          params.push(targetId);
+          await db.query(`UPDATE business_products SET ${updates.join(", ")} WHERE id = $${idx}`, params);
+        }
       }
     } else if (type === "services") {
       if (action === "toggle_status") {
@@ -690,11 +872,43 @@ export async function PATCH(req: Request) {
           Boolean(isActive),
           targetId,
         ]);
+      } else if (action === "edit" && data) {
+        const updates: string[] = ["updated_at = NOW()"];
+        const params: any[] = [];
+        let idx = 1;
+        const fieldMap: Record<string, string> = {
+          name: "custom_title",
+          custom_title: "custom_title",
+          description: "custom_description",
+          custom_description: "custom_description",
+          price: "price",
+          currency: "currency",
+          duration: "duration_minutes",
+          duration_minutes: "duration_minutes",
+        };
+        for (const [k, v] of Object.entries(data)) {
+          const col = fieldMap[k];
+          if (col && v !== undefined) {
+            updates.push(`${col} = $${idx++}`);
+            params.push(col === "price" ? Number(v) || 0 : col === "duration_minutes" ? Number(v) || 0 : v);
+          }
+        }
+        if (data.is_active !== undefined) {
+          updates.push(`is_active = $${idx++}`);
+          params.push(Boolean(data.is_active));
+        }
+        if (updates.length > 1) {
+          params.push(targetId);
+          await db.query(`UPDATE business_services SET ${updates.join(", ")} WHERE id = $${idx}`, params);
+        }
       }
     } else if (["room", "vehicle", "dish", "event", "property"].includes(type)) {
       if (action === "toggle_status") {
-        await db.query(`UPDATE business_records SET is_active = $1, updated_at = NOW() WHERE id = $2`, [
-          Boolean(isActive),
+        const act = Boolean(isActive);
+        const newStatus = act ? "published" : "draft";
+        await db.query(`UPDATE business_records SET is_active = $1, status = $2, updated_at = NOW() WHERE id = $3`, [
+          act,
+          newStatus,
           targetId,
         ]);
       } else if (action === "feature") {
@@ -702,6 +916,39 @@ export async function PATCH(req: Request) {
           Boolean(isFeatured),
           targetId,
         ]);
+      } else if (action === "edit" && data) {
+        const updates: string[] = ["updated_at = NOW()"];
+        const params: any[] = [];
+        let idx = 1;
+        const fieldMap: Record<string, string> = {
+          name: "title",
+          title: "title",
+          description: "description",
+          price: "price",
+          currency: "currency",
+        };
+        for (const [k, v] of Object.entries(data)) {
+          const col = fieldMap[k];
+          if (col && v !== undefined) {
+            updates.push(`${col} = $${idx++}`);
+            params.push(col === "price" ? Number(v) || 0 : v);
+          }
+        }
+        if (data.is_featured !== undefined) {
+          updates.push(`is_featured = $${idx++}`);
+          params.push(Boolean(data.is_featured));
+        }
+        if (data.is_active !== undefined) {
+          const act = Boolean(data.is_active);
+          updates.push(`is_active = $${idx++}`);
+          params.push(act);
+          updates.push(`status = $${idx++}`);
+          params.push(act ? "published" : "draft");
+        }
+        if (updates.length > 1) {
+          params.push(targetId);
+          await db.query(`UPDATE business_records SET ${updates.join(", ")} WHERE id = $${idx}`, params);
+        }
       }
     }
 

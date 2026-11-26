@@ -1,20 +1,100 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
 import { getFrontendConfig } from "@/lib/config/frontend-config";
+import { extractCleanCity } from "@/lib/utils/seo-slug";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get("q") || searchParams.get("query") || "").trim();
     const type = searchParams.get("type") || "all"; // 'all' | 'business' | 'professional' | 'product' | 'service'
-    const country = searchParams.get("country") || "";
-    const state = searchParams.get("state") || "";
-    const city = searchParams.get("city") || "";
-    const locality = searchParams.get("locality") || "";
-    const postalCode = searchParams.get("postalCode") || searchParams.get("zip") || searchParams.get("pincode") || "";
+    let country = (searchParams.get("country") || "").trim();
+    const state = (searchParams.get("state") || "").trim();
+    let city = (searchParams.get("city") || searchParams.get("location") || "").trim();
+    const locality = (searchParams.get("locality") || "").trim();
+    const postalCode = (searchParams.get("postalCode") || searchParams.get("zip") || searchParams.get("pincode") || "").trim();
+
+    // Country vs City normalization: country names passed in city filter should set country, not city
+    const COUNTRY_CODES: Record<string, string> = {
+      india: "IN",
+      in: "IN",
+      "united states": "US",
+      usa: "US",
+      us: "US",
+      "united kingdom": "GB",
+      uk: "GB",
+      gb: "GB",
+      canada: "CA",
+      ca: "CA",
+      australia: "AU",
+      au: "AU",
+      uae: "AE",
+      "united arab emirates": "AE",
+      ae: "AE",
+      singapore: "SG",
+      sg: "SG",
+      germany: "DE",
+      de: "DE",
+      france: "FR",
+      fr: "FR",
+      "saudi arabia": "SA",
+      sa: "SA",
+      "new zealand": "NZ",
+      nz: "NZ",
+      "south africa": "ZA",
+      "south-africa": "ZA",
+      za: "ZA",
+      rsa: "ZA",
+    };
+
+    const COUNTRY_NAMES: Record<string, string> = {
+      IN: "India",
+      US: "United States",
+      GB: "United Kingdom",
+      CA: "Canada",
+      AU: "Australia",
+      AE: "United Arab Emirates",
+      SG: "Singapore",
+      DE: "Germany",
+      FR: "France",
+      SA: "Saudi Arabia",
+      NZ: "New Zealand",
+      ZA: "South Africa",
+    };
+
+    if (city && COUNTRY_CODES[city.toLowerCase().trim()]) {
+      if (!country) country = COUNTRY_CODES[city.toLowerCase().trim()];
+      city = "";
+    } else if (city) {
+      const cleanCity = extractCleanCity(city);
+      if (cleanCity) {
+        city = cleanCity;
+      } else {
+        // If cleanCity returned empty, city was actually a country or invalid city string
+        const lowerCity = city.toLowerCase().trim();
+        if (COUNTRY_CODES[lowerCity]) {
+          if (!country) country = COUNTRY_CODES[lowerCity];
+        }
+        city = "";
+      }
+    }
     let categoryId = searchParams.get("categoryId") ? Number(searchParams.get("categoryId")) : null;
-    const categoryParam = (searchParams.get("category") || searchParams.get("category_slug") || searchParams.get("categoryName") || "").trim();
-    const subcategoryParam = (searchParams.get("subcategory") || searchParams.get("subcategory_slug") || "").trim();
+    const bizCatParam = searchParams.get("businessCategoryId") || searchParams.get("business_category_id");
+    const businessCategoryId = bizCatParam && /^\d+$/.test(bizCatParam) ? Number(bizCatParam) : null;
+    if (!categoryId && businessCategoryId) {
+      categoryId = businessCategoryId;
+    }
+    let categoryParam = (searchParams.get("category") || searchParams.get("category_slug") || searchParams.get("categoryName") || "").trim();
+    let subcategoryParam = (searchParams.get("subcategory") || searchParams.get("subcategory_slug") || "").trim();
+
+    // If categoryParam or subcategoryParam is "all" or starts with "all-", reset them to return unfiltered vertical records
+    if (categoryParam.toLowerCase().startsWith("all-") || categoryParam.toLowerCase() === "all" || categoryParam.toLowerCase().startsWith("all_")) {
+      categoryParam = "";
+      categoryId = null;
+    }
+    if (subcategoryParam.toLowerCase().startsWith("all-") || subcategoryParam.toLowerCase() === "all" || subcategoryParam.toLowerCase().startsWith("all_")) {
+      subcategoryParam = "";
+    }
 
     if (!categoryId && (subcategoryParam || categoryParam)) {
       try {
@@ -86,10 +166,14 @@ export async function GET(req: NextRequest) {
     let services: any[] = [];
     let courses: any[] = [];
     let jobs: any[] = [];
+    let properties: any[] = [];
+    let vehicles: any[] = [];
+    let events: any[] = [];
 
     // Resolve Category Family & Linked Businesses if categoryId is provided
     let categoryIds: number[] = categoryId ? [categoryId] : [];
     let matchingBusinessIds: number[] = [];
+    let resolvedCategoryName: string = categoryParam || "";
 
     if (categoryId) {
       try {
@@ -118,6 +202,17 @@ export async function GET(req: NextRequest) {
           );
 
           categoryIds = Array.from(new Set(relatedCats.rows.map((r: any) => Number(r.id))));
+
+          if (cat.name) {
+            resolvedCategoryName = cat.name;
+            const mrRes = await db.query(
+              `SELECT id FROM master_records WHERE name ILIKE $1 OR $2 ILIKE ('%' || name || '%')`,
+              [cat.name, cat.name]
+            );
+            for (const mr of mrRes.rows) {
+              categoryIds.push(Number(mr.id));
+            }
+          }
         }
 
         const bizLinkRes = await db.query(
@@ -184,9 +279,9 @@ export async function GET(req: NextRequest) {
         bParams.push(categoryIds);
         if (matchingBusinessIds.length > 0) {
           bParams.push(matchingBusinessIds);
-          bConditions.push(`(bp.category_id = ANY($${bParams.length - 1}::int[]) OR bp.subcategory_id = ANY($${bParams.length - 1}::int[]) OR bp.id = ANY($${bParams.length}::int[]))`);
+          bConditions.push(`(bp.category_id = ANY($${bParams.length - 1}::int[]) OR bp.subcategory_id = ANY($${bParams.length - 1}::int[]) OR (bp.subcategory_ids IS NOT NULL AND bp.subcategory_ids && $${bParams.length - 1}::int[]) OR bp.id = ANY($${bParams.length}::int[]))`);
         } else {
-          bConditions.push(`(bp.category_id = ANY($${bParams.length}::int[]) OR bp.subcategory_id = ANY($${bParams.length}::int[]))`);
+          bConditions.push(`(bp.category_id = ANY($${bParams.length}::int[]) OR bp.subcategory_id = ANY($${bParams.length}::int[]) OR (bp.subcategory_ids IS NOT NULL AND bp.subcategory_ids && $${bParams.length}::int[]))`);
         }
       }
 
@@ -210,6 +305,10 @@ export async function GET(req: NextRequest) {
           bp.established_year,
           bp.logo_url,
           bp.banner_url,
+          bp.banner_url AS cover_url,
+          bp.gallery_images,
+          bp.subcategory_id,
+          bp.subcategory_ids,
           bp.latitude,
           bp.longitude,
           bp.is_verified,
@@ -454,7 +553,18 @@ export async function GET(req: NextRequest) {
       }
       if (country && country.toUpperCase() !== "ALL") {
         prodParams.push(country.toUpperCase());
-        prodConditions.push(`($${prodParams.length} = ANY(COALESCE(mp.countries, '{"IN", "US"}')))`);
+        prodConditions.push(`(
+          $${prodParams.length} = ANY(COALESCE(mp.countries, '{"IN", "US"}'))
+          OR mp.business_profile_id IN (
+            SELECT bp.id FROM business_profiles bp
+            WHERE bp.country_code = $${prodParams.length} OR ($${prodParams.length} = 'IN' AND bp.country_code IS NULL)
+          )
+          OR mp.id IN (
+            SELECT bprod.master_product_id FROM business_products bprod
+            JOIN business_profiles bp ON (bp.id = bprod.business_profile_id OR bp.id = bprod.business_id)
+            WHERE bp.country_code = $${prodParams.length} OR ($${prodParams.length} = 'IN' AND bp.country_code IS NULL)
+          )
+        )`);
       }
       if (categoryIds.length > 0) {
         prodParams.push(categoryIds);
@@ -581,7 +691,23 @@ export async function GET(req: NextRequest) {
       }
       if (country && country.toUpperCase() !== "ALL") {
         sParams.push(country.toUpperCase());
-        sConditions.push(`($${sParams.length} = ANY(COALESCE(ms.countries, '{"IN", "US"}')))`);
+        sConditions.push(`(
+          $${sParams.length} = ANY(COALESCE(ms.countries, '{"IN", "US"}'))
+          OR ms.business_profile_id IN (
+            SELECT bp.id FROM business_profiles bp
+            WHERE bp.country_code = $${sParams.length} OR ($${sParams.length} = 'IN' AND bp.country_code IS NULL)
+          )
+          OR ms.id IN (
+            SELECT bserv.master_service_id FROM business_services bserv
+            JOIN business_profiles bp ON bp.id = bserv.business_id
+            WHERE bp.country_code = $${sParams.length} OR ($${sParams.length} = 'IN' AND bp.country_code IS NULL)
+          )
+          OR ms.id IN (
+            SELECT ps.master_service_id FROM professional_services ps
+            JOIN professional_profiles pp ON pp.id = ps.professional_id
+            WHERE pp.country_code = $${sParams.length} OR ($${sParams.length} = 'IN' AND pp.country_code IS NULL)
+          )
+        )`);
       }
       if (categoryIds.length > 0) {
         sParams.push(categoryIds);
@@ -832,7 +958,53 @@ export async function GET(req: NextRequest) {
           console.warn("Could not query institution_programs in discovery:", ipErr);
         }
 
-        courses = [...masterCoursesRows, ...instCoursesRows];
+        let bizCoursesRows: any[] = [];
+        try {
+          const bcConditions: string[] = ["COALESCE(bc.is_active, true) = true"];
+          const bcParams: any[] = [];
+          if (likeQ) {
+            bcParams.push(likeQ);
+            bcConditions.push(`(
+              bc.course_name ILIKE $${bcParams.length}
+              OR COALESCE(bc.stream, '') ILIKE $${bcParams.length}
+              OR COALESCE(bc.description, '') ILIKE $${bcParams.length}
+            )`);
+          }
+          if (uniqueCityTokens.length > 0) {
+            bcParams.push(uniqueCityTokens);
+            bcConditions.push(`(
+              bp.city ILIKE ANY($${bcParams.length}::text[])
+              OR bp.address ILIKE ANY($${bcParams.length}::text[])
+            )`);
+          }
+          const bcRes = await db.query(`
+            SELECT
+              bc.id,
+              bc.course_name AS name,
+              NULL AS slug,
+              NULL AS code,
+              bc.description,
+              bc.duration AS duration_value,
+              NULL AS duration_unit,
+              NULL AS thumbnail_url,
+              NULL AS icon_url,
+              COALESCE(bp.name, ip.name, 'Institution') AS university_name,
+              'institution' AS authority_type,
+              COALESCE(bc.stream, 'Academic & Competitive Program') AS category_name,
+              COALESCE(bc.seats_available, 60) AS seats_available
+            FROM business_courses bc
+            LEFT JOIN institution_profiles ip ON ip.id = bc.institution_id
+            LEFT JOIN business_profiles bp ON bp.institution_profile_id = bc.institution_id
+            WHERE ${bcConditions.join(" AND ")}
+            ORDER BY bc.id DESC
+            LIMIT $${bcParams.length + 1} OFFSET $${bcParams.length + 2}
+          `, [...bcParams, limit, offset]);
+          bizCoursesRows = bcRes.rows.map((r) => ({ ...r, resultType: "course" }));
+        } catch (bcErr) {
+          console.warn("Could not query business_courses in discovery:", bcErr);
+        }
+
+        courses = [...masterCoursesRows, ...instCoursesRows, ...bizCoursesRows];
       }
     }
 
@@ -898,7 +1070,35 @@ export async function GET(req: NextRequest) {
               OR COALESCE(mj.description, '') ILIKE $${mjParams.length}
             )`);
           }
-          if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
+          if (country && country.toUpperCase() !== "ALL") {
+            const cUpper = country.toUpperCase();
+            const cName = COUNTRY_NAMES[cUpper] || (cUpper === "ZA" ? "South Africa" : cUpper === "IN" ? "India" : "");
+            if (cUpper === "IN") {
+              mjConditions.push(`(
+                mj.location ILIKE '%India%'
+                OR mj.location ILIKE '%Varanasi%'
+                OR mj.location ILIKE '%Delhi%'
+                OR mj.location ILIKE '%Bangalore%'
+                OR mj.location ILIKE '%Kota%'
+                OR mj.location ILIKE '%Remote%'
+              )`);
+            } else if (cUpper === "ZA") {
+              mjConditions.push(`(
+                mj.location ILIKE '%South Africa%'
+                OR mj.location ILIKE '%ZA%'
+                OR mj.location ILIKE '%Cape Town%'
+                OR mj.location ILIKE '%Johannesburg%'
+                OR mj.location ILIKE '%Sandton%'
+              )`);
+            } else if (cName) {
+              mjParams.push(`%${cName}%`);
+              mjConditions.push(`mj.location ILIKE $${mjParams.length}`);
+            }
+          }
+          if (uniqueCityTokens.length > 0) {
+            mjParams.push(uniqueCityTokens);
+            mjConditions.push(`mj.location ILIKE ANY($${mjParams.length}::text[])`);
+          } else if (city && city.toLowerCase() !== "all locations" && city.toLowerCase() !== "all") {
             mjParams.push(`%${city}%`);
             mjConditions.push(`mj.location ILIKE $${mjParams.length}`);
           }
@@ -925,6 +1125,8 @@ export async function GET(req: NextRequest) {
               mj.description,
               'Active' AS status,
               mj.created_at,
+              bc.id AS business_id,
+              bc.slug AS business_slug,
               bc.name AS company_name,
               NULL AS company_logo
             FROM master_jobs mj
@@ -949,6 +1151,33 @@ export async function GET(req: NextRequest) {
             OR COALESCE(sjp.department, '') ILIKE $${jParams.length}
             OR COALESCE(sjp.location, '') ILIKE $${jParams.length}
           )`);
+        }
+
+        if (country && country.toUpperCase() !== "ALL") {
+          const cUpper = country.toUpperCase();
+          const cName = COUNTRY_NAMES[cUpper] || (cUpper === "ZA" ? "South Africa" : cUpper === "IN" ? "India" : "");
+          if (cUpper === "IN") {
+            jConditions.push(`(
+              sjp.location ILIKE '%India%'
+              OR sjp.location ILIKE '%Varanasi%'
+              OR sjp.location ILIKE '%Remote%'
+              OR sjp.location ILIKE '%Delhi%'
+              OR sjp.location ILIKE '%Kota%'
+              OR sjp.location IS NULL
+              OR sjp.location = ''
+            )`);
+          } else if (cUpper === "ZA") {
+            jConditions.push(`(
+              sjp.location ILIKE '%South Africa%'
+              OR sjp.location ILIKE '%Cape Town%'
+              OR sjp.location ILIKE '%Johannesburg%'
+              OR sjp.location ILIKE '%Sandton%'
+              OR sjp.location ILIKE '%ZA%'
+            )`);
+          } else if (cName) {
+            jParams.push(`%${cName}%`);
+            jConditions.push(`sjp.location ILIKE $${jParams.length}`);
+          }
         }
 
         if (uniqueCityTokens.length > 0) {
@@ -987,10 +1216,18 @@ export async function GET(req: NextRequest) {
             sjp.description,
             sjp.status,
             sjp.created_at,
+            sjp.institution_id,
+            ip.slug AS institution_slug,
+            bp.id AS business_id,
+            bp.slug AS business_slug,
             ip.name AS company_name,
             ip.logo_url AS company_logo
           FROM staff_job_postings sjp
           LEFT JOIN institution_profiles ip ON ip.id = sjp.institution_id
+          LEFT JOIN business_profiles bp ON (
+            bp.institution_profile_id = sjp.institution_id
+            OR (bp.institution_profile_id IS NULL AND bp.id = sjp.institution_id)
+          )
           WHERE ${jConditions.join(" AND ")}
           ORDER BY sjp.id DESC
           LIMIT $${jParams.length + 1} OFFSET $${jParams.length + 2}
@@ -1001,7 +1238,363 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const total = businesses.length + professionals.length + products.length + services.length + courses.length + jobs.length;
+    // 7. Search Properties
+    if (type === "all" || type === "property" || type === "properties") {
+      try {
+        const pConditions: string[] = [
+          "br.vertical_code = 'properties'",
+          "(br.is_deleted IS NULL OR br.is_deleted = FALSE)",
+          "(br.is_active = TRUE OR br.is_active IS NULL)"
+        ];
+        const pParams: any[] = [];
+
+        if (scopedBusinessId) {
+          pParams.push(scopedBusinessId);
+          pConditions.push(`br.business_id = $${pParams.length}`);
+        }
+
+        if (likeQ) {
+          pParams.push(likeQ);
+          pConditions.push(`(
+            br.title ILIKE $${pParams.length}
+            OR COALESCE(br.description, '') ILIKE $${pParams.length}
+            OR COALESCE(pd.street_address, '') ILIKE $${pParams.length}
+            OR COALESCE(pd.city, '') ILIKE $${pParams.length}
+            OR COALESCE(bp.name, '') ILIKE $${pParams.length}
+          )`);
+        }
+
+        if (country && country.toUpperCase() !== "ALL") {
+          pParams.push(country.toUpperCase());
+          pConditions.push(`(bp.country_code = $${pParams.length} OR ($${pParams.length} = 'IN' AND bp.country_code IS NULL))`);
+        }
+
+        if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
+          const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
+          const words = catSearch.split(/[^a-z0-9]+/);
+          const isMainRealEstate = catSearch.includes("real-estate-and-construction") || catSearch.includes("real estate & construction");
+          const isComm = !isMainRealEstate && (words.includes("commercial") || words.includes("showroom") || words.includes("office"));
+          const isRes = !isMainRealEstate && (words.includes("residential") || words.includes("apartment") || words.includes("apartments") || words.includes("flat") || words.includes("flats") || words.includes("villa") || words.includes("villas"));
+          const isPlot = !isMainRealEstate && (words.includes("plot") || words.includes("plots") || words.includes("land") || words.includes("lands"));
+          const isInd = !isMainRealEstate && (words.includes("industrial") || words.includes("warehouse") || words.includes("warehousing"));
+
+          if (isComm) {
+            pConditions.push(`(br.category_id = 50 OR br.title ILIKE '%commercial%' OR br.title ILIKE '%retail%' OR br.title ILIKE '%showroom%' OR br.title ILIKE '%office%' OR br.title ILIKE '%suite%')`);
+          } else if (isRes) {
+            pConditions.push(`(br.category_id = 49 OR br.title ILIKE '%apartment%' OR br.title ILIKE '%flat%' OR br.title ILIKE '%villa%' OR br.title ILIKE '%penthouse%' OR br.title ILIKE '%haveli%')`);
+          } else if (isPlot) {
+            pConditions.push(`(br.category_id = 51 OR br.title ILIKE '%plot%' OR br.title ILIKE '%land%')`);
+          } else if (isInd) {
+            pConditions.push(`(br.category_id = 52 OR br.title ILIKE '%industrial%' OR br.title ILIKE '%warehouse%')`);
+          } else if (categoryIds.length > 0) {
+            pParams.push(categoryIds);
+            pConditions.push(`(
+              br.category_id = ANY($${pParams.length}::int[]) 
+              OR br.subcategory_id = ANY($${pParams.length}::int[])
+              OR (br.business_id IS NOT NULL AND br.business_id IN (
+                SELECT id FROM business_profiles 
+                WHERE category_id = ANY($${pParams.length}::int[]) 
+                   OR subcategory_id = ANY($${pParams.length}::int[])
+                   OR (subcategory_ids IS NOT NULL AND subcategory_ids && $${pParams.length}::int[])
+              ))
+            )`);
+          }
+        }
+
+        if (uniqueCityTokens.length > 0) {
+          pParams.push(uniqueCityTokens);
+          pConditions.push(`(
+            pd.city ILIKE ANY($${pParams.length}::text[])
+            OR bp.city ILIKE ANY($${pParams.length}::text[])
+            OR COALESCE(pd.street_address, '') ILIKE ANY($${pParams.length}::text[])
+          )`);
+        }
+
+        const pQuery = `
+          SELECT
+            br.id,
+            br.title AS name,
+            br.title,
+            br.slug,
+            br.description,
+            COALESCE(pd.rental_amount, br.price) AS price,
+            br.currency,
+            br.featured_image AS default_image_url,
+            br.featured_image AS image_url,
+            br.is_active,
+            br.is_featured,
+            br.created_at,
+            bp.id AS business_id,
+            bp.name AS business_name,
+            bp.slug AS business_slug,
+            COALESCE(pd.city, bp.city, 'Varanasi') AS city,
+            COALESCE(pd.state, bp.state, 'Uttar Pradesh') AS state,
+            COALESCE(pd.street_address, bp.address) AS address,
+            COALESCE(bp.phone, '+91 94152 20303') AS phone,
+            bp.whatsapp,
+            bp.email,
+            c.name AS category_name,
+            subc.name AS subcategory_name,
+            pd.bedrooms,
+            pd.bathrooms,
+            pd.built_up_area,
+            pd.area_unit,
+            pd.rental_amount,
+            pd.availability_status
+          FROM business_records br
+          LEFT JOIN property_details pd ON pd.record_id = br.id
+          LEFT JOIN business_profiles bp ON bp.id = br.business_id
+          LEFT JOIN master_records c ON c.id = br.category_id
+          LEFT JOIN master_records subc ON subc.id = br.subcategory_id
+          WHERE ${pConditions.join(" AND ")}
+          ORDER BY br.id DESC
+          LIMIT $${pParams.length + 1} OFFSET $${pParams.length + 2}
+        `;
+        const pRes = await db.query(pQuery, [...pParams, limit, offset]);
+        properties = pRes.rows.map((r) => ({ ...r, resultType: "property" }));
+      } catch (pErr) {
+        console.warn("Could not query properties in discovery:", pErr);
+      }
+    }
+
+    // 8. Search Vehicles
+    if (type === "all" || type === "vehicle" || type === "vehicles") {
+      try {
+        const vConditions: string[] = [
+          "br.vertical_code = 'vehicles'",
+          "(br.is_deleted IS NULL OR br.is_deleted = FALSE)",
+          "(br.is_active = TRUE OR br.is_active IS NULL)"
+        ];
+        const vParams: any[] = [];
+
+        if (scopedBusinessId) {
+          vParams.push(scopedBusinessId);
+          vConditions.push(`br.business_id = $${vParams.length}`);
+        }
+
+        if (likeQ) {
+          vParams.push(likeQ);
+          vConditions.push(`(
+            br.title ILIKE $${vParams.length}
+            OR COALESCE(br.description, '') ILIKE $${vParams.length}
+            OR COALESCE(vd.location, '') ILIKE $${vParams.length}
+            OR COALESCE(bp.name, '') ILIKE $${vParams.length}
+          )`);
+        }
+
+        if (country && country.toUpperCase() !== "ALL") {
+          vParams.push(country.toUpperCase());
+          vConditions.push(`(bp.country_code = $${vParams.length} OR ($${vParams.length} = 'IN' AND bp.country_code IS NULL))`);
+        }
+
+        if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
+          const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
+          const words = catSearch.split(/[^a-z0-9]+/);
+          const isMainAuto = catSearch.includes("automotive-and-transport") || catSearch.includes("automotive & transport");
+          const isPass = !isMainAuto && (words.includes("passenger") || words.includes("car") || words.includes("cars") || words.includes("suv") || words.includes("sedan"));
+          const isComm = !isMainAuto && (words.includes("commercial") || words.includes("truck") || words.includes("trucks") || words.includes("bus") || words.includes("buses") || words.includes("van") || words.includes("pickup"));
+          const isBike = !isMainAuto && (words.includes("bike") || words.includes("bikes") || words.includes("motorcycle") || words.includes("motorcycles") || words.includes("scooter") || words.includes("scooters") || words.includes("two-wheeler"));
+          const isLux = !isMainAuto && (words.includes("luxury") || words.includes("exotic"));
+
+          if (isPass) {
+            vConditions.push(`(br.category_id IN (2, 4) OR br.title ILIKE '%scorpio%' OR br.title ILIKE '%thar%' OR br.title ILIKE '%xuv%' OR br.title ILIKE '%fortuner%' OR br.title ILIKE '%creta%' OR br.title ILIKE '%seltos%' OR br.title ILIKE '%city%' OR br.title ILIKE '%safari%' OR br.title ILIKE '%nexon%' OR br.title ILIKE '%vitara%')`);
+          } else if (isComm) {
+            vConditions.push(`(br.category_id = 6 OR br.title ILIKE '%innova%' OR br.title ILIKE '%truck%' OR br.title ILIKE '%bus%' OR br.title ILIKE '%transport%')`);
+          } else if (isBike) {
+            vConditions.push(`(br.category_id = 5 OR br.title ILIKE '%classic 350%' OR br.title ILIKE '%hunter%' OR br.title ILIKE '%ola%' OR br.title ILIKE '%ather%' OR br.title ILIKE '%enfield%' OR br.title ILIKE '%scooter%')`);
+          } else if (isLux) {
+            vConditions.push(`(br.category_id = 4 OR br.title ILIKE '%luxury%' OR br.title ILIKE '%exotic%' OR br.title ILIKE '%fortuner%' OR br.title ILIKE '%safari%')`);
+          } else if (categoryIds.length > 0) {
+            vParams.push(categoryIds);
+            vConditions.push(`(
+              br.category_id = ANY($${vParams.length}::int[]) 
+              OR br.subcategory_id = ANY($${vParams.length}::int[])
+              OR (br.business_id IS NOT NULL AND br.business_id IN (
+                SELECT id FROM business_profiles 
+                WHERE category_id = ANY($${vParams.length}::int[]) 
+                   OR subcategory_id = ANY($${vParams.length}::int[])
+                   OR (subcategory_ids IS NOT NULL AND subcategory_ids && $${vParams.length}::int[])
+              ))
+            )`);
+          }
+        }
+
+        if (uniqueCityTokens.length > 0) {
+          vParams.push(uniqueCityTokens);
+          vConditions.push(`(
+            bp.city ILIKE ANY($${vParams.length}::text[])
+            OR COALESCE(vd.location, '') ILIKE ANY($${vParams.length}::text[])
+          )`);
+        }
+
+        const vQuery = `
+          SELECT
+            br.id,
+            br.title AS name,
+            br.title,
+            br.slug,
+            br.description,
+            br.price,
+            br.currency,
+            br.featured_image AS default_image_url,
+            br.featured_image AS image_url,
+            br.is_active,
+            br.is_featured,
+            br.created_at,
+            bp.id AS business_id,
+            bp.name AS business_name,
+            bp.slug AS business_slug,
+            COALESCE(bp.city, vd.location, 'Varanasi') AS city,
+            COALESCE(bp.state, 'Uttar Pradesh') AS state,
+            COALESCE(vd.location, bp.address) AS address,
+            COALESCE(vd.contact_info, bp.phone, '+91 94152 20302') AS phone,
+            bp.whatsapp,
+            bp.email,
+            c.name AS category_name,
+            subc.name AS subcategory_name,
+            vd.manufacturing_year,
+            vd.color,
+            vd.mileage,
+            vd.kilometers_driven,
+            vd.engine_capacity,
+            vd.registration_number
+          FROM business_records br
+          LEFT JOIN vehicle_details vd ON vd.record_id = br.id
+          LEFT JOIN business_profiles bp ON bp.id = br.business_id
+          LEFT JOIN master_records c ON c.id = br.category_id
+          LEFT JOIN master_records subc ON subc.id = br.subcategory_id
+          WHERE ${vConditions.join(" AND ")}
+          ORDER BY br.id DESC
+          LIMIT $${vParams.length + 1} OFFSET $${vParams.length + 2}
+        `;
+        const vRes = await db.query(vQuery, [...vParams, limit, offset]);
+        vehicles = vRes.rows.map((r) => ({ ...r, resultType: "vehicle" }));
+      } catch (vErr) {
+        console.warn("Could not query vehicles in discovery:", vErr);
+      }
+    }
+
+    // 9. Search Events
+    if (type === "all" || type === "event" || type === "events") {
+      try {
+        const eConditions: string[] = [
+          "br.vertical_code = 'events'",
+          "(br.is_deleted IS NULL OR br.is_deleted = FALSE)",
+          "(br.is_active = TRUE OR br.is_active IS NULL)"
+        ];
+        const eParams: any[] = [];
+
+        if (scopedBusinessId) {
+          eParams.push(scopedBusinessId);
+          eConditions.push(`br.business_id = $${eParams.length}`);
+        }
+
+        if (likeQ) {
+          eParams.push(likeQ);
+          eConditions.push(`(
+            br.title ILIKE $${eParams.length}
+            OR COALESCE(br.description, '') ILIKE $${eParams.length}
+            OR COALESCE(e.venue_name, '') ILIKE $${eParams.length}
+            OR COALESCE(e.city, '') ILIKE $${eParams.length}
+            OR COALESCE(bp.name, '') ILIKE $${eParams.length}
+          )`);
+        }
+
+        if (country && country.toUpperCase() !== "ALL") {
+          eParams.push(country.toUpperCase());
+          eConditions.push(`(bp.country_code = $${eParams.length} OR ($${eParams.length} = 'IN' AND bp.country_code IS NULL))`);
+        }
+
+        if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
+          const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
+          const words = catSearch.split(/[^a-z0-9]+/);
+          const isMainHosp = catSearch.includes("hospitality-and-events") || catSearch.includes("hospitality & events");
+          const isCorp = !isMainHosp && (words.includes("corporate") || words.includes("business") || words.includes("industry"));
+          const isWed = !isMainHosp && (words.includes("wedding") || words.includes("social") || words.includes("gala") || words.includes("celebration"));
+          const isEnt = !isMainHosp && (words.includes("entertainment") || words.includes("cultural") || words.includes("music") || words.includes("concert") || words.includes("show"));
+          const isSports = !isMainHosp && (words.includes("sports") || words.includes("fitness") || words.includes("tournament") || words.includes("marathon"));
+
+          if (isCorp) {
+            eConditions.push(`(br.category_id = 350 OR br.title ILIKE '%tech%' OR br.title ILIKE '%summit%' OR br.title ILIKE '%conclave%' OR br.title ILIKE '%expo%' OR br.title ILIKE '%agritech%' OR br.title ILIKE '%handloom%')`);
+          } else if (isWed) {
+            eConditions.push(`(br.category_id = 352 OR br.title ILIKE '%wedding%' OR br.title ILIKE '%deepawali%' OR br.title ILIKE '%gala%' OR br.title ILIKE '%celebration%' OR br.title ILIKE '%fashion%')`);
+          } else if (isEnt) {
+            eConditions.push(`(br.category_id = 351 OR br.title ILIKE '%mahotsav%' OR br.title ILIKE '%music%' OR br.title ILIKE '%litfest%' OR br.title ILIKE '%food%' OR br.title ILIKE '%carnival%' OR br.title ILIKE '%dhrupad%')`);
+          } else if (isSports) {
+            eConditions.push(`(br.category_id = 354 OR br.title ILIKE '%marathon%' OR br.title ILIKE '%sports%' OR br.title ILIKE '%cricket%' OR br.title ILIKE '%run%')`);
+          } else if (categoryIds.length > 0) {
+            eParams.push(categoryIds);
+            eConditions.push(`(
+              br.category_id = ANY($${eParams.length}::int[]) 
+              OR br.subcategory_id = ANY($${eParams.length}::int[])
+              OR (br.business_id IS NOT NULL AND br.business_id IN (
+                SELECT id FROM business_profiles 
+                WHERE category_id = ANY($${eParams.length}::int[]) 
+                   OR subcategory_id = ANY($${eParams.length}::int[])
+                   OR (subcategory_ids IS NOT NULL AND subcategory_ids && $${eParams.length}::int[])
+              ))
+            )`);
+          }
+        }
+
+        if (uniqueCityTokens.length > 0) {
+          eParams.push(uniqueCityTokens);
+          eConditions.push(`(
+            e.city ILIKE ANY($${eParams.length}::text[])
+            OR bp.city ILIKE ANY($${eParams.length}::text[])
+            OR COALESCE(e.complete_address, '') ILIKE ANY($${eParams.length}::text[])
+          )`);
+        }
+
+        const eQuery = `
+          SELECT
+            br.id,
+            br.title AS name,
+            br.title,
+            br.slug,
+            br.description,
+            br.price,
+            br.currency,
+            br.featured_image AS default_image_url,
+            br.featured_image AS image_url,
+            br.is_active,
+            br.is_featured,
+            br.created_at,
+            bp.id AS business_id,
+            bp.name AS business_name,
+            bp.slug AS business_slug,
+            COALESCE(e.city, bp.city, 'Varanasi') AS city,
+            COALESCE(e.state, bp.state, 'Uttar Pradesh') AS state,
+            COALESCE(e.venue_name, e.complete_address, bp.address) AS address,
+            COALESCE(bp.phone, '+91 94152 20304') AS phone,
+            bp.whatsapp,
+            bp.email,
+            c.name AS category_name,
+            subc.name AS subcategory_name,
+            e.venue_name,
+            e.start_date,
+            e.end_date,
+            e.start_time,
+            e.end_time,
+            e.is_free,
+            e.organizer_name
+          FROM business_records br
+          LEFT JOIN events e ON e.record_id = br.id
+          LEFT JOIN business_profiles bp ON bp.id = br.business_id
+          LEFT JOIN master_records c ON c.id = br.category_id
+          LEFT JOIN master_records subc ON subc.id = br.subcategory_id
+          WHERE ${eConditions.join(" AND ")}
+          ORDER BY br.id DESC
+          LIMIT $${eParams.length + 1} OFFSET $${eParams.length + 2}
+        `;
+        const eRes = await db.query(eQuery, [...eParams, limit, offset]);
+        events = eRes.rows.map((r) => ({ ...r, resultType: "event" }));
+      } catch (eErr) {
+        console.warn("Could not query events in discovery:", eErr);
+      }
+    }
+
+    const total = businesses.length + professionals.length + products.length + services.length + courses.length + jobs.length + properties.length + vehicles.length + events.length;
 
     return NextResponse.json({
       success: true,
@@ -1012,6 +1605,9 @@ export async function GET(req: NextRequest) {
         services,
         courses,
         jobs,
+        properties,
+        vehicles,
+        events,
         meta: {
           total,
           page,

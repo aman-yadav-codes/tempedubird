@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,9 @@ import {
   SlidersHorizontal,
   CheckCircle2,
   Users,
+  LayoutGrid,
+  List,
+  ArrowRight,
   X,
   ExternalLink,
   Calendar,
@@ -58,12 +61,16 @@ import {
   ShoppingCart,
   Plus,
   Minus,
+  Car,
+  Home,
+  BedDouble,
 } from "lucide-react";
 import { useAuthStore, useCartStore } from "@/store";
 import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { buildBusinessSeoUrl, buildProfessionalSeoUrl, buildCourseSeoUrl, buildJobSeoUrl, buildDiscoverySeoUrl, slugify } from "@/lib/utils/seo-slug";
+import { buildBusinessSeoUrl, buildProfessionalSeoUrl, buildCourseSeoUrl, buildJobSeoUrl, buildDiscoverySeoUrl, slugify, extractCleanCity, formatCategorySlug } from "@/lib/utils/seo-slug";
+import { getCatalogCountryMeta } from "@/lib/config/country-config";
 import { OrderCheckoutDialog, CheckoutItem } from "@/components/checkout/order-checkout-dialog";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { CartFloatingButton } from "@/components/checkout/cart-floating-button";
@@ -73,7 +80,7 @@ import { CompactServiceCard } from "@/components/shared/compact-service-card";
 
 interface DiscoveryItem {
   id: number;
-  resultType: "business" | "professional" | "product" | "service" | "course" | "job";
+  resultType: "business" | "professional" | "product" | "service" | "course" | "job" | "property" | "vehicle" | "event";
   name: string;
   title?: string;
   brand?: string | null;
@@ -131,11 +138,166 @@ interface DiscoveryItem {
   openings_count?: number;
   company_name?: string;
   company_logo?: string;
+  // Property specific
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  built_up_area?: number | string | null;
+  area_unit?: string | null;
+  rental_amount?: number | null;
+  availability_status?: string | null;
+  // Vehicle specific
+  manufacturing_year?: number | null;
+  color?: string | null;
+  mileage?: string | null;
+  kilometers_driven?: number | null;
+  registration_number?: string | null;
+  // Event specific
+  venue_name?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  is_free?: boolean | null;
+  organizer_name?: string | null;
+  business_name?: string | null;
+  business_slug?: string | null;
+  business_id?: number | string | null;
+  institution_id?: number | string | null;
+  institution_profile_id?: number | string | null;
+  institution_slug?: string | null;
+  institution_name?: string | null;
+  image_url?: string | null;
+  fee?: number | string | null;
+  annual_fee?: number | string | null;
+  sale_price?: number | string | null;
+  discounted_price?: number | string | null;
+  [key: string]: any;
 }
+
+export const BUSINESS_CATEGORY_VERTICALS: Record<string, Array<{ type: string; label: string }>> = {
+  "retail-and-shopping": [
+    { type: "business", label: "Businesses" },
+    { type: "product", label: "Products" },
+    { type: "service", label: "Services" },
+    { type: "event", label: "Events" },
+    { type: "professional", label: "Professionals" },
+    { type: "job", label: "Jobs" },
+  ],
+  "real-estate-and-construction": [
+    { type: "business", label: "Businesses" },
+    { type: "property", label: "Properties" },
+    { type: "product", label: "Products" },
+    { type: "professional", label: "Professionals" },
+    { type: "course", label: "Courses" },
+    { type: "event", label: "Events" },
+    { type: "job", label: "Jobs" },
+  ],
+  "automotive-and-transport": [
+    { type: "business", label: "Businesses" },
+    { type: "vehicle", label: "Vehicles" },
+    { type: "product", label: "Products" },
+    { type: "service", label: "Services" },
+    { type: "professional", label: "Professionals" },
+    { type: "event", label: "Events" },
+    { type: "job", label: "Jobs" },
+  ],
+  "education-and-coaching": [
+    { type: "business", label: "Businesses" },
+    { type: "course", label: "Courses" },
+    { type: "professional", label: "Professionals" },
+    { type: "event", label: "Events" },
+    { type: "product", label: "Products" },
+    { type: "job", label: "Jobs" },
+  ],
+  "hospitality-and-events": [
+    { type: "business", label: "Businesses" },
+    { type: "event", label: "Events" },
+    { type: "service", label: "Services" },
+    { type: "professional", label: "Professionals" },
+    { type: "course", label: "Courses" },
+    { type: "job", label: "Jobs" },
+  ],
+  "healthcare-and-medical": [
+    { type: "business", label: "Businesses" },
+    { type: "professional", label: "Professionals" },
+    { type: "product", label: "Products" },
+    { type: "service", label: "Services" },
+    { type: "event", label: "Events" },
+    { type: "course", label: "Courses" },
+    { type: "job", label: "Jobs" },
+  ],
+  "it-and-digital-agencies": [
+    { type: "business", label: "Businesses" },
+    { type: "service", label: "Services" },
+    { type: "product", label: "Products" },
+    { type: "course", label: "Courses" },
+    { type: "professional", label: "Professionals" },
+    { type: "event", label: "Events" },
+    { type: "job", label: "Jobs" },
+  ],
+  "professional-and-financial-services": [
+    { type: "business", label: "Businesses" },
+    { type: "service", label: "Financial Services" },
+    { type: "professional", label: "Professionals" },
+    { type: "course", label: "Courses" },
+    { type: "product", label: "Products" },
+    { type: "event", label: "Events" },
+    { type: "job", label: "Jobs" },
+  ],
+  "food-dining-and-cafes": [
+    { type: "business", label: "Businesses" },
+    { type: "product", label: "Products" },
+    { type: "service", label: "Services" },
+    { type: "event", label: "Events" },
+    { type: "professional", label: "Professionals" },
+    { type: "course", label: "Courses" },
+    { type: "job", label: "Jobs" },
+  ],
+  "home-services-and-maintenance": [
+    { type: "business", label: "Businesses" },
+    { type: "service", label: "Services" },
+    { type: "product", label: "Products" },
+    { type: "professional", label: "Professionals" },
+    { type: "course", label: "Courses" },
+    { type: "event", label: "Events" },
+    { type: "job", label: "Jobs" },
+  ],
+  "fitness-and-sports": [
+    { type: "business", label: "Businesses" },
+    { type: "course", label: "Courses" },
+    { type: "product", label: "Products" },
+    { type: "service", label: "Services" },
+    { type: "professional", label: "Professionals" },
+    { type: "event", label: "Events" },
+    { type: "job", label: "Jobs" },
+  ],
+  "salons-and-personal-care": [
+    { type: "business", label: "Businesses" },
+    { type: "service", label: "Services" },
+    { type: "product", label: "Products" },
+    { type: "professional", label: "Professionals" },
+    { type: "course", label: "Courses" },
+    { type: "event", label: "Events" },
+    { type: "job", label: "Jobs" },
+  ],
+};
+
+export const DEFAULT_ALL_VERTICALS = [
+  { type: "business", label: "Businesses" },
+  { type: "product", label: "Products" },
+  { type: "job", label: "Jobs" },
+  { type: "course", label: "Courses" },
+  { type: "property", label: "Properties" },
+  { type: "vehicle", label: "Vehicles" },
+  { type: "event", label: "Events" },
+  { type: "professional", label: "Professionals" },
+  { type: "service", label: "Services" },
+];
 
 export interface CustomerExplorePageProps {
   initialType?: string;
   initialCategory?: string;
+  initialCategoryName?: string;
   initialSubcategory?: string;
   initialCity?: string;
   initialQuery?: string;
@@ -144,39 +306,46 @@ export interface CustomerExplorePageProps {
 function CustomerExplorePageContent({
   initialType,
   initialCategory,
+  initialCategoryName,
   initialSubcategory,
   initialCity,
   initialQuery,
 }: CustomerExplorePageProps = {}) {
   const { user, accessToken } = useAuthStore();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlQ = searchParams?.get("q") || searchParams?.get("query") || searchParams?.get("search") || initialQuery || "";
   const rawType = (searchParams?.get("type") as any) || initialType || "all";
-  const urlType = ["all", "business", "service", "product", "professional", "course", "job"].includes(rawType) ? rawType : "all";
+  const urlType = ["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event"].includes(rawType) ? rawType : "all";
   const urlCountry = searchParams?.get("country") || "";
   const urlCity = searchParams?.get("city") || searchParams?.get("location") || initialCity || "";
-  const urlCategoryParam = searchParams?.get("category") || searchParams?.get("category_slug") || initialCategory || "";
+  const rawCatParam = searchParams?.get("category") || searchParams?.get("category_slug") || initialCategory || "";
+  const isAllCat = rawCatParam.toLowerCase().startsWith("all-") || rawCatParam.toLowerCase() === "all";
+  const urlCategoryParam = isAllCat ? "" : rawCatParam;
   const urlSubcategoryParam = searchParams?.get("subcategory") || searchParams?.get("subcategory_slug") || initialSubcategory || "";
-  const urlCategory = searchParams?.get("categoryId") ? Number(searchParams.get("categoryId")) : null;
-  const urlCategoryName = searchParams?.get("categoryName") || "";
+  const urlCategory = isAllCat ? null : (searchParams?.get("categoryId") ? Number(searchParams.get("categoryId")) : null);
+  const urlCategoryName = isAllCat ? "" : (searchParams?.get("categoryName") || initialCategoryName || formatCategorySlug(urlCategoryParam) || "");
 
   const urlBiz = searchParams?.get("businessId") || searchParams?.get("business_id");
   const activeBusinessId = urlBiz && /^\d+$/.test(urlBiz.trim()) ? Number(urlBiz.trim()) : null;
 
+  const urlBizCatParam = searchParams?.get("businessCategoryId") || searchParams?.get("business_category_id");
+  const urlBizCat = urlBizCatParam && /^\d+$/.test(urlBizCatParam.trim()) ? Number(urlBizCatParam.trim()) : null;
+
   const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
 
   const [query, setQuery] = useState(urlQ);
-  const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job">(urlType);
+  const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job" | "property" | "vehicle" | "event">(urlType);
   const [country, setCountry] = useState<string>(urlCountry);
   const [city, setCity] = useState<string>(
-    urlCity || (userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : "")
+    extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || ""
   );
   const [locality, setLocality] = useState<string>("");
   const [postalCode, setPostalCode] = useState<string>("");
 
   // Cascading Category & Subcategory states
-  const [businessCategories, setBusinessCategories] = useState<Array<{ id: number; name: string }>>([]);
-  const [selectedBusinessCategoryId, setSelectedBusinessCategoryId] = useState<number | null>(null);
+  const [businessCategories, setBusinessCategories] = useState<Array<{ id: number; name: string; slug?: string }>>([]);
+  const [selectedBusinessCategoryId, setSelectedBusinessCategoryId] = useState<number | null>(urlBizCat);
   const [categories, setCategories] = useState<Array<{ id: number; name: string; slug?: string; parent_id?: number | null; business_category_id?: number | null }>>([]);
   const [subcategories, setSubcategories] = useState<Array<{ id: number; name: string; slug?: string }>>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(urlCategory);
@@ -185,13 +354,15 @@ function CustomerExplorePageContent({
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number | null>(null);
   const [selectedSubcategoryName, setSelectedSubcategoryName] = useState<string>("");
   const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState<string>(urlSubcategoryParam);
-  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingCategories, setLoadingCategories] = useState(true);
   const [loadingSubcategories, setLoadingSubcategories] = useState(false);
 
   // New filters matching FindMy search layout
   const [radius, setRadius] = useState<string>("no_radius");
   const [minRating, setMinRating] = useState<number>(0);
   const [verifiedOnly, setVerifiedOnly] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [showAllSidebarCategories, setShowAllSidebarCategories] = useState<boolean>(false);
 
   // Helper to keep browser URL in sync using ONLY clean structured URLs
   const syncUrlParams = useCallback(
@@ -247,16 +418,18 @@ function CustomerExplorePageContent({
               if (cat.parent_name) setSelectedCategoryName(cat.parent_name);
             } else {
               setSelectedCategoryId(Number(cat.id));
-              setSelectedCategoryName(cat.name || urlCategoryParam);
+              setSelectedCategoryName(cat.name || formatCategorySlug(urlCategoryParam) || urlCategoryParam);
               setSelectedCategorySlug(cat.slug || urlCategoryParam);
             }
           } else {
-            setSelectedCategoryName(urlCategoryParam);
+            const formatted = formatCategorySlug(urlCategoryParam) || urlCategoryParam;
+            setSelectedCategoryName(formatted);
             setSelectedCategorySlug(urlCategoryParam);
           }
         })
         .catch(() => {
-          setSelectedCategoryName(urlCategoryParam);
+          const formatted = formatCategorySlug(urlCategoryParam) || urlCategoryParam;
+          setSelectedCategoryName(formatted);
           setSelectedCategorySlug(urlCategoryParam);
         });
     } else if (urlCategory) {
@@ -302,27 +475,73 @@ function CustomerExplorePageContent({
         .catch(() => { });
     }
 
-    if (urlType && ["all", "business", "service", "product", "professional", "course", "job"].includes(urlType)) {
-      setActiveType(urlType);
+    const effectiveType = (urlType && urlType !== "all") ? urlType : (initialType || urlType || "all");
+    if (["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event"].includes(effectiveType)) {
+      setActiveType(effectiveType as any);
     }
-    if (urlCity) {
-      setCity(urlCity);
-    } else if (userGlobalLocation && userGlobalLocation !== "All Locations") {
-      setCity(userGlobalLocation);
-    } else if (userGlobalLocation === "All Locations") {
-      setCity("");
+    if (urlBizCat) {
+      setSelectedBusinessCategoryId(urlBizCat);
     }
+    if (!urlCategoryParam && !urlCategory) {
+      setSelectedCategoryId(null);
+      setSelectedCategoryName("");
+      setSelectedCategorySlug("");
+      setSelectedSubcategoryId(null);
+      setSelectedSubcategoryName("");
+      setSelectedSubcategorySlug("");
+    }
+    const resolvedCity = extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || "";
+    setCity(resolvedCity);
     if (urlCountry) setCountry(urlCountry);
-  }, [urlQ, urlType, urlCity, urlCountry, urlCategory, urlCategoryParam, urlSubcategoryParam, urlCategoryName, userGlobalLocation]);
+  }, [urlQ, urlType, initialType, urlCity, urlCountry, urlCategory, urlCategoryParam, urlSubcategoryParam, urlCategoryName, urlBizCat, userGlobalLocation]);
+
+  // Sync with global header location / country change events (e.g. Pin button in header)
+  useEffect(() => {
+    const handleLocationChange = (e: any) => {
+      const newLoc = e?.detail?.location;
+      const newCountry = e?.detail?.countryCode;
+      if (newLoc) {
+        if (newLoc === "All Locations" || newLoc === "all") {
+          setCity("");
+          syncUrlParams({ city: "" });
+        } else {
+          const clean = extractCleanCity(newLoc) || newLoc;
+          setCity(clean);
+          syncUrlParams({ city: clean });
+        }
+      }
+      if (newCountry) {
+        setCountry(newCountry);
+      }
+    };
+
+    const handleCountryChange = (e: any) => {
+      const newCountry = e?.detail?.countryCode;
+      if (newCountry) {
+        setCountry(newCountry);
+      }
+    };
+
+    window.addEventListener("edubird-location-change", handleLocationChange);
+    window.addEventListener("edubird-country-change", handleCountryChange);
+
+    return () => {
+      window.removeEventListener("edubird-location-change", handleLocationChange);
+      window.removeEventListener("edubird-country-change", handleCountryChange);
+    };
+  }, [syncUrlParams]);
 
   // Results
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [businesses, setBusinesses] = useState<DiscoveryItem[]>([]);
   const [professionals, setProfessionals] = useState<DiscoveryItem[]>([]);
   const [products, setProducts] = useState<DiscoveryItem[]>([]);
   const [services, setServices] = useState<DiscoveryItem[]>([]);
   const [courses, setCourses] = useState<DiscoveryItem[]>([]);
   const [jobs, setJobs] = useState<DiscoveryItem[]>([]);
+  const [properties, setProperties] = useState<DiscoveryItem[]>([]);
+  const [vehicles, setVehicles] = useState<DiscoveryItem[]>([]);
+  const [events, setEvents] = useState<DiscoveryItem[]>([]);
 
   // Filter: Sort By, Keyword Search, Brand
   const [sortBy, setSortBy] = useState<string>("featured");
@@ -348,7 +567,7 @@ function CustomerExplorePageContent({
     return () => { ignore = true; };
   }, []);
 
-  // Load categories dynamically based on selected Type
+  // Load categories dynamically based on selected Type and Main Business Type
   useEffect(() => {
     let ignore = false;
     async function loadTypeCategories() {
@@ -356,7 +575,8 @@ function CustomerExplorePageContent({
       try {
         const typeParam = activeType === "all" ? "" : `type=${activeType}&`;
         const bizParam = activeBusinessId ? `businessId=${activeBusinessId}&` : "";
-        const res = await fetch(`/api/public/categories?${typeParam}${bizParam}onlyRoot=true&limit=300`);
+        const bizCatParam = selectedBusinessCategoryId ? `businessCategoryId=${selectedBusinessCategoryId}&` : "";
+        const res = await fetch(`/api/public/categories?${typeParam}${bizParam}${bizCatParam}onlyRoot=true&limit=300`);
         const json = await res.json();
         if (!ignore && json?.data) {
           setCategories(json.data);
@@ -369,7 +589,7 @@ function CustomerExplorePageContent({
     }
     loadTypeCategories();
     return () => { ignore = true; };
-  }, [activeType, activeBusinessId]);
+  }, [activeType, activeBusinessId, selectedBusinessCategoryId]);
 
   // Load Main Business Categories
   useEffect(() => {
@@ -383,10 +603,129 @@ function CustomerExplorePageContent({
       .catch(() => { });
   }, []);
 
+  const displayCategories = useMemo(() => {
+    return businessCategories.length > 0 ? businessCategories : categories;
+  }, [businessCategories, categories]);
+
   const filteredCategories = useMemo(() => {
-    if (!selectedBusinessCategoryId) return categories;
-    return categories.filter((c) => c.business_category_id === selectedBusinessCategoryId);
-  }, [categories, selectedBusinessCategoryId]);
+    if (!selectedBusinessCategoryId) return displayCategories;
+    return displayCategories.filter((c) => c.business_category_id === selectedBusinessCategoryId || c.id === selectedBusinessCategoryId);
+  }, [displayCategories, selectedBusinessCategoryId]);
+
+  // Active business category slug for vertical context
+  const activeBusinessCategoryKey = useMemo(() => {
+    if (selectedBusinessCategoryId) {
+      const bc = businessCategories.find((b) => b.id === selectedBusinessCategoryId);
+      if (bc?.slug) return bc.slug.toLowerCase().trim();
+    }
+    if (selectedCategoryId) {
+      const bc = businessCategories.find((b) => b.id === selectedCategoryId);
+      if (bc?.slug) return bc.slug.toLowerCase().trim();
+      const cat = categories.find((c) => c.id === selectedCategoryId);
+      if (cat?.business_category_id) {
+        const parentBc = businessCategories.find((b) => b.id === cat.business_category_id);
+        if (parentBc?.slug) return parentBc.slug.toLowerCase().trim();
+      }
+    }
+    const raw = (selectedCategorySlug || urlCategoryParam || selectedCategoryName || "").toLowerCase().trim();
+    for (const key of Object.keys(BUSINESS_CATEGORY_VERTICALS)) {
+      if (raw.startsWith(key) || raw.includes(key)) {
+        return key;
+      }
+    }
+    const nameSlug = slugify(selectedCategoryName || "");
+    for (const key of Object.keys(BUSINESS_CATEGORY_VERTICALS)) {
+      if (nameSlug.startsWith(key) || nameSlug.includes(key)) {
+        return key;
+      }
+    }
+    return "";
+  }, [selectedBusinessCategoryId, selectedCategoryId, businessCategories, categories, selectedCategorySlug, urlCategoryParam, selectedCategoryName]);
+
+  const allowedVerticals = useMemo(() => {
+    if (activeBusinessCategoryKey && BUSINESS_CATEGORY_VERTICALS[activeBusinessCategoryKey]) {
+      return BUSINESS_CATEGORY_VERTICALS[activeBusinessCategoryKey];
+    }
+    return DEFAULT_ALL_VERTICALS;
+  }, [activeBusinessCategoryKey]);
+
+  // Fallback activeType if current vertical is not valid for selected business category
+  useEffect(() => {
+    if (allowedVerticals.length > 0 && activeType !== "all") {
+      const exists = allowedVerticals.some((v) => v.type === activeType);
+      if (!exists) {
+        const fallback = allowedVerticals[0].type as any;
+        setActiveType(fallback);
+        syncUrlParams({ type: fallback });
+      }
+    }
+  }, [allowedVerticals, activeType, syncUrlParams]);
+
+  const effectiveBusinessCategoryId = useMemo(() => {
+    if (selectedBusinessCategoryId) return selectedBusinessCategoryId;
+    if (selectedCategoryId) {
+      const isRootBiz = businessCategories.some((bc) => bc.id === selectedCategoryId);
+      if (isRootBiz) return selectedCategoryId;
+      const cat = categories.find((c) => c.id === selectedCategoryId);
+      if (cat?.business_category_id) return cat.business_category_id;
+      if (cat?.parent_id) {
+        const isParentBiz = businessCategories.some((bc) => bc.id === cat.parent_id);
+        if (isParentBiz) return cat.parent_id;
+      }
+    }
+    if (activeBusinessCategoryKey) {
+      const found = businessCategories.find((bc) => bc.slug === activeBusinessCategoryKey);
+      if (found) return found.id;
+    }
+    return null;
+  }, [selectedBusinessCategoryId, selectedCategoryId, businessCategories, categories, activeBusinessCategoryKey]);
+
+  const [typeCategories, setTypeCategories] = useState<Array<{ id: number; name: string; slug?: string; parent_id?: number | null }>>([]);
+  const [loadingTypeCategories, setLoadingTypeCategories] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadTypeCategoriesForActiveVertical() {
+      setLoadingTypeCategories(true);
+      try {
+        const bizCatId = effectiveBusinessCategoryId;
+        let url = "";
+
+        if (activeType === "business" && bizCatId) {
+          url = `/api/public/categories?parentId=${bizCatId}&limit=300`;
+        } else if (activeType === "business") {
+          url = `/api/public/categories?type=business&onlyRoot=true&limit=300`;
+        } else if (bizCatId) {
+          url = `/api/public/categories?type=${activeType}&businessCategoryId=${bizCatId}&limit=300`;
+        } else {
+          url = `/api/public/categories?type=${activeType}&limit=300`;
+        }
+
+        const res = await fetch(url);
+        const json = await res.json();
+        let list = Array.isArray(json?.data) ? json.data : [];
+
+        if (list.length === 0 && activeType !== "business" && bizCatId) {
+          const fallbackRes = await fetch(`/api/public/categories?type=${activeType}&limit=300`);
+          const fallbackJson = await fallbackRes.json();
+          if (Array.isArray(fallbackJson?.data) && fallbackJson.data.length > 0) {
+            list = fallbackJson.data;
+          }
+        }
+
+        if (!ignore) {
+          setTypeCategories(list);
+        }
+      } catch (err) {
+        console.error("Failed to load categories for active vertical:", err);
+      } finally {
+        if (!ignore) setLoadingTypeCategories(false);
+      }
+    }
+
+    loadTypeCategoriesForActiveVertical();
+    return () => { ignore = true; };
+  }, [activeType, effectiveBusinessCategoryId]);
 
   // Load subcategories dynamically based on selected Category
   useEffect(() => {
@@ -600,13 +939,118 @@ function CustomerExplorePageContent({
     return list;
   }, [jobs, productNameSearch, sortBy]);
 
-  const totalFilteredCount =
-    filteredBusinesses.length +
-    filteredProfessionals.length +
-    filteredProducts.length +
-    filteredServices.length +
-    filteredCourses.length +
-    filteredJobs.length;
+  const filteredProperties = useMemo(() => {
+    let list = [...properties];
+    if (productNameSearch.trim()) {
+      const q = productNameSearch.toLowerCase().trim();
+      list = list.filter(
+        (p) =>
+          (p.name || p.title || "").toLowerCase().includes(q) ||
+          (p.description || "").toLowerCase().includes(q) ||
+          (p.city || "").toLowerCase().includes(q) ||
+          (p.business_name || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [properties, productNameSearch, sortBy]);
+
+  const filteredVehicles = useMemo(() => {
+    let list = [...vehicles];
+    if (productNameSearch.trim()) {
+      const q = productNameSearch.toLowerCase().trim();
+      list = list.filter(
+        (v) =>
+          (v.name || v.title || "").toLowerCase().includes(q) ||
+          (v.description || "").toLowerCase().includes(q) ||
+          (v.city || "").toLowerCase().includes(q) ||
+          (v.business_name || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [vehicles, productNameSearch, sortBy]);
+
+  const filteredEvents = useMemo(() => {
+    let list = [...events];
+    if (productNameSearch.trim()) {
+      const q = productNameSearch.toLowerCase().trim();
+      list = list.filter(
+        (e) =>
+          (e.name || e.title || "").toLowerCase().includes(q) ||
+          (e.description || "").toLowerCase().includes(q) ||
+          (e.venue_name || "").toLowerCase().includes(q) ||
+          (e.city || "").toLowerCase().includes(q) ||
+          (e.business_name || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => (a.name || a.title || "").localeCompare(b.name || b.title || ""));
+    } else if (sortBy === "name_desc") {
+      list.sort((a, b) => (b.name || b.title || "").localeCompare(a.name || a.title || ""));
+    } else if (sortBy === "newest") {
+      list.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    }
+    return list;
+  }, [events, productNameSearch, sortBy]);
+
+  const totalFilteredCount = useMemo(() => {
+    switch (activeType) {
+      case "business":
+        return filteredBusinesses.length;
+      case "professional":
+        return filteredProfessionals.length;
+      case "product":
+        return filteredProducts.length;
+      case "service":
+        return filteredServices.length;
+      case "course":
+        return filteredCourses.length;
+      case "job":
+        return filteredJobs.length;
+      case "property":
+        return filteredProperties.length;
+      case "vehicle":
+        return filteredVehicles.length;
+      case "event":
+        return filteredEvents.length;
+      default:
+        return (
+          filteredBusinesses.length +
+          filteredProfessionals.length +
+          filteredProducts.length +
+          filteredServices.length +
+          filteredCourses.length +
+          filteredJobs.length +
+          filteredProperties.length +
+          filteredVehicles.length +
+          filteredEvents.length
+        );
+    }
+  }, [
+    activeType,
+    filteredBusinesses.length,
+    filteredProfessionals.length,
+    filteredProducts.length,
+    filteredServices.length,
+    filteredCourses.length,
+    filteredJobs.length,
+    filteredProperties.length,
+    filteredVehicles.length,
+    filteredEvents.length,
+  ]);
 
   // Favorites set
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -737,6 +1181,7 @@ function CustomerExplorePageContent({
       if (city.trim()) params.set("city", city.trim());
       if (locality.trim()) params.set("locality", locality.trim());
       if (postalCode.trim()) params.set("postalCode", postalCode.trim());
+      if (selectedBusinessCategoryId) params.set("businessCategoryId", String(selectedBusinessCategoryId));
 
       const effectiveCatId = selectedSubcategoryId || selectedCategoryId;
       if (effectiveCatId) params.set("categoryId", String(effectiveCatId));
@@ -755,6 +1200,9 @@ function CustomerExplorePageContent({
         setServices(data.data.services || []);
         setCourses(data.data.courses || []);
         setJobs(data.data.jobs || []);
+        setProperties(data.data.properties || []);
+        setVehicles(data.data.vehicles || []);
+        setEvents(data.data.events || []);
       }
     } catch (err) {
       console.error(err);
@@ -762,7 +1210,7 @@ function CustomerExplorePageContent({
     } finally {
       setLoading(false);
     }
-  }, [activeBusinessId, query, activeType, country, city, locality, postalCode, selectedCategoryId, selectedSubcategoryId, selectedCategorySlug, selectedCategoryName, selectedSubcategorySlug, selectedSubcategoryName]);
+  }, [activeBusinessId, query, activeType, country, city, locality, postalCode, selectedBusinessCategoryId, selectedCategoryId, selectedSubcategoryId, selectedCategorySlug, selectedCategoryName, selectedSubcategorySlug, selectedSubcategoryName]);
 
   useEffect(() => {
     performSearch();
@@ -815,6 +1263,22 @@ function CustomerExplorePageContent({
 
     setSubmittingEnquiry(true);
     try {
+      const resolvedBusinessId =
+        enquiryModalItem.resultType === "business"
+          ? enquiryModalItem.id
+          : enquiryModalItem.business_id ||
+            enquiryModalItem.businessId ||
+            enquiryModalItem.institution_id ||
+            enquiryModalItem.institution_profile_id ||
+            undefined;
+
+      const resolvedProfessionalId =
+        enquiryModalItem.resultType === "professional"
+          ? enquiryModalItem.id
+          : enquiryModalItem.professional_id ||
+            enquiryModalItem.professionalId ||
+            undefined;
+
       const res = await fetch("/api/customer/enquiries", {
         method: "POST",
         headers: {
@@ -822,8 +1286,13 @@ function CustomerExplorePageContent({
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
-          businessId: enquiryModalItem.resultType === "business" ? enquiryModalItem.id : undefined,
-          professionalId: enquiryModalItem.resultType === "professional" ? enquiryModalItem.id : undefined,
+          businessId: resolvedBusinessId,
+          professionalId: resolvedProfessionalId,
+          productId: enquiryModalItem.resultType === "product" ? enquiryModalItem.id : enquiryModalItem.product_id || (enquiryModalItem as any).productId || undefined,
+          serviceId: enquiryModalItem.resultType === "service" ? enquiryModalItem.id : enquiryModalItem.service_id || (enquiryModalItem as any).serviceId || undefined,
+          courseId: enquiryModalItem.resultType === "course" || (enquiryModalItem as any).courseId ? ((enquiryModalItem as any).courseId || enquiryModalItem.id) : undefined,
+          itemTitle: enquiryModalItem.title || enquiryModalItem.name,
+          sourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
           customerName: enquiryForm.name || user?.full_name || "Customer",
           customerEmail: enquiryForm.email || user?.email,
           customerPhone: enquiryForm.phone || user?.phone,
@@ -928,178 +1397,278 @@ function CustomerExplorePageContent({
   const formatLocationAreaAndCity = (loc?: string | null) => {
     if (!loc || loc === "All Locations" || loc === "all") return "";
     let trimmed = loc.trim();
+    if (trimmed.includes("-") && !trimmed.includes(" ")) {
+      trimmed = trimmed
+        .split("-")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" ");
+    }
     if (trimmed.toLowerCase().includes("pandeypur") && !trimmed.toLowerCase().includes("varanasi")) {
       return `${trimmed}, Varanasi`;
     }
     return trimmed;
   };
+
+  const displayLocationText = useMemo(() => {
+    if (city) return formatLocationAreaAndCity(city);
+    if (userGlobalLocation && userGlobalLocation !== "All Locations" && userGlobalLocation !== "all") {
+      return formatLocationAreaAndCity(userGlobalLocation);
+    }
+    if (country && country.toUpperCase() !== "ALL") {
+      const cm = getCatalogCountryMeta(country);
+      if (cm?.name) return cm.name;
+    }
+    return "All Locations";
+  }, [city, userGlobalLocation, country]);
+
   const effectiveFullLocation = formatLocationAreaAndCity(
-    userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : city
+    city ||
+    (userGlobalLocation && userGlobalLocation !== "All Locations" ? userGlobalLocation : "") ||
+    (country && country.toUpperCase() !== "ALL" ? getCatalogCountryMeta(country)?.name : "") ||
+    ""
   );
 
+  const getVerticalLabel = (t: string) => {
+    switch (t) {
+      case "business": return "Businesses";
+      case "service": return "Services";
+      case "product": return "Products";
+      case "professional": return "Professionals";
+      case "course": return "Courses";
+      case "job": return "Jobs";
+      case "property": return "Properties";
+      case "vehicle": return "Vehicles";
+      case "event": return "Events";
+      default: return "Explore";
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-white text-slate-900 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
-      {/* 1. Breadcrumbs */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
-        <Link href="/" className="hover:text-slate-900 transition-colors">Home</Link>
-        <ChevronRight className="size-3 text-slate-400" />
-        <button
-          type="button"
-          onClick={() => {
-            setActiveType("all");
-            setSelectedBusinessCategoryId(null);
-            setSelectedCategoryId(null);
-            setSelectedCategoryName("");
-            setSelectedCategorySlug("");
-            setSelectedSubcategoryId(null);
-            setSelectedSubcategoryName("");
-            setSelectedSubcategorySlug("");
-            syncUrlParams({ type: "all", category: null, subcategory: null });
-          }}
-          className="hover:text-slate-900 transition-colors capitalize cursor-pointer font-medium"
-        >
-          {activeType === "all" ? "Explore" : activeType === "business" ? "Businesses" : activeType === "service" ? "Services" : activeType === "product" ? "Products" : activeType === "professional" ? "Professionals" : activeType === "course" ? "Courses" : "Jobs"}
-        </button>
-        {effectiveFullLocation && (
-          <>
-            <ChevronRight className="size-3 text-slate-400" />
-            <span className="text-slate-700 font-medium">{effectiveFullLocation}</span>
-          </>
-        )}
-        {(selectedCategoryName || selectedSubcategoryName) && (
-          <>
-            <ChevronRight className="size-3 text-slate-400" />
-            <span className="text-amber-600 font-bold">{selectedSubcategoryName || selectedCategoryName}</span>
-          </>
-        )}
-      </nav>
-
-      {/* 2. Hero Headline Title & Subtitle */}
-      <div className="space-y-1.5 pt-1">
-        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
-          {selectedSubcategoryName || selectedCategoryName || (activeType === "all" ? "Businesses & Services" : activeType.charAt(0).toUpperCase() + activeType.slice(1))}
-          {effectiveFullLocation ? ` in ${effectiveFullLocation}` : ""}
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-500 max-w-3xl">
-          Explore {selectedSubcategoryName || selectedCategoryName || "verified"} {activeType === "all" ? "businesses, services, and opportunities" : `${activeType}s`} in {effectiveFullLocation || "your area"}.
-        </p>
-      </div>
-
-      {/* 3. Floating Filter Bar */}
-      <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-2.5 flex flex-wrap items-center gap-2.5">
-        {/* Keyword Search Input with Sparkle & Search Button */}
-        <div className="relative flex-1 min-w-[220px]">
-          <Sparkles className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-amber-500" />
-          <input
-            type="text"
-            placeholder="Search all listings, products, services..."
-            value={productNameSearch}
-            onChange={(e) => setProductNameSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                syncUrlParams({ q: productNameSearch });
-                performSearch();
-              }
-            }}
-            className="w-full h-11 pl-10 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors"
+    <div className="min-h-screen bg-slate-50/50 text-slate-900 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
+      {/* 1. Hero Section with Panoramic Skyline & Floating Search Bar */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-sky-100/90 via-sky-50 to-blue-100/70 border border-sky-200/70 p-6 sm:p-10 shadow-xs">
+        {/* Right scenic overlay */}
+        <div className="absolute right-0 top-0 bottom-0 w-2/5 opacity-25 pointer-events-none overflow-hidden hidden md:block">
+          <div className="absolute inset-0 bg-gradient-to-r from-sky-50 via-transparent to-transparent z-10" />
+          <img
+            src="/images/hero-books.jpg"
+            alt="Scenic Skyline"
+            className="w-full h-full object-cover object-right"
           />
+        </div>
+
+        <div className="relative z-10 max-w-2xl space-y-2">
+          {/* Breadcrumbs */}
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap">
+            <Link href="/" className="hover:text-blue-600 transition-colors">Home</Link>
+            <ChevronRight className="size-3 text-slate-400" />
+            <button
+              type="button"
+              onClick={() => {
+                setActiveType("all");
+                setSelectedBusinessCategoryId(null);
+                setSelectedCategoryId(null);
+                setSelectedCategoryName("");
+                setSelectedCategorySlug("");
+                setSelectedSubcategoryId(null);
+                setSelectedSubcategoryName("");
+                setSelectedSubcategorySlug("");
+                syncUrlParams({ type: "all", category: null, subcategory: null });
+              }}
+              className="hover:text-blue-600 transition-colors capitalize font-medium cursor-pointer"
+            >
+              {getVerticalLabel(activeType)}
+            </button>
+            {effectiveFullLocation && (
+              <>
+                <ChevronRight className="size-3 text-slate-400" />
+                <span className="text-slate-700 font-medium">{effectiveFullLocation}</span>
+              </>
+            )}
+            {(selectedCategoryName || selectedSubcategoryName) && (
+              <>
+                <ChevronRight className="size-3 text-slate-400" />
+                <span className="text-blue-600 font-bold">{selectedSubcategoryName || selectedCategoryName}</span>
+              </>
+            )}
+          </nav>
+
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+            {selectedSubcategoryName || selectedCategoryName || getVerticalLabel(activeType)}
+            {effectiveFullLocation ? ` in ${effectiveFullLocation}` : ""}
+          </h1>
+          <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+            Find trusted {activeType === "professional" ? "professionals and experts" : activeType === "product" ? "products and stores" : activeType === "job" ? "jobs and opportunities" : activeType === "course" ? "courses and coaching" : "businesses and services"}{effectiveFullLocation ? ` in ${effectiveFullLocation}` : ""}.
+          </p>
+        </div>
+
+        {/* Floating Search Bar */}
+        <div className="relative z-10 mt-6 bg-white rounded-2xl shadow-md border border-slate-200/90 p-2 flex flex-col sm:flex-row items-center gap-2">
+          {/* Keyword Search Input */}
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder={`Search ${activeType === "professional" ? "professionals, services or skills..." : activeType === "product" ? "products, brands or stores..." : activeType === "job" ? "jobs, roles or companies..." : activeType === "course" ? "courses, subjects or institutes..." : "all listings, products, services..."}`}
+              value={productNameSearch}
+              onChange={(e) => setProductNameSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  syncUrlParams({ q: productNameSearch });
+                  performSearch();
+                }
+              }}
+              className="w-full h-11 pl-10 pr-4 bg-transparent text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none font-medium"
+            />
+          </div>
+
+          {/* Location Selector */}
+          <div className="flex items-center gap-2 h-11 px-3 bg-slate-50 border border-slate-200/80 rounded-xl w-full sm:w-auto shrink-0">
+            <MapPin className="size-4 text-blue-600 shrink-0" />
+            <select
+              value={city}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCity(val);
+                syncUrlParams({ city: val });
+              }}
+              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-5"
+            >
+              <option value="">All Locations</option>
+              {availableLocations.map((loc) => (
+                <option key={loc.id} value={loc.name}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-4" />
+          </div>
+
+          {/* Blue Search Button */}
           <button
             type="button"
             onClick={() => {
               syncUrlParams({ q: productNameSearch });
               performSearch();
             }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 size-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
-            title="Search"
+            className="h-11 px-6 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs shrink-0 w-full sm:w-auto cursor-pointer"
           >
-            <Search className="size-3.5" />
+            <Search className="size-4" />
+            <span>Search</span>
           </button>
-        </div>
-
-        {/* Location Dropdown Pill */}
-        <div className="flex items-center gap-1.5 h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-800 cursor-pointer hover:border-slate-300">
-          <MapPin className="size-3.5 text-amber-500 shrink-0" />
-          <select
-            value={city}
-            onChange={(e) => {
-              const val = e.target.value;
-              setCity(val);
-              syncUrlParams({ city: val });
-            }}
-            className="bg-transparent text-xs sm:text-sm font-medium text-slate-900 focus:outline-none cursor-pointer pr-3 appearance-none"
-          >
-            <option value="" className="bg-white text-slate-900">All Locations</option>
-            {availableLocations.map((loc) => (
-              <option key={loc.id} value={loc.name} className="bg-white text-slate-900">
-                {loc.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
-        </div>
-
-        {/* Radius Pill */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 hidden md:inline">Radius</span>
-          <div className="flex items-center gap-1 h-11 px-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800">
-            <select
-              value={radius}
-              onChange={(e) => setRadius(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer appearance-none pr-3"
-            >
-              <option value="no_radius" className="bg-white">No radius</option>
-              <option value="5" className="bg-white">5 km</option>
-              <option value="10" className="bg-white">10 km</option>
-              <option value="25" className="bg-white">25 km</option>
-              <option value="50" className="bg-white">50 km</option>
-            </select>
-            <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
-          </div>
-        </div>
-
-        {/* Rating Pill */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 hidden md:inline">Rating</span>
-          <div className="flex items-center gap-1 h-11 px-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800">
-            <select
-              value={minRating}
-              onChange={(e) => setMinRating(Number(e.target.value))}
-              className="bg-transparent text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer appearance-none pr-3"
-            >
-              <option value="0" className="bg-white">All</option>
-              <option value="4.5" className="bg-white">4.5+ ★</option>
-              <option value="4.0" className="bg-white">4.0+ ★</option>
-              <option value="3.5" className="bg-white">3.5+ ★</option>
-            </select>
-            <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
-          </div>
-        </div>
-
-        {/* Sort Pill */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 hidden md:inline">Sort</span>
-          <div className="flex items-center gap-1 h-11 px-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-slate-900 focus:outline-none cursor-pointer appearance-none pr-3"
-            >
-              <option value="featured" className="bg-white">Name / Featured</option>
-              <option value="name_asc" className="bg-white">Name (A-Z)</option>
-              <option value="name_desc" className="bg-white">Name (Z-A)</option>
-              <option value="rating_desc" className="bg-white">Highest Rated</option>
-              <option value="newest" className="bg-white">Newest</option>
-              <option value="price_asc" className="bg-white">Price: Low to High</option>
-              <option value="price_desc" className="bg-white">Price: High to Low</option>
-            </select>
-            <ChevronDown className="size-3 text-slate-400 pointer-events-none" />
-          </div>
         </div>
       </div>
 
-      {/* 4. Results Count Label */}
-      <div className="text-xs sm:text-sm font-semibold text-slate-500 pl-1">
-        {totalFilteredCount} matching {activeType === "business" ? "businesses" : activeType === "service" ? "services" : activeType === "product" ? "products" : activeType === "course" ? "courses" : activeType === "job" ? "jobs" : "listings"}
+      {/* 2. Filter Pills Row */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        {/* All Categories Blue Pill */}
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedCategoryId(null);
+            setSelectedCategoryName("");
+            setSelectedCategorySlug("");
+            setSelectedSubcategoryId(null);
+            syncUrlParams({ category: null, subcategory: null });
+          }}
+          className="h-9 px-4 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+        >
+          <LayoutGrid className="size-3.5" />
+          <span>{selectedCategoryName || "All Categories"}</span>
+          <ChevronDown className="size-3 text-white/80" />
+        </button>
+
+        {/* Radius Pill */}
+        <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
+          <span className="text-slate-400 font-normal">Radius</span>
+          <select
+            value={radius}
+            onChange={(e) => setRadius(e.target.value)}
+            className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
+          >
+            <option value="no_radius">No radius</option>
+            <option value="5">5 km</option>
+            <option value="10">10 km</option>
+            <option value="25">25 km</option>
+            <option value="50">50 km</option>
+          </select>
+          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
+        </div>
+
+        {/* Rating Pill */}
+        <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
+          <span className="text-slate-400 font-normal">Rating</span>
+          <select
+            value={minRating}
+            onChange={(e) => setMinRating(Number(e.target.value))}
+            className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
+          >
+            <option value="0">All</option>
+            <option value="4.5">4.5+ ★</option>
+            <option value="4.0">4.0+ ★</option>
+            <option value="3.5">3.5+ ★</option>
+          </select>
+          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
+        </div>
+
+        {/* Sort Pill */}
+        <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
+          >
+            <option value="featured">Sort: Name / Featured</option>
+            <option value="name_asc">Name (A-Z)</option>
+            <option value="name_desc">Name (Z-A)</option>
+            <option value="rating_desc">Highest Rated</option>
+            <option value="newest">Newest</option>
+            <option value="price_asc">Price: Low to High</option>
+            <option value="price_desc">Price: High to Low</option>
+          </select>
+          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
+        </div>
+      </div>
+
+      {/* 3. Results Header Row with Count & View Mode Toggle */}
+      <div className="flex items-center justify-between pt-1">
+        {loading ? (
+          <div className="h-5 w-44 bg-slate-200 animate-pulse rounded-md" />
+        ) : (
+          <div className="text-sm sm:text-base font-semibold text-slate-700 pl-1">
+            <span className="text-blue-600 font-extrabold text-base sm:text-lg">{totalFilteredCount}</span> matching {activeType === "business" ? "businesses" : activeType === "service" ? "services" : activeType === "product" ? "products" : activeType === "course" ? "courses" : activeType === "job" ? "jobs" : "listings"}
+          </div>
+        )}
+
+        {/* Grid / List Switcher */}
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setViewMode("grid")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+              viewMode === "grid"
+                ? "bg-[#0070f3] text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
+            )}
+          >
+            <LayoutGrid className="size-3.5" />
+            <span>Grid</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+              viewMode === "list"
+                ? "bg-[#0070f3] text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
+            )}
+          >
+            <List className="size-3.5" />
+            <span>List</span>
+          </button>
+        </div>
       </div>
 
       {/* 5. Two-Column Layout: Grid on Left, Filters Sidebar on Right */}
@@ -1109,9 +1678,32 @@ function CustomerExplorePageContent({
 
           {/* Results Content */}
           {loading ? (
-            <div className="flex flex-col items-center justify-center p-16 text-muted-foreground gap-3">
-              <Loader2 className="size-8 animate-spin text-primary" />
-              <span className="text-sm font-medium">Finding matching listings...</span>
+            <div className="space-y-6">
+              <div className="h-6 w-56 bg-slate-200 animate-pulse rounded-md" />
+              <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "grid grid-cols-1 gap-4"}>
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div
+                    key={i}
+                    className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs animate-pulse flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="h-44 w-full bg-slate-200" />
+                      <div className="p-4 space-y-3">
+                        <div className="h-4 bg-slate-200 rounded-md w-3/4" />
+                        <div className="h-3 bg-slate-100 rounded-md w-1/2" />
+                        <div className="flex items-center gap-2 pt-1">
+                          <div className="h-4 w-12 bg-amber-100 rounded-md" />
+                          <div className="h-3 w-20 bg-slate-100 rounded-md" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 pt-0 border-t border-slate-100 flex items-center justify-between gap-2 mt-2">
+                      <div className="h-9 w-full bg-slate-100 rounded-xl" />
+                      <div className="h-9 w-20 bg-slate-200 rounded-xl" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="space-y-8">
@@ -1131,27 +1723,34 @@ function CustomerExplorePageContent({
                       const isFavorited = favorites.has(favKey);
                       const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${biz.name} ${biz.city || ""}`)}`;
                       const whatsappClean = (biz.whatsapp || biz.phone || "").replace(/[^0-9]/g, "");
+                      const bizUrl = buildBusinessSeoUrl(biz);
 
                       return (
                         <div
                           key={biz.id}
-                          className="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
+                          onClick={() => router.push(bizUrl)}
+                          className="bg-white border border-slate-200 hover:border-slate-300 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer"
                         >
                           <div>
                             {/* Top Image Banner with Category Badge */}
                             <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
-                              <img
-                                src={(biz as any).cover_url || biz.logo_url || biz.default_image_url || "/images/hero-deer.jpg"}
-                                alt={biz.name}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
+                              <Link href={bizUrl} className="block w-full h-full">
+                                <img
+                                  src={(biz as any).cover_url || (biz as any).banner_url || biz.logo_url || biz.default_image_url || "/images/hero-deer.jpg"}
+                                  alt={biz.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                              </Link>
                               <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
                               <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-md text-slate-800 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-slate-200 shadow-xs">
                                 {biz.category_name || biz.business_type || "Business"}
                               </div>
                               <button
                                 type="button"
-                                onClick={() => handleToggleFavorite(biz)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleFavorite(biz);
+                                }}
                                 className={`absolute top-3 right-3 p-1.5 rounded-full backdrop-blur-md transition-colors cursor-pointer ${isFavorited
                                   ? "bg-rose-50 text-rose-600 border border-rose-200"
                                   : "bg-white/80 text-slate-600 hover:text-rose-600 border border-slate-200"
@@ -1181,8 +1780,8 @@ function CustomerExplorePageContent({
                               <div className="flex items-center justify-between text-xs text-slate-500">
                                 <div className="flex items-center gap-1">
                                   <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                                  <span className="font-bold text-slate-900">{biz.avg_rating || "4.8"}</span>
-                                  <span className="text-slate-500">({biz.review_count || 12} reviews)</span>
+                                  <span className="font-bold text-slate-900">{Number(biz.avg_rating) > 0 ? biz.avg_rating : "4.8"}</span>
+                                  <span className="text-slate-500">({Number(biz.review_count) > 0 ? biz.review_count : 12} reviews)</span>
                                 </div>
                                 <div className="flex items-center gap-1 text-slate-500 text-xs">
                                   <MapPin className="size-3 text-amber-500 shrink-0" />
@@ -1268,183 +1867,113 @@ function CustomerExplorePageContent({
                     </h2>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "grid grid-cols-1 gap-4"}>
                     {filteredProfessionals.map((pro) => {
                       const favKey = `professional-${pro.id}`;
                       const isFavorited = favorites.has(favKey);
-                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${pro.name} ${pro.city || ""}`)}`;
-                      const whatsappClean = (pro.whatsapp || pro.phone || "").replace(/[^0-9]/g, "");
+                      const proUrl = buildProfessionalSeoUrl(pro);
 
                       return (
-                        <Card key={pro.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
-                          <div>
-                            <CardHeader className="pb-3 border-b bg-muted/10">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div
+                          key={pro.id}
+                          onClick={() => router.push(proUrl)}
+                          className={cn(
+                            "bg-white border border-slate-200 hover:border-blue-400 rounded-2xl p-4 shadow-xs hover:shadow-md transition-all flex justify-between group cursor-pointer",
+                            viewMode === "grid" ? "flex-col" : "flex-col sm:flex-row sm:items-center gap-4"
+                          )}
+                        >
+                          <div className={cn("min-w-0", viewMode === "list" && "flex-1")}>
+                            {/* Top row: Avatar + Info + Heart */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-3 min-w-0 flex-1">
+                                {/* Circular Avatar */}
+                                <Link href={proUrl} onClick={(e) => e.stopPropagation()} className="shrink-0">
                                   {pro.avatar_url ? (
                                     <img
                                       src={pro.avatar_url}
                                       alt={pro.name}
-                                      className="size-11 rounded-full object-cover border border-border shadow-2xs shrink-0"
+                                      className="size-14 rounded-full object-cover border-2 border-white shadow-xs shrink-0"
                                     />
                                   ) : (
-                                    <div className="size-11 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-xs border border-primary/20">
+                                    <div className="size-14 rounded-full bg-rose-100 text-rose-600 font-bold flex items-center justify-center shrink-0 text-base shadow-xs">
                                       {pro.name.slice(0, 2).toUpperCase()}
                                     </div>
                                   )}
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <Link href={buildProfessionalSeoUrl(pro)}>
-                                        <CardTitle className="text-base font-bold text-foreground hover:text-primary transition-colors cursor-pointer truncate">
-                                          {pro.name}
-                                        </CardTitle>
-                                      </Link>
-                                      {pro.is_verified && (
-                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 text-[10px] px-1 py-0">
-                                          <ShieldCheck className="size-3 mr-0.5 text-emerald-600" /> Verified
-                                        </Badge>
-                                      )}
+                                </Link>
+
+                                {/* Name & Badges */}
+                                <div className="min-w-0 flex-1">
+                                  <Link href={proUrl} onClick={(e) => e.stopPropagation()}>
+                                    <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
+                                      {pro.name}
+                                    </h3>
+                                  </Link>
+
+                                  {/* Verified Badge */}
+                                  {pro.is_verified && (
+                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/70 text-emerald-700 text-[10px] font-semibold mt-1">
+                                      <CheckCircle2 className="size-3 text-emerald-600 fill-emerald-100" />
+                                      <span>Verified</span>
                                     </div>
-                                    <span className="text-xs text-muted-foreground block mt-0.5 font-medium text-purple-600 dark:text-purple-400">
-                                      {pro.profession_type} {pro.experience_years ? `• ${pro.experience_years} Years Experience` : ""}
+                                  )}
+
+                                  {/* Profession & Experience */}
+                                  <div className="flex items-center gap-1.5 text-xs text-purple-700 font-medium mt-1.5 truncate">
+                                    <Briefcase className="size-3.5 text-purple-600 shrink-0" />
+                                    <span className="truncate">
+                                      {pro.profession_type || pro.designation || "Professional"}
+                                      {pro.experience_years ? ` • ${pro.experience_years} Years Experience` : ""}
                                     </span>
                                   </div>
+
+                                  {/* Rating */}
+                                  <div className="flex items-center gap-1 text-xs text-slate-500 font-medium mt-1">
+                                    <Star className="size-3.5 fill-amber-400 text-amber-400 shrink-0" />
+                                    <span className="font-bold text-slate-800">{pro.avg_rating || "0.0"}</span>
+                                    <span className="text-slate-400">({pro.review_count || 0} reviews)</span>
+                                  </div>
                                 </div>
-
-                                <button
-                                  onClick={() => handleToggleFavorite(pro)}
-                                  className={`p-1.5 rounded-full transition-all cursor-pointer ${isFavorited ? "text-rose-600 bg-rose-50 dark:bg-rose-950/50" : "text-muted-foreground hover:text-rose-600"
-                                    }`}
-                                  title={isFavorited ? "Remove from favorites" : "Save to favorites"}
-                                >
-                                  <Heart className={`size-4 ${isFavorited ? "fill-rose-600" : ""}`} />
-                                </button>
-                              </div>
-                            </CardHeader>
-
-                            <CardContent className="p-4 space-y-3 text-xs">
-                              {/* Rating & Reviews */}
-                              <div className="flex items-center justify-between text-xs">
-                                <div className="flex items-center gap-1">
-                                  <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                                  <span className="font-bold text-foreground">{pro.avg_rating || "New"}</span>
-                                  <span className="text-muted-foreground">({pro.review_count || 0} reviews)</span>
-                                </div>
-                                <button
-                                  onClick={() => setReviewModalItem(pro)}
-                                  className="text-primary hover:underline text-[11px] font-semibold cursor-pointer"
-                                >
-                                  Write Review
-                                </button>
                               </div>
 
-                              {/* Address / Location */}
-                              <div className="flex items-start gap-1.5 text-muted-foreground text-xs">
-                                <MapPin className="size-3.5 shrink-0 mt-0.5 text-primary" />
-                                <span>{[pro.locality, pro.city, pro.state].filter(Boolean).join(", ") || "City location available"}</span>
-                              </div>
-
-                              {/* About snippet */}
-                              {pro.about && (
-                                <p className="text-muted-foreground text-xs line-clamp-2 italic">
-                                  &quot;{pro.about}&quot;
-                                </p>
-                              )}
-                            </CardContent>
-                          </div>
-
-                          {/* Action Buttons */}
-                          <CardFooter className="p-4 pt-0 border-t border-border/40 bg-muted/5 flex flex-col gap-2 mt-2">
-                            <div className="grid grid-cols-4 gap-1.5 w-full pt-3">
-                              {pro.phone ? (
-                                <a
-                                  href={`tel:${pro.phone}`}
-                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300 transition-colors"
-                                  title="Call Professional"
-                                >
-                                  <Phone className="size-4" />
-                                </a>
-                              ) : (
-                                <span className="opacity-40 p-2 text-center text-muted-foreground"><Phone className="size-4 mx-auto" /></span>
-                              )}
-
-                              {whatsappClean ? (
-                                <a
-                                  href={`https://wa.me/${whatsappClean}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 transition-colors"
-                                  title="Chat on WhatsApp"
-                                >
-                                  <MessageCircle className="size-4" />
-                                </a>
-                              ) : (
-                                <span className="opacity-40 p-2 text-center text-muted-foreground"><MessageCircle className="size-4 mx-auto" /></span>
-                              )}
-
-                              {pro.email ? (
-                                <a
-                                  href={`mailto:${pro.email}`}
-                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950 dark:text-purple-300 transition-colors"
-                                  title="Send Email"
-                                >
-                                  <Mail className="size-4" />
-                                </a>
-                              ) : (
-                                <span className="opacity-40 p-2 text-center text-muted-foreground"><Mail className="size-4 mx-auto" /></span>
-                              )}
-
-                              <a
-                                href={mapsUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center justify-center p-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 transition-colors"
-                                title="Directions on Map"
-                              >
-                                <Navigation className="size-4" />
-                              </a>
-                            </div>
-
-                            <div className="flex items-center gap-2 w-full pt-1">
-                              <Link href={buildProfessionalSeoUrl(pro)} className="flex-1">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className="w-full text-xs font-semibold gap-1.5 cursor-pointer"
-                                >
-                                  <Briefcase className="size-3.5" /> View Profile
-                                </Button>
-                              </Link>
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => {
-                                  setCheckoutItem({
-                                    id: pro.id,
-                                    name: `Consultation with ${pro.name}`,
-                                    type: "service",
-                                    provider_name: pro.name,
-                                    duration_minutes: 45,
-                                    suggested_price_inr: (pro as any).consultation_fee || 500,
-                                    institution_id: (pro as any).institution_profile_id || null,
-                                  });
-                                  setCheckoutOpen(true);
-                                }}
-                                className="flex-1 text-xs font-semibold gap-1.5 cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90"
-                              >
-                                <Calendar className="size-3.5" /> Book
-                              </Button>
+                              {/* Favorite Heart Button */}
                               <button
-                                onClick={() => setReportModalItem(pro)}
-                                className="text-[11px] text-muted-foreground hover:text-destructive px-1.5 py-1 shrink-0"
-                                title="Report listing"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleFavorite(pro);
+                                }}
+                                className="p-1 text-slate-400 hover:text-rose-600 transition-colors shrink-0 cursor-pointer"
+                                title={isFavorited ? "Remove from favorites" : "Save to favorites"}
                               >
-                                Report
+                                <Heart className={cn("size-4.5", isFavorited && "fill-rose-600 text-rose-600")} />
                               </button>
                             </div>
-                          </CardFooter>
-                        </Card>
+                          </div>
+
+                          {/* Bottom Action Buttons: View Profile and Call */}
+                          <div className={cn(
+                            "flex items-center gap-2 border-t border-slate-100 pt-3 mt-3",
+                            viewMode === "list" ? "sm:border-t-0 sm:pt-0 sm:mt-0 sm:w-56 shrink-0" : "w-full"
+                          )}>
+                            <Link
+                              href={proUrl}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex-1 text-center py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold transition-colors flex items-center justify-center gap-1 border border-sky-100"
+                            >
+                              <span>View Profile</span>
+                              <ArrowRight className="size-3" />
+                            </Link>
+
+                            <a
+                              href={`tel:${pro.phone || "9876543210"}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex-1 text-center py-2 px-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 border border-sky-100"
+                            >
+                              <Phone className="size-3.5 text-sky-600" />
+                              <span>Call</span>
+                            </a>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -1529,99 +2058,111 @@ function CustomerExplorePageContent({
                   </h2>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredCourses.map((c) => (
-                      <Card key={c.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card">
-                        <CardHeader className="p-4 pb-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              {c.category_name && (
-                                <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-amber-50 text-amber-700 border-amber-200">
-                                  {c.category_name}
-                                </Badge>
-                              )}
-                              <Link href={buildCourseSeoUrl(c)} className="hover:text-primary transition-colors cursor-pointer block">
-                                <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
-                                  {c.name}
-                                </h3>
+                    {filteredCourses.map((c) => {
+                      const courseUrl = buildCourseSeoUrl(c);
+                      return (
+                        <Card
+                          key={c.id}
+                          onClick={() => router.push(courseUrl)}
+                          className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card cursor-pointer group"
+                        >
+                          <CardHeader className="p-4 pb-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                {c.category_name && (
+                                  <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-amber-50 text-amber-700 border-amber-200">
+                                    {c.category_name}
+                                  </Badge>
+                                )}
+                                <Link href={courseUrl} className="group-hover:text-primary transition-colors cursor-pointer block">
+                                  <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
+                                    {c.name}
+                                  </h3>
+                                </Link>
+                                {c.code && (
+                                  <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                                    Code: {c.code}
+                                  </p>
+                                )}
+                              </div>
+                              <Link
+                                href={courseUrl}
+                                className="size-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0 hover:bg-amber-500/20 transition-colors"
+                              >
+                                <BookOpen className="size-4.5" />
                               </Link>
-                              {c.code && (
-                                <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
-                                  Code: {c.code}
-                                </p>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
+                            {c.description && (
+                              <p className="text-muted-foreground text-[11px] line-clamp-2">
+                                {c.description}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
+                              {c.duration_value && (
+                                <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                  <Clock className="size-3 text-primary" />
+                                  {c.duration_value} {c.duration_unit || "Months"}
+                                </span>
+                              )}
+                              {c.university_name && (
+                                <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                  <Building2 className="size-3 text-primary" />
+                                  {c.university_name}
+                                </span>
+                              )}
+                              {c.seats_available !== undefined && (
+                                <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                  {c.seats_available} Seats Available
+                                </span>
                               )}
                             </div>
-                            <div className="size-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
-                              <BookOpen className="size-4.5" />
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
-                          {c.description && (
-                            <p className="text-muted-foreground text-[11px] line-clamp-2">
-                              {c.description}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
-                            {c.duration_value && (
-                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                                <Clock className="size-3 text-primary" />
-                                {c.duration_value} {c.duration_unit || "Months"}
-                              </span>
-                            )}
-                            {c.university_name && (
-                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                                <Building2 className="size-3 text-primary" />
-                                {c.university_name}
-                              </span>
-                            )}
-                            {c.seats_available !== undefined && (
-                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                                {c.seats_available} Seats Available
-                              </span>
-                            )}
-                          </div>
-                        </CardContent>
-                        <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setCheckoutItem({
-                                id: c.id,
-                                name: c.name,
-                                type: "service",
-                                price: Number(c.price || c.fee || c.annual_fee || 5000),
-                                sale_price: Number(c.sale_price || c.discounted_price || c.price || c.fee || 5000),
-                                institution_id: c.institution_id || c.institution_profile_id || null,
-                                provider_name: c.university_name || c.institution_name || "Maa Sharda Institute",
-                              } as any);
-                              setCheckoutOpen(true);
-                            }}
-                            className="flex-1 text-xs font-semibold cursor-pointer border-slate-300 hover:bg-slate-100"
-                          >
-                            Buy Now
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => {
-                              setEnquiryModalItem(c);
-                              setEnquiryForm({
-                                name: user?.full_name || "",
-                                email: user?.email || "",
-                                phone: user?.phone || "",
-                                message: `Hi, I am interested in admission for ${c.name}. Please share details and fee structure.`,
-                                preferredDate: "",
-                                preferredTime: "",
-                              });
-                            }}
-                            className="flex-1 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white"
-                          >
-                            Enquire
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    ))}
+                          </CardContent>
+                          <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCheckoutItem({
+                                  id: c.id,
+                                  name: c.name,
+                                  type: "service",
+                                  price: Number(c.price || c.fee || c.annual_fee || 5000),
+                                  sale_price: Number(c.sale_price || c.discounted_price || c.price || c.fee || 5000),
+                                  institution_id: c.institution_id || c.institution_profile_id || null,
+                                  provider_name: c.university_name || c.institution_name || "Maa Sharda Institute",
+                                } as any);
+                                setCheckoutOpen(true);
+                              }}
+                              className="flex-1 text-xs font-semibold cursor-pointer border-slate-300 hover:bg-slate-100"
+                            >
+                              Buy Now
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEnquiryModalItem({ ...c, resultType: "course", courseId: c.id });
+                                setEnquiryForm({
+                                  name: user?.full_name || "",
+                                  email: user?.email || "",
+                                  phone: user?.phone || "",
+                                  message: `Hi, I am interested in admission for ${c.name}. Please share details and fee structure.`,
+                                  preferredDate: "",
+                                  preferredTime: "",
+                                });
+                              }}
+                              className="flex-1 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white"
+                            >
+                              Enquire
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1635,93 +2176,507 @@ function CustomerExplorePageContent({
                   </h2>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredJobs.map((j) => (
-                      <Card key={j.id} className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card">
-                        <CardHeader className="p-4 pb-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              {j.department && (
-                                <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-blue-50 text-blue-700 border-blue-200">
-                                  {j.department}
-                                </Badge>
-                              )}
-                              <Link href={buildJobSeoUrl(j)} className="hover:text-primary transition-colors cursor-pointer block">
-                                <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2">
-                                  {j.title || j.name}
+                    {filteredJobs.map((j) => {
+                      const jobUrl = buildJobSeoUrl(j);
+                      const employerHref = j.institution_slug
+                        ? `/institutes/${j.institution_slug}`
+                        : j.business_slug
+                        ? `/business/${j.business_slug}`
+                        : j.institution_id
+                        ? `/institutes/${j.institution_id}`
+                        : j.business_id
+                        ? `/business/${j.business_id}`
+                        : null;
+                      const employerName = j.company_name || j.institution_name;
+                      return (
+                        <Card
+                          key={j.id}
+                          onClick={() => router.push(jobUrl)}
+                          className="rounded-2xl border shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden bg-card group cursor-pointer"
+                        >
+                          <CardHeader className="p-4 pb-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                {j.department && (
+                                  <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 mb-1 bg-blue-50 text-blue-700 border-blue-200">
+                                    {j.department}
+                                  </Badge>
+                                )}
+                                <h3 className="font-bold text-sm text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                                  <Link href={jobUrl} className="hover:text-primary">
+                                    {j.title || j.name}
+                                  </Link>
                                 </h3>
+                                {employerName && (
+                                  employerHref ? (
+                                    <Link
+                                      href={employerHref}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-xs text-muted-foreground font-semibold mt-0.5 hover:text-primary hover:underline truncate block transition-colors"
+                                    >
+                                      {employerName}
+                                    </Link>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground font-semibold mt-0.5 truncate">
+                                      {employerName}
+                                    </p>
+                                  )
+                                )}
+                              </div>
+                              <Link
+                                href={jobUrl}
+                                className="size-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0 hover:bg-blue-500/20 transition-colors"
+                              >
+                                <Briefcase className="size-4.5" />
                               </Link>
-                              {j.company_name && (
-                                <p className="text-xs text-muted-foreground font-semibold mt-0.5">
-                                  {j.company_name}
-                                </p>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
+                            {j.description && (
+                              <p className="text-muted-foreground text-[11px] line-clamp-2">
+                                {j.description}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
+                              {j.location && (
+                                <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                  <MapPin className="size-3 text-primary" />
+                                  {j.location}
+                                </span>
+                              )}
+                              {j.employment_type && (
+                                <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
+                                  {j.employment_type}
+                                </span>
+                              )}
+                              {j.work_mode && (
+                                <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md capitalize">
+                                  {j.work_mode}
+                                </span>
+                              )}
+                              {j.salary_range && (
+                                <span className="flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                                  {j.salary_range}
+                                </span>
                               )}
                             </div>
-                            <div className="size-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
-                              <Briefcase className="size-4.5" />
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-1 pb-3 text-xs space-y-2 flex-1">
-                          {j.description && (
-                            <p className="text-muted-foreground text-[11px] line-clamp-2">
-                              {j.description}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
-                            {j.location && (
-                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                                <MapPin className="size-3 text-primary" />
-                                {j.location}
-                              </span>
-                            )}
-                            {j.employment_type && (
-                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md">
-                                {j.employment_type}
-                              </span>
-                            )}
-                            {j.work_mode && (
-                              <span className="flex items-center gap-1 font-medium bg-muted/60 px-2 py-0.5 rounded-md capitalize">
-                                {j.work_mode}
-                              </span>
-                            )}
-                            {j.salary_range && (
-                              <span className="flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                                {j.salary_range}
-                              </span>
-                            )}
-                          </div>
-                        </CardContent>
-                        <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
-                          <Link href={buildJobSeoUrl(j)} className="flex-1">
+                          </CardContent>
+                          <CardFooter className="p-4 pt-0 border-t bg-muted/10 flex items-center justify-between gap-2">
+                            <Link href={jobUrl} className="flex-1" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full text-xs font-semibold cursor-pointer"
+                              >
+                                View Details
+                              </Button>
+                            </Link>
                             <Button
                               size="sm"
-                              variant="outline"
-                              className="w-full text-xs font-semibold"
+                              variant="default"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEnquiryModalItem({ ...j, resultType: "job", jobId: j.id });
+                                setEnquiryForm({
+                                  name: user?.full_name || "",
+                                  email: user?.email || "",
+                                  phone: user?.phone || "",
+                                  message: `Hi, I would like to apply for the ${j.title || j.name} position. Please review my candidacy.`,
+                                  preferredDate: "",
+                                  preferredTime: "",
+                                });
+                              }}
+                              className="flex-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
                             >
-                              View Details
+                              Apply Now
                             </Button>
-                          </Link>
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => {
-                              setEnquiryModalItem(j);
-                              setEnquiryForm({
-                                name: user?.full_name || "",
-                                email: user?.email || "",
-                                phone: user?.phone || "",
-                                message: `Hi, I would like to apply for the ${j.title || j.name} position. Please review my candidacy.`,
-                                preferredDate: "",
-                                preferredTime: "",
-                              });
-                            }}
-                            className="flex-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
-                          >
-                            Apply Now
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    ))}
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Properties Section */}
+              {(activeType === "all" || activeType === "property") && filteredProperties.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <Home className="size-4 text-emerald-600" />
+                      Featured Properties & Real Estate ({filteredProperties.length})
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredProperties.map((p) => {
+                      const propUrl = `/properties/${p.slug || p.id}`;
+                      return (
+                        <Card
+                          key={p.id}
+                          onClick={() => router.push(propUrl)}
+                          className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between cursor-pointer group"
+                        >
+                          <div>
+                            <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
+                              <Link href={propUrl} className="block w-full h-full">
+                                {p.image_url || p.default_image_url ? (
+                                  <img
+                                    src={p.image_url || p.default_image_url || ""}
+                                    alt={p.title || p.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-emerald-50 text-emerald-600">
+                                    <Home className="size-12 opacity-60" />
+                                  </div>
+                                )}
+                              </Link>
+                              <div className="absolute top-2.5 right-2.5 pointer-events-none">
+                                <Badge className="bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5">
+                                  {p.rental_amount ? `₹${Number(p.rental_amount).toLocaleString()}/mo` : p.price ? `₹${Number(p.price).toLocaleString()}` : "Price on Request"}
+                                </Badge>
+                              </div>
+                              {p.city && (
+                                <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
+                                  <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                    <MapPin className="size-2.5" />
+                                    {p.city}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                            <CardContent className="p-4 space-y-2">
+                              <h3 className="font-bold text-slate-900 text-sm line-clamp-1 group-hover:text-emerald-600 transition-colors">
+                                <Link href={propUrl}>
+                                  {p.title || p.name}
+                                </Link>
+                              </h3>
+                              {p.business_name && (
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                  <Building2 className="size-3 text-slate-400 shrink-0" />
+                                  <Link
+                                    href={p.business_slug ? `/business/${p.business_slug}` : p.business_id ? `/business/${p.business_id}` : "#"}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="truncate font-medium text-slate-700 hover:text-emerald-600 hover:underline transition-colors"
+                                  >
+                                    {p.business_name}
+                                  </Link>
+                                </div>
+                              )}
+                              {p.description && (
+                                <p className="text-xs text-slate-600 line-clamp-2">
+                                  {p.description}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
+                                {p.bedrooms ? (
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                    {p.bedrooms} BHK
+                                  </span>
+                                ) : null}
+                                {p.built_up_area ? (
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                    {p.built_up_area} {p.area_unit || "sq ft"}
+                                  </span>
+                                ) : null}
+                                {p.address && (
+                                  <span className="text-[10px] text-slate-400 truncate max-w-[200px]">
+                                    {p.address}
+                                  </span>
+                                )}
+                              </div>
+                            </CardContent>
+                          </div>
+                          <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
+                            {p.phone && (
+                              <a
+                                href={`tel:${p.phone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                              >
+                                <Phone className="size-3" /> Call
+                              </a>
+                            )}
+                            <Button
+                              size="sm"
+                              className="flex-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEnquiryModalItem({ ...p, resultType: "property", propertyId: p.id });
+                                setEnquiryForm({
+                                  name: user?.full_name || "",
+                                  email: user?.email || "",
+                                  phone: user?.phone || "",
+                                  message: `Hi, I am interested in "${p.title || p.name}". Please share more details and arrange a site visit.`,
+                                  preferredDate: "",
+                                  preferredTime: "",
+                                });
+                              }}
+                            >
+                              Enquire Now
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Vehicles Section */}
+              {(activeType === "all" || activeType === "vehicle") && filteredVehicles.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <Car className="size-4 text-blue-600" />
+                      Featured Vehicles & Mobility ({filteredVehicles.length})
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredVehicles.map((v) => {
+                      const vehUrl = `/vehicles/${v.slug || v.id}`;
+                      return (
+                        <Card
+                          key={v.id}
+                          onClick={() => router.push(vehUrl)}
+                          className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between cursor-pointer group"
+                        >
+                          <div>
+                            <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
+                              <Link href={vehUrl} className="block w-full h-full">
+                                {v.image_url || v.default_image_url ? (
+                                  <img
+                                    src={v.image_url || v.default_image_url || ""}
+                                    alt={v.title || v.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-blue-50 text-blue-600">
+                                    <Car className="size-12 opacity-60" />
+                                  </div>
+                                )}
+                              </Link>
+                              <div className="absolute top-2.5 right-2.5 pointer-events-none">
+                                <Badge className="bg-blue-600 text-white font-bold text-[10px] px-2 py-0.5">
+                                  {v.price ? `₹${Number(v.price).toLocaleString()}` : "Price on Request"}
+                                </Badge>
+                              </div>
+                              {v.city && (
+                                <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
+                                  <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                    <MapPin className="size-2.5" />
+                                    {v.city}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                            <CardContent className="p-4 space-y-2">
+                              <h3 className="font-bold text-slate-900 text-sm line-clamp-1 group-hover:text-blue-600 transition-colors">
+                                <Link href={vehUrl}>
+                                  {v.title || v.name}
+                                </Link>
+                              </h3>
+                              {v.business_name && (
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                  <Building2 className="size-3 text-slate-400 shrink-0" />
+                                  <Link
+                                    href={v.business_slug ? `/business/${v.business_slug}` : v.business_id ? `/business/${v.business_id}` : "#"}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="truncate font-medium text-slate-700 hover:text-blue-600 hover:underline transition-colors"
+                                  >
+                                    {v.business_name}
+                                  </Link>
+                                </div>
+                              )}
+                              {v.description && (
+                                <p className="text-xs text-slate-600 line-clamp-2">
+                                  {v.description}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
+                                {v.manufacturing_year ? (
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                    {v.manufacturing_year}
+                                  </span>
+                                ) : null}
+                                {v.color ? (
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                    {v.color}
+                                  </span>
+                                ) : null}
+                                {v.mileage ? (
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                    {v.mileage}
+                                  </span>
+                                ) : null}
+                                {v.kilometers_driven ? (
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded font-medium">
+                                    {Number(v.kilometers_driven).toLocaleString()} km
+                                  </span>
+                                ) : null}
+                              </div>
+                            </CardContent>
+                          </div>
+                          <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
+                            {v.phone && (
+                              <a
+                                href={`tel:${v.phone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                              >
+                                <Phone className="size-3" /> Call Dealer
+                              </a>
+                            )}
+                            <Button
+                              size="sm"
+                              className="flex-1 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEnquiryModalItem({ ...v, resultType: "vehicle", vehicleId: v.id });
+                                setEnquiryForm({
+                                  name: user?.full_name || "",
+                                  email: user?.email || "",
+                                  phone: user?.phone || "",
+                                  message: `Hi, I am interested in purchasing "${v.title || v.name}". Please share test drive and best price details.`,
+                                  preferredDate: "",
+                                  preferredTime: "",
+                                });
+                              }}
+                            >
+                              Enquire Now
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Events Section */}
+              {(activeType === "all" || activeType === "event") && filteredEvents.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <Calendar className="size-4 text-purple-600" />
+                      Upcoming Events & Expos ({filteredEvents.length})
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredEvents.map((e) => {
+                      const eventUrl = `/events/${e.slug || e.id}`;
+                      return (
+                        <Card
+                          key={e.id}
+                          onClick={() => router.push(eventUrl)}
+                          className="border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col justify-between cursor-pointer group"
+                        >
+                          <div>
+                            <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
+                              <Link href={eventUrl} className="block w-full h-full">
+                                {e.image_url || e.default_image_url ? (
+                                  <img
+                                    src={e.image_url || e.default_image_url || ""}
+                                    alt={e.title || e.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-purple-50 text-purple-600">
+                                    <Calendar className="size-12 opacity-60" />
+                                  </div>
+                                )}
+                              </Link>
+                              <div className="absolute top-2.5 right-2.5 pointer-events-none">
+                                <Badge className={e.is_free ? "bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5" : "bg-purple-600 text-white font-bold text-[10px] px-2 py-0.5"}>
+                                  {e.is_free ? "Free Entry" : e.price ? `₹${Number(e.price).toLocaleString()}` : "Pass Required"}
+                                </Badge>
+                              </div>
+                              {e.city && (
+                                <div className="absolute bottom-2.5 left-2.5 pointer-events-none">
+                                  <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-xs text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                    <MapPin className="size-2.5" />
+                                    {e.city}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                            <CardContent className="p-4 space-y-2">
+                              <h3 className="font-bold text-slate-900 text-sm line-clamp-1 group-hover:text-purple-600 transition-colors">
+                                <Link href={eventUrl}>
+                                  {e.title || e.name}
+                                </Link>
+                              </h3>
+                              {e.venue_name && (
+                                <div className="text-[11px] text-slate-600 flex items-center gap-1 font-medium">
+                                  <MapPin className="size-3 text-purple-500 shrink-0" />
+                                  <span className="truncate">{e.venue_name}</span>
+                                </div>
+                              )}
+                              {e.business_name && (
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                  <Building2 className="size-3 text-slate-400 shrink-0" />
+                                  <Link
+                                    href={e.business_slug ? `/business/${e.business_slug}` : e.business_id ? `/business/${e.business_id}` : "#"}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="truncate font-medium text-slate-700 hover:text-purple-600 hover:underline transition-colors"
+                                  >
+                                    {e.business_name}
+                                  </Link>
+                                </div>
+                              )}
+                              {e.description && (
+                                <p className="text-xs text-slate-600 line-clamp-2">
+                                  {e.description}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 text-[11px] text-slate-600 pt-1 flex-wrap">
+                                {e.start_date && (
+                                  <span className="bg-purple-50 text-purple-700 font-semibold px-2 py-0.5 rounded flex items-center gap-1">
+                                    <Calendar className="size-3" />
+                                    {new Date(e.start_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                  </span>
+                                )}
+                                {e.start_time && (
+                                  <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded flex items-center gap-1">
+                                    <Clock className="size-3" />
+                                    {e.start_time}
+                                  </span>
+                                )}
+                              </div>
+                            </CardContent>
+                          </div>
+                          <CardFooter className="p-4 pt-0 border-t bg-slate-50/50 flex items-center justify-between gap-2 mt-2">
+                            {e.phone && (
+                              <a
+                                href={`tel:${e.phone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center justify-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 flex-1 transition-colors"
+                              >
+                                <Phone className="size-3" /> Contact
+                              </a>
+                            )}
+                            <Button
+                              size="sm"
+                              className="flex-1 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                setEnquiryModalItem({ ...e, resultType: "event", eventId: e.id });
+                                setEnquiryForm({
+                                  name: user?.full_name || "",
+                                  email: user?.email || "",
+                                  phone: user?.phone || "",
+                                  message: `Hi, I would like to register/attend "${e.title || e.name}". Please confirm schedule and booking.`,
+                                  preferredDate: e.start_date || "",
+                                  preferredTime: e.start_time || "",
+                                });
+                              }}
+                            >
+                              Register / Enquire
+                            </Button>
+                          </CardFooter>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1802,11 +2757,15 @@ function CustomerExplorePageContent({
               </button>
             </div>
 
-            {/* 1. Listing Type Filter (On Top in Dropdown) */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Layers className="size-3.5 text-amber-500" />
-                Listing Type
+            {/* 1. Listing Type / Vertical Dropdown (On Top) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span>Listing Type</span>
+                {allowedVerticals.length > 0 && (
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {allowedVerticals.length} available
+                  </span>
+                )}
               </label>
               <div className="relative">
                 <select
@@ -1814,147 +2773,173 @@ function CustomerExplorePageContent({
                   onChange={(e) => {
                     const newType = e.target.value as any;
                     setActiveType(newType);
-                    setSelectedCategoryId(null);
-                    setSelectedCategoryName("");
-                    setSelectedCategorySlug("");
                     setSelectedSubcategoryId(null);
                     setSelectedSubcategoryName("");
                     setSelectedSubcategorySlug("");
-                    syncUrlParams({ type: newType, category: null, subcategory: null });
+                    syncUrlParams({ type: newType, subcategory: null });
                   }}
-                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-semibold capitalize"
+                  className="w-full h-10 rounded-xl bg-slate-50 hover:bg-slate-100/70 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white focus:border-blue-500 font-medium cursor-pointer transition-all appearance-none"
                 >
-                  <option value="all">All Types</option>
-                  <option value="business">Businesses</option>
-                  <option value="service">Services</option>
-                  <option value="product">Products</option>
-                  <option value="professional">Professionals</option>
-                  <option value="course">Courses</option>
-                  <option value="job">Jobs</option>
+                  {allowedVerticals.map((v) => (
+                    <option key={v.type} value={v.type}>
+                      {v.label}
+                    </option>
+                  ))}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
               </div>
             </div>
 
-            {/* Main Business Category Filter (Only for business or all types) */}
-            {(activeType === "all" || activeType === "business") && (
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-700">
-                  Main Business Category
-                </label>
-                <select
-                  value={selectedBusinessCategoryId || ""}
-                  onChange={(e) => {
-                    const val = e.target.value ? Number(e.target.value) : null;
-                    setSelectedBusinessCategoryId(val);
-                    setSelectedCategoryId(null);
-                    setSelectedCategoryName("");
-                    setSelectedCategorySlug("");
-                    setSelectedSubcategoryId(null);
-                    setSelectedSubcategoryName("");
-                    setSelectedSubcategorySlug("");
-                    syncUrlParams({ category: null, subcategory: null });
-                  }}
-                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
-                >
-                  <option value="">All Business Types ({businessCategories.length})</option>
-                  {businessCategories.map((bc) => (
-                    <option key={bc.id} value={bc.id}>
-                      {bc.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Particular Category Filter (Related to Selected Type) */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700">
-                {activeType === "service" ? "Service Category" : activeType === "course" ? "Course Category" : activeType === "professional" ? "Profession Category" : activeType === "job" ? "Job Domain" : "Category"}
+            {/* 2. Business Category Filter */}
+            <div className="space-y-2 pt-2 border-t border-slate-200">
+              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span>Business Category</span>
               </label>
-              <select
-                value={selectedCategoryId || ""}
-                onChange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : null;
-                  setSelectedCategoryId(val);
-                  setSelectedSubcategoryId(null);
-                  setSelectedSubcategoryName("");
-                  setSelectedSubcategorySlug("");
-                  if (val) {
-                    const cat = categories.find((c) => c.id === val);
-                    const catName = cat ? cat.name : "";
-                    const catSlug = cat ? (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")) : "";
-                    setSelectedCategoryName(catName);
-                    setSelectedCategorySlug(catSlug);
-                    syncUrlParams({ category: catSlug || catName, subcategory: null });
-                  } else {
-                    setSelectedCategoryName("");
-                    setSelectedCategorySlug("");
-                    syncUrlParams({ category: null, subcategory: null });
-                  }
-                }}
-                className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
-              >
-                <option value="">All Categories ({filteredCategories.length})</option>
-                {filteredCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Subcategory Filter (if category selected) */}
-            {selectedCategoryId && subcategories.length > 0 && (
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-700">Subcategory</label>
-                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                  <button
-                    key={sub.id}
-                      type="button"
-                      onClick={() => {
+              <div className="relative">
+                {loadingCategories && businessCategories.length === 0 ? (
+                  <div className="w-full h-10 rounded-xl bg-slate-100 border border-slate-200 animate-pulse flex items-center px-3 text-xs text-slate-400 font-medium">
+                    Loading categories...
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      value={effectiveBusinessCategoryId || ""}
+                      onChange={(e) => {
+                        const val = e.target.value ? Number(e.target.value) : null;
+                        setSelectedBusinessCategoryId(val);
+                        setSelectedCategoryId(val);
                         setSelectedSubcategoryId(null);
                         setSelectedSubcategoryName("");
                         setSelectedSubcategorySlug("");
-                        syncUrlParams({ subcategory: null });
+                        if (val) {
+                          const cat = businessCategories.find((c) => c.id === val);
+                          const catName = cat ? cat.name : "";
+                          const catSlug = cat ? (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")) : "";
+                          setSelectedCategoryName(catName);
+                          setSelectedCategorySlug(catSlug);
+                          syncUrlParams({ category: catSlug || catName, subcategory: null });
+                        } else {
+                          setSelectedCategoryName("");
+                          setSelectedCategorySlug("");
+                          syncUrlParams({ category: null, subcategory: null });
+                        }
                       }}
-                      className={cn(
-                        "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
-                        !selectedSubcategoryId ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                      )}
+                      className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-medium"
                     >
-                      <span>All Subcategories</span>
-                      <span className="text-[10px] text-slate-400">({subcategories.length})</span>
-                    </button>
-                  {
-                      subcategories.map((sub) => (
-                        <button
-                          key={sub.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedSubcategoryId(sub.id);
-                            setSelectedSubcategoryName(sub.name);
-                            const subSlug = sub.slug || sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-                            setSelectedSubcategorySlug(subSlug);
-                            syncUrlParams({ subcategory: subSlug });
-                          }}
-                          className={cn(
-                            "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
-                            selectedSubcategoryId === sub.id ? "bg-amber-100 text-amber-900 font-semibold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                          )}
-                        >
-                          <span className="truncate">{sub.name}</span>
-                        </button>
-                      ))
-                    }
-                </div>
+                      <option value="">
+                        {businessCategories.length > 0 ? `All Business Categories (${businessCategories.length})` : (selectedCategoryName || "All Business Categories")}
+                      </option>
+                      {businessCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
+                  </>
+                )}
               </div>
-            )}
+            </div>
 
+            {/* 3. Category / Subcategory Filter for Selected Listing Type */}
+            <div className="space-y-2 pt-2 border-t border-slate-200">
+              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                <span>
+                  {activeType === "product"
+                    ? "Product Category"
+                    : activeType === "course"
+                      ? "Course Category"
+                      : activeType === "job"
+                        ? "Job Category"
+                        : activeType === "property"
+                          ? "Property Category"
+                          : activeType === "vehicle"
+                            ? "Vehicle Category"
+                            : activeType === "event"
+                              ? "Event Category"
+                              : activeType === "professional"
+                                ? "Profession Category"
+                                : activeType === "service"
+                                  ? "Service Category"
+                                  : "Subcategory"}
+                </span>
+                {typeCategories.length > 0 && (
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    ({typeCategories.length})
+                  </span>
+                )}
+              </label>
+
+              {loadingTypeCategories && typeCategories.length === 0 ? (
+                <div className="w-full h-10 rounded-xl bg-slate-100 border border-slate-200 animate-pulse flex items-center px-3 text-xs text-slate-400 font-medium">
+                  Loading categories...
+                </div>
+              ) : typeCategories.length > 0 ? (
+                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSubcategoryId(null);
+                      setSelectedSubcategoryName("");
+                      setSelectedSubcategorySlug("");
+                      const bc = businessCategories.find((b) => b.id === effectiveBusinessCategoryId);
+                      const baseSlug = bc?.slug || "";
+                      setSelectedCategoryId(effectiveBusinessCategoryId);
+                      setSelectedCategorySlug(baseSlug);
+                      setSelectedCategoryName(bc?.name || "");
+                      syncUrlParams({ category: baseSlug || null, subcategory: null });
+                    }}
+                    className={cn(
+                      "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
+                      !selectedSubcategoryId
+                        ? "bg-amber-100 text-amber-900 font-semibold"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    )}
+                  >
+                    <span>All {activeType === "product" ? "Product Categories" : activeType === "job" ? "Job Categories" : activeType === "property" ? "Property Categories" : activeType === "vehicle" ? "Vehicle Categories" : activeType === "course" ? "Course Categories" : activeType === "event" ? "Event Categories" : activeType === "professional" ? "Profession Categories" : activeType === "service" ? "Service Categories" : "Subcategories"}</span>
+                    <span className="text-[10px] text-slate-400">({typeCategories.length})</span>
+                  </button>
+
+                  {typeCategories.map((cat) => {
+                    const catSlug = cat.slug || slugify(cat.name);
+                    const isSelected =
+                      selectedSubcategoryId === cat.id ||
+                      (selectedCategoryId === cat.id && !selectedSubcategoryId) ||
+                      selectedSubcategorySlug === catSlug ||
+                      (selectedCategorySlug === catSlug && !selectedSubcategorySlug);
+
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedSubcategoryId(cat.id);
+                          setSelectedSubcategoryName(cat.name);
+                          setSelectedSubcategorySlug(catSlug);
+                          syncUrlParams({ subcategory: catSlug });
+                        }}
+                        className={cn(
+                          "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
+                          isSelected
+                            ? "bg-amber-100 text-amber-900 font-semibold"
+                            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                        )}
+                      >
+                        <span className="truncate">{cat.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 italic py-1">
+                  No categories found for this listing type
+                </div>
+              )}
+            </div>
 
             {/* Brand Filter (if products available) */}
-            {availableBrands.length > 0 && (
-              <div className="space-y-2">
+            {activeType === "product" && availableBrands.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-slate-200">
                 <label className="text-xs font-semibold text-slate-700">Brand</label>
                 <select
                   value={selectedBrand}
@@ -1973,6 +2958,55 @@ function CustomerExplorePageContent({
                 </select>
               </div>
             )}
+
+            {/* Rating Star Checklist */}
+            <div className="space-y-2 pt-2 border-t border-slate-200">
+              <label className="text-xs font-semibold text-slate-700 block">Rating</label>
+              <div className="space-y-1.5">
+                {[
+                  { r: 5, label: "5 Star & Above" },
+                  { r: 4, label: "4 Star & Above" },
+                  { r: 3, label: "3 Star & Above" },
+                ].map((item) => {
+                  const isSelected = minRating === item.r;
+                  return (
+                    <button
+                      key={item.r}
+                      type="button"
+                      onClick={() => setMinRating(isSelected ? 0 : item.r)}
+                      className={cn(
+                        "w-full text-left text-xs px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer group",
+                        isSelected
+                          ? "bg-blue-50 text-blue-700 font-semibold border border-blue-200/60"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      )}
+                    >
+                      <div className={cn(
+                        "size-3.5 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                        isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300 group-hover:border-slate-400 bg-white"
+                      )}>
+                        {isSelected && <div className="size-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Star className="size-3.5 fill-amber-400 text-amber-400 shrink-0" />
+                        <span className="text-xs font-medium text-slate-700">{item.label}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Add Listing CTA Button */}
+            <div className="pt-2">
+              <Link
+                href="/packages"
+                className="w-full h-10 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <Plus className="size-3.5" />
+                <span>Add Listing</span>
+              </Link>
+            </div>
 
             {/* Verified Only Toggle */}
             <div className="pt-2 border-t border-slate-200">
@@ -2252,16 +3286,37 @@ function CustomerExplorePageContent({
   );
 }
 
+function ExplorePageSkeleton() {
+  return (
+    <div className="min-h-screen bg-slate-50 pb-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6">
+        <div className="space-y-3">
+          <div className="h-4 w-48 bg-slate-200 animate-pulse rounded-md" />
+          <div className="h-8 w-72 bg-slate-200 animate-pulse rounded-lg" />
+          <div className="h-4 w-96 bg-slate-100 animate-pulse rounded-md" />
+        </div>
+        <div className="h-14 w-full bg-white rounded-2xl border border-slate-200 shadow-xs animate-pulse" />
+        <div className="h-4 w-36 bg-slate-200 animate-pulse rounded-md" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="lg:col-span-8 xl:col-span-9 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="bg-white border border-slate-200 rounded-2xl overflow-hidden h-72 animate-pulse" />
+              ))}
+            </div>
+          </div>
+          <div className="lg:col-span-4 xl:col-span-3">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 h-96 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerExplorePage(props: CustomerExplorePageProps = {}) {
   return (
-    <Suspense
-      fallback={
-        <div className="container mx-auto px-4 py-16 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
-          <Loader2 className="size-4 animate-spin text-rose-600" />
-          <span>Loading Discovery Directory...</span>
-        </div>
-      }
-    >
+    <Suspense fallback={<ExplorePageSkeleton />}>
       <CustomerExplorePageContent {...props} />
     </Suspense>
   );

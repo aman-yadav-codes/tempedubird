@@ -30,8 +30,10 @@ function resolveScope(user: CurrentUser, requestedInstitutionId?: number | null)
   if (isPlatform && !requestedInstitutionId) {
     return { scope: "platform", institutionId: null };
   }
-  if (requestedInstitutionId && institutionIds.has(requestedInstitutionId)) {
-    return { scope: "institution", institutionId: requestedInstitutionId };
+  if (requestedInstitutionId) {
+    if (institutionIds.has(requestedInstitutionId) || institutionIds.size === 0) {
+      return { scope: "institution", institutionId: requestedInstitutionId };
+    }
   }
   const firstId = Array.from(institutionIds)[0] ?? null;
   return { scope: "institution", institutionId: firstId };
@@ -69,6 +71,9 @@ export async function GET(req: Request) {
       incomeParams.push(institutionId);
     } else if (scope === "platform") {
       incomeConditions.push(`fie.scope_type = 'platform'`);
+    } else {
+      incomeConditions.push(`(fie.institution_id IS NULL OR fie.created_by = $${pIdx++})`);
+      incomeParams.push(user.id);
     }
 
     if (fromDate) {
@@ -113,6 +118,9 @@ export async function GET(req: Request) {
       expenseParams.push(institutionId);
     } else if (scope === "platform") {
       expenseConditions.push(`fee.scope_type = 'platform'`);
+    } else {
+      expenseConditions.push(`(fee.institution_id IS NULL OR fee.created_by = $${epIdx++})`);
+      expenseParams.push(user.id);
     }
 
     if (fromDate) {
@@ -137,7 +145,7 @@ export async function GET(req: Request) {
     }
     if (search) {
       expenseConditions.push(`(
-        LOWER(COALESCE(fee.vendor_name, fee.paid_to_label, '')) LIKE $${epIdx}
+        LOWER(COALESCE(fee.vendor_name, fee.paid_to_label, fee.paid_to, '')) LIKE $${epIdx}
         OR LOWER(COALESCE(fee.description, '')) LIKE $${epIdx}
         OR LOWER(COALESCE(fee.reference_no, fee.invoice_no, '')) LIKE $${epIdx}
         OR LOWER(COALESCE(fec.name, '')) LIKE $${epIdx}
@@ -154,7 +162,7 @@ export async function GET(req: Request) {
         COALESCE(SUM(COALESCE(fie.amount_received, fie.amount)), 0)::NUMERIC AS total_received,
         COALESCE(SUM(COALESCE(fie.pending_amount, 0)), 0)::NUMERIC AS total_pending
       FROM finance_income_entries fie
-      WHERE ${scope === "institution" && institutionId ? `fie.institution_id = ${institutionId}` : "fie.scope_type = 'platform'"}
+      WHERE ${scope === "institution" && institutionId ? `fie.institution_id = ${institutionId}` : scope === "platform" ? "fie.scope_type = 'platform'" : `fie.created_by = ${user.id}`}
         AND COALESCE(fie.transaction_status, 'completed') != 'cancelled'
     `;
 
@@ -165,7 +173,7 @@ export async function GET(req: Request) {
         COALESCE(SUM(COALESCE(fee.amount_paid, fee.amount)), 0)::NUMERIC AS total_paid,
         COALESCE(SUM(COALESCE(fee.outstanding_amount, 0)), 0)::NUMERIC AS total_outstanding
       FROM finance_expense_entries fee
-      WHERE ${scope === "institution" && institutionId ? `fee.institution_id = ${institutionId}` : "fee.scope_type = 'platform'"}
+      WHERE ${scope === "institution" && institutionId ? `fee.institution_id = ${institutionId}` : scope === "platform" ? "fee.scope_type = 'platform'" : `fee.created_by = ${user.id}`}
         AND COALESCE(fee.transaction_status, 'completed') != 'cancelled'
     `;
 
@@ -315,14 +323,14 @@ export async function GET(req: Request) {
       transactions = allRows.slice(offset, offset + limit);
     }
 
-    // Lookup options for forms
+    // Lookup options for forms (with graceful fallbacks)
     const [incCatRes, expCatRes, clientsRes, vendorsRes, inventoryRes, payMethodsRes] = await Promise.all([
-      db.query(`SELECT id, name FROM finance_income_categories WHERE is_active = TRUE AND (scope_type = $1 OR ($2::INT IS NOT NULL AND institution_id = $2)) ORDER BY name ASC`, [scope, institutionId]),
-      db.query(`SELECT id, name FROM finance_expense_categories WHERE is_active = TRUE AND (scope_type = $1 OR ($2::INT IS NOT NULL AND institution_id = $2)) ORDER BY name ASC`, [scope, institutionId]),
-      institutionId ? db.query(`SELECT id, name, company_name, email, phone, address FROM clients WHERE institution_id = $1 ORDER BY name ASC LIMIT 200`, [institutionId]) : { rows: [] },
-      institutionId ? db.query(`SELECT id, name, company_name, email, phone, address FROM vendors WHERE institution_id = $1 ORDER BY name ASC LIMIT 200`, [institutionId]) : { rows: [] },
-      institutionId ? db.query(`SELECT id, name, sku, unit, unit_price, quantity FROM inventory_items WHERE institution_id = $1 ORDER BY name ASC LIMIT 200`, [institutionId]) : { rows: [] },
-      db.query(`SELECT id, method_name, method_key, category FROM finance_payment_methods WHERE is_active = TRUE AND (scope_type = $1 OR ($2::INT IS NOT NULL AND institution_id = $2)) ORDER BY id ASC`, [scope, institutionId]),
+      db.query(`SELECT id, name FROM finance_income_categories WHERE is_active = TRUE AND (scope_type = $1 OR ($2::INT IS NOT NULL AND institution_id = $2)) ORDER BY name ASC`, [scope, institutionId]).catch(() => ({ rows: [] })),
+      db.query(`SELECT id, name FROM finance_expense_categories WHERE is_active = TRUE AND (scope_type = $1 OR ($2::INT IS NOT NULL AND institution_id = $2)) ORDER BY name ASC`, [scope, institutionId]).catch(() => ({ rows: [] })),
+      institutionId ? db.query(`SELECT id, name, company_name, email, phone, address FROM clients WHERE institution_id = $1 ORDER BY name ASC LIMIT 200`, [institutionId]).catch(() => ({ rows: [] })) : { rows: [] },
+      institutionId ? db.query(`SELECT id, name, company_name, email, phone, address FROM vendors WHERE institution_id = $1 ORDER BY name ASC LIMIT 200`, [institutionId]).catch(() => ({ rows: [] })) : { rows: [] },
+      institutionId ? db.query(`SELECT id, name, sku, unit, unit_price, quantity FROM inventory_items WHERE institution_id = $1 ORDER BY name ASC LIMIT 200`, [institutionId]).catch(() => ({ rows: [] })) : { rows: [] },
+      db.query(`SELECT id, COALESCE(title, method_type, 'Payment Method') AS method_name, method_type AS method_key, method_type AS category FROM finance_payment_methods WHERE is_active = TRUE AND (scope_type = $1 OR ($2::INT IS NOT NULL AND institution_id = $2)) ORDER BY id ASC`, [scope, institutionId]).catch(() => ({ rows: [] })),
     ]);
 
     return NextResponse.json({

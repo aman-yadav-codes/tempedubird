@@ -11,6 +11,7 @@ import {
   buildJobSeoUrl,
   buildProductSeoUrl,
   buildPropertySeoUrl,
+  KNOWN_CATEGORY_SLUG_LABELS,
 } from "@/lib/utils/seo-slug";
 
 import { PublicBusinessProfileClient } from "@/components/profile/public-business-profile-client";
@@ -20,6 +21,9 @@ import { PublicCourseDetailView } from "@/components/public/public-course-detail
 import { PublicJobDetailView } from "@/components/public/public-job-detail-view";
 import { PublicProductDetailView } from "@/components/public/public-product-detail-view";
 import { PublicPropertyDetailView } from "@/components/public/public-property-detail-view";
+import { filterListingsByBusinessCategory } from "@/lib/utils/business-vertical-filter";
+import CustomerExplorePage from "@/app/(public)/explore/page";
+import { fetchBusinessFullData } from "@/app/(public)/business/[id]/page";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +51,50 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
     const { id: rawNumId } = extractIdFromSlug(targetSlug);
     const { id: withoutLocId } = extractIdFromSlug(withoutLocation);
     const numId = rawNumId || withoutLocId || 0;
+
+    // 0a. Check if this path represents a Category Listing or Location Filter route
+    const isLocationFilter = targetSlug.startsWith("in-");
+    const isAllFilter = targetSlug.startsWith("all-");
+    const isCategoryPrefix = targetSlug.startsWith("category-") || targetSlug.startsWith("property-") || targetSlug.startsWith("vehicle-") || targetSlug.startsWith("event-") || targetSlug.startsWith("job-");
+
+    if (isLocationFilter || isAllFilter || isCategoryPrefix) {
+      const cityPart = isLocationFilter ? targetSlug.replace(/^in-/, "") : (targetSlug.includes("-in-") ? targetSlug.split("-in-").pop() : "");
+      return {
+        type: "explore" as const,
+        category: rawCategory,
+        city: cityPart || "",
+      };
+    }
+
+    if (KNOWN_CATEGORY_SLUG_LABELS[targetSlug] || KNOWN_CATEGORY_SLUG_LABELS[withoutLocation]) {
+      const cityPart = targetSlug.includes("-in-") ? targetSlug.split("-in-").pop() : "";
+      return {
+        type: "explore" as const,
+        category: withoutLocation,
+        categoryName: KNOWN_CATEGORY_SLUG_LABELS[withoutLocation] || KNOWN_CATEGORY_SLUG_LABELS[targetSlug],
+        city: cityPart || "",
+      };
+    }
+
+    try {
+      const catCheck = await db.query(
+        `SELECT id, name, slug, category_type FROM categories WHERE slug = $1 OR slug = $2 LIMIT 1`,
+        [withoutLocation, targetSlug]
+      );
+      if (catCheck.rows.length > 0) {
+        const matchedCat = catCheck.rows[0];
+        const cityPart = targetSlug.includes("-in-") ? targetSlug.split("-in-").pop() : "";
+        return {
+          type: "explore" as const,
+          category: matchedCat.slug,
+          categoryName: matchedCat.name,
+          categoryType: matchedCat.category_type || rawCategory,
+          city: cityPart || "",
+        };
+      }
+    } catch (catErr) {
+      console.warn("Category check error:", catErr);
+    }
 
     // 0. Special Handling for institution-admin or ID 5717: Deepak Yadav
     if (
@@ -290,56 +338,13 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
       );
 
       if (bizRes.rows.length > 0) {
-        const business = bizRes.rows[0];
-        const bizId = business.id;
-        const instId = business.institution_profile_id || -1;
-        const userId = business.user_id || -1;
-
-        const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled] = await Promise.allSettled([
-          db.query(
-            `SELECT p.* FROM products p WHERE (p.business_profile_id = $1 OR (p.institution_id IS NOT NULL AND p.institution_id = $2)) AND COALESCE(p.status, 'active') = 'active' ORDER BY p.id DESC`,
-            [bizId, instId]
-          ),
-          db.query(
-            `SELECT s.* FROM services s WHERE (s.business_profile_id = $1 OR (s.institution_id IS NOT NULL AND s.institution_id = $2)) AND COALESCE(s.status, 'active') = 'active' ORDER BY s.id DESC`,
-            [bizId, instId]
-          ),
-          db.query(
-            `SELECT pp.* FROM professional_profiles pp WHERE (pp.business_profile_id = $1 OR pp.institution_profile_id = $2) AND COALESCE(pp.is_active, TRUE) = TRUE ORDER BY pp.id DESC`,
-            [bizId, instId]
-          ),
-          db.query(
-            `SELECT pr.*, u.full_name AS user_name FROM platform_reviews pr LEFT JOIN users u ON u.id = pr.user_id WHERE pr.business_id = $1 AND COALESCE(pr.is_approved, TRUE) = TRUE ORDER BY pr.id DESC LIMIT 20`,
-            [bizId]
-          ),
-        ]);
-
-        let resolvedServices = servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [];
-        try {
-          const targetInstId = instId > 0 ? instId : bizId;
-          const disabledCheck = await db.query(
-            `SELECT 1 FROM business_type_modules btm
-             JOIN system_modules sm ON sm.id = btm.module_id
-             JOIN institution_profiles ip ON (ip.institution_type_id = btm.business_type_id OR btm.business_type_id = 27)
-             WHERE ip.id = $1 AND (sm.route = '/admin/marketing/services' OR sm.module_key = 'admin_services' OR sm.route = '/admin/catalog/services') AND btm.is_enabled = FALSE
-             LIMIT 1`,
-            [targetInstId]
-          );
-          if (disabledCheck.rows.length > 0) {
-            resolvedServices = [];
-          }
-        } catch {
-          // ignore
+        const fullData = await fetchBusinessFullData(bizRes.rows[0].id.toString());
+        if (fullData && !("redirectTo" in fullData)) {
+          return {
+            type: "business" as const,
+            ...fullData,
+          };
         }
-
-        return {
-          type: "business" as const,
-          business,
-          products: productsSettled.status === "fulfilled" ? productsSettled.value.rows : [],
-          services: resolvedServices,
-          professionals: professionalsSettled.status === "fulfilled" ? professionalsSettled.value.rows : [],
-          reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
-        };
       }
     } catch {
       // Continue
@@ -478,15 +483,15 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
           COALESCE(ip.title, 'Academic Course') AS name,
           COALESCE(ip.title, 'Academic Course') AS title,
           ip.slug,
-          ip.code,
-          ip.description,
+          NULL AS code,
+          COALESCE(ip.about, '') AS description,
           ip.about,
           ip.duration_value,
           ip.duration_unit,
           ip.seats_available,
           ip.fee_amount,
-          COALESCE(c.name, 'Education & Coaching') AS category_name,
-          COALESCE(c.slug, 'education-coaching') AS category_slug,
+          'Education & Coaching' AS category_name,
+          'education-coaching' AS category_slug,
           inst.name AS institution_name,
           inst.slug AS institution_slug,
           inst.id AS institution_id,
@@ -496,7 +501,6 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
         FROM institution_programs ip
         LEFT JOIN institution_profiles inst ON inst.id = ip.institution_id
         LEFT JOIN locations loc ON loc.id = inst.location_id
-        LEFT JOIN categories c ON c.id = ip.category_id
         WHERE COALESCE(ip.is_active, TRUE) = TRUE
           AND (
             ip.slug = $1
@@ -594,7 +598,46 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
       };
     }
 
-    // 5. Try finding Job Opening
+    // 5. Try finding Job Opening in staff_job_postings
+    try {
+      const jobRes = await db.query(
+        `SELECT 
+          j.*,
+          i.name AS institution_name,
+          i.slug AS institution_slug,
+          i.city AS institution_city,
+          i.phone AS institution_phone
+        FROM staff_job_postings j
+        LEFT JOIN institution_profiles i ON i.id = j.institution_id
+        WHERE j.slug = $1 
+           OR j.slug = $2 
+           OR (j.id = $3 AND $3 > 0)
+           OR j.slug ILIKE $1 
+           OR j.slug ILIKE $2
+        LIMIT 1`,
+        [targetSlug, withoutLocation, numId || -1]
+      );
+
+      if (jobRes.rows.length > 0) {
+        const jRow = jobRes.rows[0];
+        const employer = {
+          id: jRow.institution_id || 162,
+          name: jRow.institution_name || "EduBird Partner Institution",
+          slug: jRow.institution_slug || "",
+          city: jRow.institution_city || jRow.location || "Varanasi",
+          locality: jRow.location || "Varanasi",
+          phone: jRow.institution_phone || "+91 9876543210",
+        };
+        return {
+          type: "job" as const,
+          job: jRow,
+          employer,
+        };
+      }
+    } catch (jErr) {
+      console.error("Job lookup error in fetchSeoProfileData:", jErr);
+    }
+
     if (
       rawCategory === "jobs" ||
       targetSlug.includes("faculty") ||
@@ -1108,7 +1151,7 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
         const business = looseBizRes.rows[0];
         const bizId = business.id;
         const instId = business.institution_profile_id || -1;
-        const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled] = await Promise.allSettled([
+        const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled, coursesSettled, jobsSettled, recordsSettled] = await Promise.allSettled([
           db.query(
             `SELECT p.* FROM products p WHERE (p.business_profile_id = $1 OR (p.institution_id IS NOT NULL AND p.institution_id = $2)) AND COALESCE(p.status, 'active') = 'active' ORDER BY p.id DESC`,
             [bizId, instId]
@@ -1125,15 +1168,75 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
             `SELECT pr.*, u.full_name AS user_name FROM platform_reviews pr LEFT JOIN users u ON u.id = pr.user_id WHERE pr.business_id = $1 AND COALESCE(pr.is_approved, TRUE) = TRUE ORDER BY pr.id DESC LIMIT 20`,
             [bizId]
           ),
+          db.query(
+            `SELECT c.* FROM institution_courses c WHERE (c.business_profile_id = $1 OR (c.institution_id IS NOT NULL AND c.institution_id = $2)) AND COALESCE(c.status, 'published') = 'published' ORDER BY c.id DESC`,
+            [bizId, instId]
+          ),
+          db.query(
+            `SELECT j.* FROM staff_job_postings j WHERE (j.business_id = $1 OR (j.institution_id IS NOT NULL AND j.institution_id = $2)) AND COALESCE(j.status, 'published') IN ('published', 'active', 'open') ORDER BY j.id DESC`,
+            [bizId, instId]
+          ),
+          db.query(
+            `SELECT 
+              br.*,
+              cat.name as category_name,
+              subcat.name as subcategory_name,
+              COALESCE(br.featured_image, (SELECT brm.url FROM business_record_media brm WHERE brm.record_id = br.id LIMIT 1)) as image_url,
+              CASE br.vertical_code
+                WHEN 'vehicles' THEN row_to_json(vd)
+                WHEN 'properties' THEN row_to_json(pd)
+                WHEN 'restaurants' THEN row_to_json(d)
+                WHEN 'hotels' THEN row_to_json(hr)
+                WHEN 'events' THEN row_to_json(ev)
+                ELSE NULL
+              END as details
+            FROM business_records br
+            LEFT JOIN master_records cat ON cat.id = br.category_id
+            LEFT JOIN master_records subcat ON subcat.id = br.subcategory_id
+            LEFT JOIN vehicle_details vd ON vd.record_id = br.id
+            LEFT JOIN property_details pd ON pd.record_id = br.id
+            LEFT JOIN dishes d ON d.record_id = br.id
+            LEFT JOIN hotel_rooms hr ON hr.record_id = br.id
+            LEFT JOIN events ev ON ev.record_id = br.id
+            WHERE (br.business_id = $1 OR (br.institution_id IS NOT NULL AND br.institution_id = $2))
+              AND br.is_deleted = FALSE
+              AND COALESCE(br.is_active, TRUE) = TRUE
+              AND br.status = 'published'
+            ORDER BY br.id DESC`,
+            [bizId, instId]
+          ),
         ]);
+
+        const recordsRows = recordsSettled.status === "fulfilled" ? recordsSettled.value.rows : [];
+        const rawBundle = {
+          products: productsSettled.status === "fulfilled" ? productsSettled.value.rows : [],
+          services: servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [],
+          professionals: professionalsSettled.status === "fulfilled" ? professionalsSettled.value.rows : [],
+          courses: coursesSettled.status === "fulfilled" ? coursesSettled.value.rows : [],
+          jobs: jobsSettled.status === "fulfilled" ? jobsSettled.value.rows : [],
+          properties: recordsRows.filter((r: any) => r.vertical_code === "properties").map((r: any) => ({ ...r, ...(r.details || {}), image_url: r.image_url || r.featured_image || null })),
+          vehicles: recordsRows.filter((r: any) => r.vertical_code === "vehicles").map((r: any) => ({ ...r, ...(r.details || {}), image_url: r.image_url || r.featured_image || null })),
+          events: recordsRows.filter((r: any) => r.vertical_code === "events").map((r: any) => ({ ...r, ...(r.details || {}), image_url: r.image_url || r.featured_image || null })),
+          dishes: recordsRows.filter((r: any) => r.vertical_code === "restaurants").map((r: any) => ({ ...r, ...(r.details || {}), image_url: r.image_url || r.featured_image || null })),
+          rooms: recordsRows.filter((r: any) => r.vertical_code === "hotels").map((r: any) => ({ ...r, ...(r.details || {}), image_url: r.image_url || r.featured_image || null })),
+        };
+
+        const filtered = filterListingsByBusinessCategory(business, rawBundle);
 
         return {
           type: "business" as const,
           business,
-          products: productsSettled.status === "fulfilled" ? productsSettled.value.rows : [],
-          services: servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [],
-          professionals: professionalsSettled.status === "fulfilled" ? professionalsSettled.value.rows : [],
+          products: filtered.products,
+          services: filtered.services,
+          professionals: filtered.professionals,
           reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
+          courses: filtered.courses,
+          jobs: filtered.jobs,
+          properties: filtered.properties,
+          vehicles: filtered.vehicles,
+          events: filtered.events,
+          dishes: filtered.dishes,
+          rooms: filtered.rooms,
         };
       }
     } catch {
@@ -1155,6 +1258,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
       title: "Listing | EduBird Local Discovery",
       description: "Explore verified businesses, professionals, services, courses, and job openings.",
+    };
+  }
+
+  if (data.type === "explore") {
+    const rawCat = (data as any).category || "";
+    const catName = (data as any).categoryName || rawCat.replace(/-/g, " ");
+    const city = (data as any).city;
+    const loc = city ? ` in ${city.charAt(0).toUpperCase() + city.slice(1)}` : "";
+    return {
+      title: `${catName}${loc} | 143Panda`,
+      description: `Explore top verified listings for ${catName}${loc}.`,
     };
   }
 
@@ -1281,6 +1395,29 @@ export default async function SeoCategoryProfilePage({ params }: Props) {
     redirect(data.redirectTo);
   }
 
+  if (data.type === "explore") {
+    const rawCat = (data as any).category || "";
+    const catType = (data as any).categoryType || (
+      rawCat === "events" || rawCat === "event" ? "event" :
+      rawCat === "vehicles" || rawCat === "vehicle" ? "vehicle" :
+      rawCat === "properties" || rawCat === "property" ? "property" :
+      rawCat === "products" || rawCat === "product" ? "product" :
+      rawCat === "services" || rawCat === "service" ? "service" :
+      rawCat === "jobs" || rawCat === "job" ? "job" :
+      rawCat === "courses" || rawCat === "course" ? "course" :
+      rawCat === "professionals" || rawCat === "professional" ? "professional" : "business"
+    );
+    return (
+      <CustomerExplorePage
+        key={`explore-${rawCat}-${(data as any).city || ""}`}
+        initialType={catType}
+        initialCategory={rawCat}
+        initialCategoryName={(data as any).categoryName}
+        initialCity={(data as any).city}
+      />
+    );
+  }
+
   if (data.type === "business") {
     const biz = data.business;
     const locationStr = [biz.locality, biz.city, biz.state].filter(Boolean).join(", ");
@@ -1310,10 +1447,18 @@ export default async function SeoCategoryProfilePage({ params }: Props) {
         <Suspense fallback={<div className="min-h-screen bg-background p-8 text-center text-sm">Loading business profile...</div>}>
           <PublicBusinessProfileClient
             business={biz}
-            products={data.products}
-            services={data.services}
-            professionals={data.professionals}
-            reviews={data.reviews}
+            products={data.products || []}
+            services={data.services || []}
+            professionals={data.professionals || []}
+            reviews={data.reviews || []}
+            courses={data.courses || []}
+            jobs={data.jobs || []}
+            packages={(data as any).packages || []}
+            properties={data.properties || []}
+            vehicles={data.vehicles || []}
+            events={data.events || []}
+            dishes={data.dishes || []}
+            rooms={data.rooms || []}
           />
         </Suspense>
       </>

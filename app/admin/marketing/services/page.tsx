@@ -708,7 +708,11 @@ export default function AdminServicesPage() {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <Link
                       href={`/services/${srv.id}`}
-                      className="text-xs font-bold text-foreground truncate hover:text-sky-600 transition-colors cursor-pointer block max-w-[170px]"
+                      className={`text-xs font-bold truncate transition-colors cursor-pointer block max-w-[170px] hover:underline ${
+                        (srv.is_active !== undefined && srv.is_active !== null ? Boolean(srv.is_active) : (srv.status === "active" || srv.status === "published"))
+                          ? "!text-emerald-600 dark:!text-emerald-400 hover:!text-emerald-700"
+                          : "!text-rose-600 dark:!text-rose-400 hover:!text-rose-700"
+                      }`}
                       title={srv.title}
                     >
                       {srv.title}

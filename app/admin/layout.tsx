@@ -28,6 +28,14 @@ export default function AdminLayout({
   const pathname = usePathname();
   const canonicalPathname = toCanonicalAdminPath(pathname);
   const { user } = useAuthStore();
+  const isCustomer = Boolean(
+    pathname?.startsWith('/customer') ||
+    (
+      Array.isArray((user as any)?.role_codes)
+        ? (user as any).role_codes.some((r: string) => String(r).toLowerCase() === "customer") && !(user as any).role_codes.some((r: string) => ["platform_admin", "superadmin", "super_admin", "admin", "platformadmin", "institution_admin", "head_of_operations", "staff", "teacher", "faculty"].includes(String(r).toLowerCase()))
+        : (user as any)?.role === "customer" || (user as any)?.primary_role === "customer"
+    )
+  );
   const isBusinessContext = Boolean(
     pathname?.startsWith('/workspace') ||
     pathname?.startsWith('/admin/company') ||
@@ -81,29 +89,35 @@ export default function AdminLayout({
           <div className="flex flex-1 flex-col min-h-screen min-w-0 overflow-hidden">
             <header className="sticky top-0 z-30 flex h-16 items-center border-b border-border/80 bg-background/95 backdrop-blur-md px-4 gap-3 shadow-2xs">
               <SidebarTrigger className="-ml-1 text-muted-foreground hover:text-foreground" />
-              {!isBusinessContext && (
+              {!isBusinessContext && !isCustomer && (
                 <>
                   <div className="w-px h-5 bg-border/60" />
                   <AdminAcademicSessionSelector />
                 </>
               )}
-              <div className="w-px h-5 bg-border/60 hidden sm:block" />
-              <AdminActiveTaskWidget />
+              {!isCustomer && (
+                <>
+                  <div className="w-px h-5 bg-border/60 hidden sm:block" />
+                  <AdminActiveTaskWidget />
+                </>
+              )}
               <AddBusinessProfileButton />
               <AdminStorefrontHeaderButton />
 
               <div className="ml-auto flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  title="Reload Session Data"
-                  className="hidden sm:inline-flex p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer"
-                >
-                  <span className="sr-only">Reload</span>
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
+                {!isCustomer && (
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    title="Reload Session Data"
+                    className="hidden sm:inline-flex p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer"
+                  >
+                    <span className="sr-only">Reload</span>
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                )}
                 <AdminNotificationCenter />
                 <AdminThemeToggle theme={theme} onThemeChange={setTheme} />
                 <AdminUserProfileMenu />

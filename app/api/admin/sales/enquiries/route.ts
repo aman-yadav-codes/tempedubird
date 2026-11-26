@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
 import { requireAdmin } from "@/lib/auth/auth";
+import { isPlatformAdminUser } from "@/lib/auth/permissions";
 import { db } from "@/lib/db/db";
 import { getPageCount, getPagination } from "@/lib/queries/pagination";
 
@@ -34,10 +35,7 @@ export async function GET(req: Request) {
         const status = url.searchParams.get("status")?.trim() || "";
         const institutionIdParam = url.searchParams.get("institutionId") || req.headers.get("x-institution-id");
 
-        const isPlatformAdmin = Boolean(
-            user?.role_codes?.some((r: string) => r.toLowerCase().includes("super_admin") || r.toLowerCase().includes("platform_admin") || r.toLowerCase() === "admin") ||
-            user?.roles?.some((r: string) => r.toLowerCase().includes("super") || r.toLowerCase().includes("platform"))
-        );
+        const isPlatformAdmin = isPlatformAdminUser(user);
 
         let institutionId: number | null = null;
         if (institutionIdParam && !isNaN(Number(institutionIdParam)) && institutionIdParam !== "all") {
@@ -50,9 +48,36 @@ export async function GET(req: Request) {
         const whereClauses: string[] = [];
         const params: unknown[] = [];
 
-        if (institutionId) {
+        if (!isPlatformAdmin) {
+            const [bpRes, ppRes, instRes] = await Promise.all([
+                db.query(`SELECT id FROM business_profiles WHERE user_id = $1`, [user.id]).catch(() => ({ rows: [] })),
+                db.query(`SELECT id FROM professional_profiles WHERE user_id = $1`, [user.id]).catch(() => ({ rows: [] })),
+                db.query(`SELECT institution_id FROM institution_memberships WHERE user_id = $1 UNION SELECT id FROM institution_profiles WHERE user_id = $1`, [user.id]).catch(() => ({ rows: [] })),
+            ]);
+            const businessIds: number[] = bpRes.rows.map((r: any) => Number(r.id)).filter(Boolean);
+            const professionalIds: number[] = ppRes.rows.map((r: any) => Number(r.id)).filter(Boolean);
+            const instIdsFromUser = (user.memberships || []).map((m: any) => Number(m.institution_id)).filter(Boolean);
+            const institutionIds: number[] = Array.from(new Set([...instRes.rows.map((r: any) => Number(r.institution_id || r.id)).filter(Boolean), ...instIdsFromUser]));
+
+            params.push(user.id);
+            const uIdx = params.length;
+            params.push(businessIds);
+            const bIdx = params.length;
+            params.push(professionalIds);
+            const pIdx = params.length;
+            params.push(institutionIds);
+            const iIdx = params.length;
+
+            whereClauses.push(`(
+                ce.created_by_user_id = $${uIdx}
+                OR ce.seller_user_id = $${uIdx}
+                OR (ce.business_id IS NOT NULL AND ce.business_id = ANY($${bIdx}))
+                OR (ce.professional_id IS NOT NULL AND ce.professional_id = ANY($${pIdx}))
+                OR (ce.institution_id IS NOT NULL AND ce.institution_id = ANY($${iIdx}))
+            )`);
+        } else if (institutionId) {
             params.push(institutionId);
-            whereClauses.push(`(ce.institution_id = $${params.length} OR ce.institution_id IS NULL)`);
+            whereClauses.push(`ce.institution_id = $${params.length}`);
         }
 
         if (search) {
@@ -117,7 +142,11 @@ export async function GET(req: Request) {
                         END
                     ) AS source,
                     vs.created_at,
-                    vs.institution_id
+                    vs.institution_id,
+                    vs.user_id AS created_by_user_id,
+                    NULL::integer AS business_id,
+                    NULL::integer AS professional_id,
+                    NULL::integer AS seller_user_id
                 FROM visitor_sessions vs
                 LEFT JOIN institution_programs prog ON prog.id = vs.program_id
                 WHERE (COALESCE(vs.full_name, '') != '' OR COALESCE(vs.phone, '') != '' OR COALESCE(vs.email, '') != '')
@@ -150,12 +179,61 @@ export async function GET(req: Request) {
                         ELSE 'EduBird'
                     END AS source,
                     se.created_at,
-                    se.institution_id
+                    se.institution_id,
+                    sp.user_id AS created_by_user_id,
+                    NULL::integer AS business_id,
+                    NULL::integer AS professional_id,
+                    NULL::integer AS seller_user_id
                 FROM student_enrollments se
                 INNER JOIN student_profiles sp ON sp.id = se.student_id
                 INNER JOIN users u ON u.id = sp.user_id
                 LEFT JOIN institution_programs p ON p.id = se.program_id
                 WHERE COALESCE(se.is_deleted, FALSE) = FALSE
+
+                UNION ALL
+
+                SELECT
+                    'ci_' || ci.id::text AS id,
+                    ci.customer_name AS student_name,
+                    NULL AS parent_name,
+                    NULL AS parent_phone,
+                    NULL AS parent_email,
+                    NULL AS child_name,
+                    COALESCE(ci.customer_phone, '') AS phone,
+                    COALESCE(ci.customer_email, '') AS email,
+                    COALESCE(ci.status, 'new') AS status,
+                    COALESCE(ci.status, 'new') AS pipeline_stage,
+                    25000::numeric AS estimated_value,
+                    COALESCE(ci.message, 'Direct Customer Enquiry') AS notes,
+                    COALESCE(prod.title, s.title, bp.name, pp.name, 'Customer Inquiry') AS preferred_program,
+                    'inquiry' AS enquiry_type,
+                    NULL AS package_id,
+                    NULL AS package_name,
+                    NULL AS package_price,
+                    NULL AS package_for,
+                    NULL AS package_validity,
+                    jsonb_build_object(
+                        'store_name', COALESCE(bp.name, pp.name, '143Panda Store'),
+                        'seller_name', COALESCE(u_bp.full_name, u_pp.full_name, 'Store Merchant'),
+                        'source_url', COALESCE(ci.source_url, CASE WHEN ci.business_id IS NOT NULL THEN '/business/' || ci.business_id::text WHEN ci.professional_id IS NOT NULL THEN '/professional/' || ci.professional_id::text ELSE '/explore' END),
+                        'message', ci.message,
+                        'preferred_date', ci.preferred_date,
+                        'preferred_time', ci.preferred_time
+                    ) AS metadata,
+                    'Store Directory' AS source,
+                    ci.created_at,
+                    COALESCE(bp.institution_profile_id, NULL)::integer AS institution_id,
+                    ci.customer_user_id AS created_by_user_id,
+                    ci.business_id AS business_id,
+                    ci.professional_id AS professional_id,
+                    COALESCE(bp.user_id, pp.user_id, prod.created_by, s.created_by)::integer AS seller_user_id
+                FROM customer_inquiries ci
+                LEFT JOIN business_profiles bp ON bp.id = ci.business_id
+                LEFT JOIN users u_bp ON u_bp.id = bp.user_id
+                LEFT JOIN professional_profiles pp ON pp.id = ci.professional_id
+                LEFT JOIN users u_pp ON u_pp.id = pp.user_id
+                LEFT JOIN products prod ON prod.id = ci.product_id
+                LEFT JOIN services s ON s.id = ci.service_id
             )
         `;
 
@@ -197,7 +275,10 @@ export async function GET(req: Request) {
                     ce.source,
                     ce.created_at,
                     ce.institution_id,
-                    COALESCE(ip.name, ip.slug, 'EduBird Partner Institute') AS institution_name
+                    COALESCE(ce.metadata->>'store_name', ip.name, ip.slug, '143Panda Platform') AS store_name,
+                    COALESCE(ce.metadata->>'seller_name', 'Store Merchant') AS seller_name,
+                    COALESCE(ce.metadata->>'source_url', '/explore') AS source_url,
+                    COALESCE(ip.name, ip.slug, ce.metadata->>'store_name', 'EduBird Partner Institute') AS institution_name
                 FROM combined_enquiries ce
                 LEFT JOIN institution_profiles ip ON ip.id = ce.institution_id
                 ${whereSql}

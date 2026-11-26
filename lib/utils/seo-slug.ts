@@ -130,9 +130,13 @@ export function buildBusinessSeoUrl(biz: {
   state?: string | null;
   country_code?: string | null;
 }): string {
-  const catSlug = slugify(biz.category_name || biz.category_slug || "services") || "services";
-  const subcatSlug = slugify(biz.subcategory_name || biz.subcategory_slug || "");
   const baseBizSlug = slugify(biz.slug || biz.name || `business-${biz.id}`);
+  const rawCat = biz.category_name || biz.category_slug || "";
+  const catSlug = slugify(rawCat);
+  if (!catSlug || catSlug === "services" || catSlug === "general" || catSlug === "businesses") {
+    return `/business/${baseBizSlug}`;
+  }
+  const subcatSlug = slugify(biz.subcategory_name || biz.subcategory_slug || "");
 
   // Format location: locality, city, state
   const locParts = [biz.locality, biz.city, biz.state].filter(Boolean).map((s) => slugify(s));
@@ -274,20 +278,8 @@ export function buildJobSeoUrl(job: {
   location?: string | null;
   city?: string | null;
 }): string {
-  const catSlug = slugify(job.category_name || job.category_slug || job.department || "jobs") || "jobs";
-  const title = job.title || job.name || `job-${job.id}`;
-  const baseSlug = slugify(job.slug || title);
-  const city = job.city || job.location || "varanasi";
-  const locality = job.locality || "";
-  const locParts = [locality, city].filter(Boolean).map((s) => slugify(s));
-  const locSlug = locParts.length > 0 ? locParts.join("-") : "varanasi";
-
-  let itemPart = baseSlug;
-  if (locSlug && !itemPart.includes(locSlug)) {
-    itemPart = `${itemPart}-in-${locSlug}`;
-  }
-
-  return `/${catSlug}/${itemPart}`;
+  const baseSlug = job.slug || slugify(job.title || job.name || `job-${job.id}`);
+  return `/jobs/${baseSlug}`;
 }
 
 /**
@@ -357,22 +349,91 @@ export function buildPropertySeoUrl(prop: {
   return `/${catSlug}/${itemPart}`;
 }
 
+const KNOWN_COUNTRIES = new Set([
+  "india", "in",
+  "united states", "usa", "us", "america",
+  "united kingdom", "uk", "gb", "great britain",
+  "canada", "ca",
+  "australia", "au",
+  "uae", "united arab emirates", "ae",
+  "singapore", "sg",
+  "germany", "de", "deutschland",
+  "france", "fr",
+  "saudi arabia", "sa", "ksa",
+  "new zealand", "nz",
+  "south africa", "south-africa", "za", "rsa"
+]);
+
+const KNOWN_STATES = new Set([
+  "uttar pradesh", "up", "maharashtra", "delhi", "new delhi", "rajasthan",
+  "bihar", "karnataka", "punjab", "west bengal", "tamil nadu", "telangana",
+  "gujarat", "haryana", "madhya pradesh", "mp", "kerala", "odisha", "assam"
+]);
+
+/**
+ * Cleanly extract only the City name from any composite address or location string.
+ * Strips countries, states, and postal codes.
+ */
+export function extractCleanCity(locationRaw?: string | null): string {
+  if (!locationRaw) return "";
+  const trimmed = locationRaw.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === "all locations" || lower === "all" || lower === "worldwide") return "";
+  if (KNOWN_COUNTRIES.has(lower)) return "";
+
+  // Check known Indian cities and common localities/aliases
+  if (lower.includes("varanasi") || lower.includes("kashi") || lower.includes("benaras") || lower.includes("pandeypur") || lower.includes("sigra")) {
+    return "Varanasi";
+  }
+  if (lower.includes("delhi") || lower.includes("noida") || lower.includes("gurgaon") || lower.includes("gurugram")) {
+    return "New Delhi";
+  }
+  if (lower.includes("mumbai") || lower.includes("bombay") || lower.includes("thane")) {
+    return "Mumbai";
+  }
+  if (lower.includes("bengaluru") || lower.includes("bangalore")) {
+    return "Bengaluru";
+  }
+  if (lower.includes("kolkata") || lower.includes("calcutta")) {
+    return "Kolkata";
+  }
+  if (lower.includes("hyderabad") || lower.includes("secunderabad")) {
+    return "Hyderabad";
+  }
+  if (lower.includes("lucknow") || lower.includes("kanpur") || lower.includes("prayagraj") || lower.includes("allahabad")) {
+    return "Lucknow";
+  }
+  if (lower.includes("jaipur") || lower.includes("kota")) return "Jaipur";
+  if (lower.includes("pune")) return "Pune";
+  if (lower.includes("chennai")) return "Chennai";
+  if (lower.includes("patna")) return "Patna";
+  if (lower.includes("ahmedabad") || lower.includes("surat")) return "Ahmedabad";
+  if (lower.includes("chandigarh")) return "Chandigarh";
+
+  if (trimmed.includes(",")) {
+    const parts = trimmed.split(",").map((p) => p.trim()).filter(Boolean);
+    const filtered = parts.filter((p) => {
+      const pLow = p.toLowerCase();
+      return !KNOWN_COUNTRIES.has(pLow) && !KNOWN_STATES.has(pLow) && !/^\d{5,6}$/.test(pLow);
+    });
+    if (filtered.length > 0) {
+      return filtered[filtered.length - 1];
+    }
+    return "";
+  }
+
+  if (KNOWN_STATES.has(lower)) return "";
+  return trimmed;
+}
+
 /**
  * Extract canonical city name and slug for SEO URLs
  * E.g. "Pandeypur Chauraha, Varanasi" -> "varanasi"
- * E.g. "Pandeypur Chauraha" -> "varanasi" (resolves known area to city)
+ * E.g. "India" -> "" (Country is not a city)
  */
 export function extractCanonicalCitySlug(locationRaw?: string | null): string {
-  if (!locationRaw || locationRaw.toLowerCase() === "all locations" || locationRaw.toLowerCase() === "all") return "";
-  let raw = locationRaw.trim();
-  if (raw.includes(",")) {
-    const parts = raw.split(",").map((p) => p.trim()).filter(Boolean);
-    raw = parts[parts.length - 1] || parts[0];
-  }
-  if (raw.toLowerCase().includes("pandeypur")) {
-    return "varanasi";
-  }
-  return slugify(raw);
+  const city = extractCleanCity(locationRaw);
+  return city ? slugify(city) : "";
 }
 
 /**
@@ -398,13 +459,14 @@ export function buildDiscoverySeoUrl({
   const normType = (type || "").toLowerCase().trim();
   let prefix = "/businesses";
   if (normType === "professional" || normType === "professionals") prefix = "/professionals";
-  else if (normType === "product" || normType === "products") prefix = "/products";
+  else if (normType === "product" || normType === "products" || normType === "shopping") prefix = "/products";
   else if (normType === "course" || normType === "courses") prefix = "/courses";
   else if (normType === "job" || normType === "jobs") prefix = "/jobs";
-  else if (normType === "business" || normType === "businesses") prefix = "/businesses";
-  else if (normType === "service" || normType === "services") prefix = "/services";
-  else if (normType === "property" || normType === "properties") prefix = "/businesses";
-  else if (normType === "event" || normType === "events") prefix = "/businesses";
+  else if (normType === "business" || normType === "businesses" || normType === "category" || normType === "categories") prefix = "/businesses";
+  else if (normType === "service" || normType === "services" || normType === "financial") prefix = "/services";
+  else if (normType === "property" || normType === "properties") prefix = "/properties";
+  else if (normType === "vehicle" || normType === "vehicles") prefix = "/vehicles";
+  else if (normType === "event" || normType === "events") prefix = "/events";
   else if (!normType || normType === "all") {
     prefix = "/businesses";
   }
@@ -428,12 +490,126 @@ export function buildDiscoverySeoUrl({
   return prefix;
 }
 
+export const KNOWN_CATEGORY_SLUG_LABELS: Record<string, string> = {
+  // Property
+  "all-properties": "Properties & Real Estate",
+  "property-commercial-properties": "Commercial Properties",
+  "property-residential-real-estate": "Residential Real Estate",
+  "property-industrial-warehousing-estates": "Industrial & Warehousing Estates",
+  "property-plots-development-lands": "Plots & Development Lands",
+  "commercial-properties": "Commercial Properties",
+  "residential-real-estate": "Residential Real Estate",
+  "industrial-warehousing-estates": "Industrial & Warehousing Estates",
+  "plots-development-lands": "Plots & Development Lands",
+  // Vehicles
+  "all-vehicles": "Vehicles & Mobility",
+  "vehicle-passenger-cars-suvs": "Passenger Cars & SUVs",
+  "vehicle-commercial-transport-vehicles": "Commercial & Transport Vehicles",
+  "vehicle-two-wheelers-motorcycles": "Two-Wheelers & Motorcycles",
+  "vehicle-luxury-exotic-automobiles": "Luxury & Exotic Automobiles",
+  "passenger-cars-suvs": "Passenger Cars & SUVs",
+  "commercial-transport-vehicles": "Commercial & Transport Vehicles",
+  "two-wheelers-motorcycles": "Two-Wheelers & Motorcycles",
+  "luxury-exotic-automobiles": "Luxury & Exotic Automobiles",
+  // Events
+  "all-events": "Events & Expos",
+  "event-corporate-industry-events": "Corporate & Industry Events",
+  "event-live-entertainment-cultural-shows": "Live Entertainment & Cultural Shows",
+  "event-sports-fitness-tournaments": "Sports & Fitness Tournaments",
+  "event-weddings-social-galas": "Weddings & Social Galas",
+  "corporate-industry-events": "Corporate & Industry Events",
+  "live-entertainment-cultural-shows": "Live Entertainment & Cultural Shows",
+  "sports-fitness-tournaments": "Sports & Fitness Tournaments",
+  "weddings-social-galas": "Weddings & Social Galas",
+  // Professionals
+  "all-professionals": "Professionals & Consultants",
+  "doctors-and-healthcare-specialists": "Doctors & Healthcare Specialists",
+  "academic-tutors-and-education-specialists": "Academic, Tutors & Education Specialists",
+  "chartered-accountants-and-financial-advisors": "Chartered Accountants & Financial Advisors",
+  "legal-law-and-compliance-experts": "Legal & Law Experts",
+  "design-architecture-and-creative-experts": "Design, Architecture & Creative Experts",
+  "business-strategy-and-management-consultants": "Business & Strategy Consultants",
+  "fitness-wellness-and-sports-trainers": "Fitness & Wellness Trainers",
+  "beauty-hair-and-styling-artists": "Beauty & Styling Artists",
+  // Jobs
+  "all-job-openings": "Job Openings & Careers",
+  "administration-hr": "Administration & HR",
+  "job-automotive-engineering-operations": "Automotive Engineering & Operations",
+  "finance-accounting": "Finance & Accounting",
+  "job-healthcare-medical-services": "Healthcare & Medical Services",
+  "job-hospitality-restaurant-culinary": "Hospitality & Restaurant Culinary",
+  "job-real-estate-construction": "Real Estate & Construction",
+  "hospitality-retail-store-operations": "Retail & Store Operations",
+  "automotive-engineering-operations": "Automotive Engineering & Operations",
+  "healthcare-medical-services": "Healthcare & Medical Services",
+  "hospitality-restaurant-culinary": "Hospitality & Restaurant Culinary",
+  "real-estate-construction": "Real Estate & Construction",
+  // Products
+  "all-products": "Products & Merchandise",
+  "electronics-and-gadgets": "Electronics & Gadgets",
+  "automobiles-cars-and-electric-vehicles": "Automobiles, Cars & Electric Vehicles",
+  "building-materials-and-construction-hardware": "Building Materials & Construction",
+  "books-and-study-materials": "Books & Study Materials",
+  "fashion-accessories-and-footwear": "Fashion Accessories & Apparel",
+  "packaged-foods-and-gourmet-groceries": "Bakery & Gourmet Foods",
+  "event-decor-and-celebration-supplies": "Event Supplies & Decor",
+  "kitchenware-and-appliances": "Kitchenware & Appliances",
+  "baby-care": "Baby Care",
+  "dairy-products": "Dairy Products",
+  "fruits-and-vegetables": "Fruits & Vegetables",
+  "meat-fish-poultry": "Meat, Fish & Poultry",
+  "chicken-meat-fish": "Chicken, Meat & Fish",
+  "bakery-biscuits": "Bakery & Biscuits",
+  "bath-body": "Bath & Body",
+  "beauty-cosmetics": "Beauty & Cosmetics",
+  "chips-namkeen": "Chips & Namkeen",
+  "atta-rice-dal": "Atta, Rice & Dal",
+  "automotive-spare-parts-accessories": "Automotive Spare Parts & Accessories",
+  // Businesses
+  "all-businesses": "Local Businesses & Stores",
+  "education-and-coaching": "Education & Coaching",
+  "fitness-and-sports": "Fitness & Sports",
+  "food-dining-and-cafes": "Food, Dining & Cafes",
+  "healthcare-and-medical": "Healthcare & Medical",
+  "home-services-and-maintenance": "Home Services & Maintenance",
+  "hospitality-and-events": "Hospitality & Events",
+  "it-and-digital-agencies": "IT & Digital Agencies",
+  "professional-and-financial-services": "Professional & Financial Services",
+  "real-estate-and-construction": "Real Estate & Construction",
+  "retail-and-shopping": "Retail & Shopping",
+  "salons-and-personal-care": "Salons & Personal Care",
+};
+
+/**
+ * Format any category slug into a clean, human-readable display title.
+ * E.g. "property-commercial-properties" -> "Commercial Properties"
+ * E.g. "academic-tutors-and-education-specialists" -> "Academic, Tutors & Education Specialists"
+ */
+export function formatCategorySlug(slug?: string | null): string {
+  if (!slug) return "";
+  const trimmed = slug.trim().toLowerCase();
+  if (KNOWN_CATEGORY_SLUG_LABELS[trimmed]) {
+    return KNOWN_CATEGORY_SLUG_LABELS[trimmed];
+  }
+  // Strip known vertical prefixes (e.g. property-, vehicle-, event-, job-, etc.)
+  const stripped = trimmed.replace(/^(property|vehicle|event|job|service|product|business)-/, "");
+  if (KNOWN_CATEGORY_SLUG_LABELS[stripped]) {
+    return KNOWN_CATEGORY_SLUG_LABELS[stripped];
+  }
+  // Title-case words and convert "and" to "&"
+  return stripped
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ")
+    .replace(/\bAnd\b/g, "&");
+}
+
 /**
  * Parse structured discovery / listing slug
- * Example: "doctors-and-healthcare-in-varanasi" -> { categorySlug: "doctors-and-healthcare", locationSlug: "varanasi", city: "Varanasi" }
+ * Example: "doctors-and-healthcare-in-varanasi" -> { categorySlug: "doctors-and-healthcare", categoryName: "Doctors & Healthcare Specialists", locationSlug: "varanasi", city: "Varanasi" }
  */
 export function parseDiscoverySeoSlug(slug: string | undefined | null) {
-  if (!slug) return { categorySlug: "", locationSlug: "", city: "" };
+  if (!slug) return { categorySlug: "", categoryName: "", locationSlug: "", city: "" };
   const raw = String(slug).trim();
 
   let categorySlug = raw;
@@ -452,6 +628,10 @@ export function parseDiscoverySeoSlug(slug: string | undefined | null) {
     categorySlug = "";
   }
 
+  if (locationSlug && KNOWN_COUNTRIES.has(locationSlug.toLowerCase())) {
+    locationSlug = "";
+  }
+
   const city = locationSlug
     ? locationSlug
         .split("-")
@@ -459,5 +639,7 @@ export function parseDiscoverySeoSlug(slug: string | undefined | null) {
         .join(" ")
     : "";
 
-  return { categorySlug, locationSlug, city };
+  const categoryName = categorySlug ? formatCategorySlug(categorySlug) : "";
+
+  return { categorySlug, categoryName, locationSlug, city: extractCleanCity(city) || city };
 }

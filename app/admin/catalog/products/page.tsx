@@ -33,6 +33,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -726,6 +734,27 @@ export default function MasterProductsPage() {
     }
   };
 
+  const handleToggleStatus = async (product: MasterProduct) => {
+    try {
+      const res = await fetch("/api/admin/catalog/products", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ id: product.id, is_active: !product.is_active }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update status");
+      }
+      toast.success(product.is_active ? "Product suspended" : "Product activated");
+      loadData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update product status");
+    }
+  };
+
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       const matchesSearch =
@@ -886,14 +915,12 @@ export default function MasterProductsPage() {
                 <TableHeader>
                   <TableRow className="bg-muted/30">
                     <TableHead className="w-[70px]">Image</TableHead>
-                    <TableHead>Product Name & Slug</TableHead>
-                    <TableHead>Category Hierarchy</TableHead>
+                    <TableHead>Product Name & Details</TableHead>
                     <TableHead>Brand & Model</TableHead>
                     <TableHead>SKU & Unit</TableHead>
                     <TableHead>Synonyms</TableHead>
                     <TableHead className="text-right">Suggested Price</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="text-right">Admin Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -915,10 +942,42 @@ export default function MasterProductsPage() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="font-semibold text-xs text-foreground">
-                        <div>{p.name}</div>
-                        <div className="text-[10px] text-muted-foreground font-mono">
-                          /{p.slug}
+                      <TableCell className="text-xs max-w-[260px]">
+                        <a
+                          href={`/products/${p.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`font-bold text-xs truncate block cursor-pointer transition-colors hover:underline ${
+                            (p.is_active !== undefined && p.is_active !== null ? Boolean(p.is_active) : (p.listing_status === "published" || p.status === "active"))
+                              ? "!text-emerald-600 dark:!text-emerald-400 hover:!text-emerald-700"
+                              : "!text-rose-600 dark:!text-rose-400 hover:!text-rose-700"
+                          }`}
+                          title={`${p.name} (Click to open product page)`}
+                        >
+                          {p.name}
+                        </a>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            #{p.id} • /{p.slug}
+                          </span>
+                          {p.main_category_name ? (
+                            <Badge variant="outline" className="text-[9px] py-0 px-1 bg-primary/5">
+                              {p.main_category_name}
+                            </Badge>
+                          ) : p.category_name ? (
+                            <Badge variant="outline" className="text-[9px] py-0 px-1">
+                              {p.category_name}
+                            </Badge>
+                          ) : null}
+                          {p.is_active ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[9px] py-0 px-1">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground text-[9px] py-0 px-1">
+                              Suspended
+                            </Badge>
+                          )}
                         </div>
                         {p.business_name && (
                           <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
@@ -926,40 +985,11 @@ export default function MasterProductsPage() {
                             <span className="font-medium text-foreground">{p.business_name}</span>
                           </div>
                         )}
-                        {p.professional_name && (
-                          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                            <span className="text-[9px] text-blue-500 font-bold shrink-0">👤</span>
-                            <span>{p.professional_name}</span>
-                          </div>
-                        )}
                         {p.description && (
-                          <div className="text-[10px] text-muted-foreground line-clamp-1 max-w-xs font-normal mt-0.5">
+                          <div className="text-[10px] text-muted-foreground line-clamp-1 font-normal mt-0.5">
                             {p.description}
                           </div>
                         )}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        <div className="space-y-0.5">
-                          {p.main_category_name ? (
-                            <Badge variant="outline" className="text-[10px] bg-primary/5">
-                              {p.main_category_name}
-                            </Badge>
-                          ) : p.category_name ? (
-                            <Badge variant="outline" className="text-[10px]">
-                              {p.category_name}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground text-[10px]">—</span>
-                          )}
-                          {p.subcategory_name && (
-                            <div>
-                              <span className="text-[9px] text-muted-foreground">↳ </span>
-                              <Badge variant="secondary" className="text-[9px]">
-                                {p.subcategory_name}
-                              </Badge>
-                            </div>
-                          )}
-                        </div>
                       </TableCell>
                       <TableCell className="text-xs">
                         {p.brand ? (
@@ -1085,47 +1115,66 @@ export default function MasterProductsPage() {
                           </PopoverContent>
                         </Popover>
                       </TableCell>
-                      <TableCell className="text-center">
-                        {p.is_active ? (
-                          <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[10px] gap-1">
-                            <CheckCircle2 className="size-3" /> Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-muted-foreground text-[10px] gap-1">
-                            <XCircle className="size-3" /> Inactive
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-muted-foreground hover:text-foreground"
-                            onClick={() => setDetailProduct(p)}
-                            title="View Product Details"
-                          >
-                            <Eye className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-primary hover:text-primary"
-                            onClick={() => openEditDialog(p)}
-                            title="Edit Product"
-                          >
-                            <Edit2 className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(p.id)}
-                            title="Delete Product"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
+                      <TableCell className="text-right whitespace-nowrap">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2.5 text-xs gap-1 cursor-pointer font-medium hover:bg-muted"
+                            >
+                              <span>Actions</span>
+                              <ChevronDown className="size-3 text-muted-foreground" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 text-xs">
+                            <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                              Product Actions
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem
+                              onClick={() => window.open(`/products/${p.id}`, "_blank")}
+                              className="cursor-pointer text-xs"
+                            >
+                              <ExternalLink className="size-3.5 mr-2 text-muted-foreground" /> View Public Page
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openEditDialog(p)}
+                              className="cursor-pointer text-xs"
+                            >
+                              <Edit2 className="size-3.5 mr-2 text-muted-foreground" /> Edit Product
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setDetailProduct(p)}
+                              className="cursor-pointer text-xs"
+                            >
+                              <Eye className="size-3.5 mr-2 text-muted-foreground" /> View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleToggleStatus(p)}
+                              className={`cursor-pointer text-xs ${
+                                p.is_active ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                              }`}
+                            >
+                              {p.is_active ? (
+                                <>
+                                  <XCircle className="size-3.5 mr-2" /> Suspend Product
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="size-3.5 mr-2" /> Activate Product
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(p.id)}
+                              className="cursor-pointer text-xs text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-950/30"
+                            >
+                              <Trash2 className="size-3.5 mr-2" /> Delete Product
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}

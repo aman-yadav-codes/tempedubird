@@ -105,16 +105,26 @@ export function CompactServiceCard({
   return (
     <div
       id={`service-compact-${s.id}`}
-      className={`p-3 rounded-xl border transition-all flex items-center gap-3.5 group relative bg-card hover:bg-muted/30 ${
+      onClick={(e) => {
+        if (!e.defaultPrevented) {
+          if (onOpenDetails) {
+            onOpenDetails(s);
+          } else {
+            router.push(serviceDetailUrl);
+          }
+        }
+      }}
+      className={`p-3 rounded-xl border transition-all flex items-center gap-3.5 group relative bg-card hover:bg-muted/30 cursor-pointer ${
         isHighlighted
           ? "ring-2 ring-primary border-primary bg-primary/10 shadow-sm"
           : "shadow-2xs hover:shadow-xs border-border/70"
       } ${className}`}
     >
       {/* 1. Left Thumbnail Image */}
-      <div
-        onClick={handleThumbnailClick}
-        className="relative size-16 rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-600 shrink-0 overflow-hidden border flex items-center justify-center cursor-pointer group/img"
+      <Link
+        href={serviceDetailUrl}
+        onClick={handleOpenDetails}
+        className="relative size-16 rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-600 shrink-0 overflow-hidden border flex items-center justify-center cursor-pointer group/img block"
         title={`View ${serviceTitle}`}
       >
         {imageUrl ? (
@@ -131,7 +141,7 @@ export function CompactServiceCard({
         {isHighlighted && (
           <span className="absolute top-1 right-1 size-2 rounded-full bg-primary ring-2 ring-background" />
         )}
-      </div>
+      </Link>
 
       {/* 2. Middle Content */}
       <div className="min-w-0 flex-1">
@@ -149,9 +159,23 @@ export function CompactServiceCard({
           )}
         </div>
 
-        <p className="text-[11px] text-muted-foreground truncate" title={subtitle}>
-          {subtitle}
-        </p>
+        {effectiveBusiness.slug || effectiveBusiness.id ? (
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+            <span>{pricingModel} {durationText ? `• ${durationText}` : ""} • </span>
+            <Link
+              href={effectiveBusiness.slug ? `/business/${effectiveBusiness.slug}` : `/business/${effectiveBusiness.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="font-semibold hover:text-primary hover:underline truncate"
+              title={effectiveBusiness.name}
+            >
+              {effectiveBusiness.name}
+            </Link>
+          </div>
+        ) : (
+          <p className="text-[11px] text-muted-foreground truncate" title={subtitle}>
+            {subtitle}
+          </p>
+        )}
 
         {/* Pricing */}
         <div className="flex items-center justify-between mt-1">

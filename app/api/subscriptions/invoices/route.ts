@@ -14,6 +14,38 @@ async function getAuthUserId(req: Request): Promise<number | null> {
         return Number(decoded.userId || decoded.id || decoded.sub);
       }
     }
+
+    const cookieHeader = req.headers.get("cookie") || "";
+    const cookies = Object.fromEntries(
+      cookieHeader
+        .split(";")
+        .map((c) => c.trim().split("="))
+        .filter((pair) => pair.length === 2)
+        .map(([k, v]) => [decodeURIComponent(k.trim()), decodeURIComponent(v.trim())])
+    );
+
+    const cookieToken = cookies["auth_token"] || cookies["token"] || cookies["accessToken"];
+    if (cookieToken) {
+      try {
+        const decoded = jwt.verify(cookieToken, JWT_SECRET) as any;
+        if (decoded && (decoded.userId || decoded.id || decoded.sub)) {
+          return Number(decoded.userId || decoded.id || decoded.sub);
+        }
+      } catch {}
+    }
+
+    const refreshToken = cookies["refresh_token"];
+    if (refreshToken) {
+      try {
+        const sessionRes = await db.query(
+          `SELECT user_id, expires_at FROM sessions WHERE refresh_token = $1 AND expires_at > NOW() LIMIT 1`,
+          [refreshToken]
+        );
+        if (sessionRes.rows[0]?.user_id) {
+          return Number(sessionRes.rows[0].user_id);
+        }
+      } catch {}
+    }
   } catch (err) {
     // ignore
   }

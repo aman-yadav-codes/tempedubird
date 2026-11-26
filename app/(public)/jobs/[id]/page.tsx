@@ -41,7 +41,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { StaffJobPosting } from "@/lib/queries/jobs";
-import { buildJobSeoUrl, parseDiscoverySeoSlug } from "@/lib/utils/seo-slug";
+import { buildJobSeoUrl, parseDiscoverySeoSlug, KNOWN_CATEGORY_SLUG_LABELS } from "@/lib/utils/seo-slug";
 import CustomerExplorePage from "@/app/(public)/explore/page";
 
 interface JobDetailPageProps {
@@ -51,13 +51,29 @@ interface JobDetailPageProps {
 export default function JobDetailPage({ params }: JobDetailPageProps) {
   const { id } = use(params);
 
-  if (id && (id.includes("-in-") || id.startsWith("all-") || id.startsWith("in-"))) {
-    const { categorySlug, city } = parseDiscoverySeoSlug(id);
-    return <CustomerExplorePage initialType="job" initialCategory={categorySlug} initialCity={city} />;
+  const withoutLoc = id && id.includes("-in-") ? id.split("-in-")[0] : id;
+  const isJobCategory = id && (
+    id.startsWith("all-") ||
+    id.startsWith("in-") ||
+    id.startsWith("job-") ||
+    Boolean(KNOWN_CATEGORY_SLUG_LABELS[id]) ||
+    Boolean(withoutLoc && KNOWN_CATEGORY_SLUG_LABELS[withoutLoc])
+  );
+
+  if (isJobCategory) {
+    const { categorySlug, categoryName, city } = parseDiscoverySeoSlug(id);
+    return <CustomerExplorePage key={`job-${id}`} initialType="job" initialCategory={categorySlug} initialCategoryName={categoryName} initialCity={city} />;
   }
+
+  return <JobDetailContent key={id} jobId={id} />;
+}
+
+function JobDetailContent({ jobId }: { jobId: string }) {
+  const id = jobId;
   const router = useRouter();
   const [job, setJob] = useState<StaffJobPosting | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notFoundFallback, setNotFoundFallback] = useState(false);
   const [notFoundState, setNotFoundState] = useState(false);
 
   // Application dialog
@@ -95,10 +111,7 @@ export default function JobDetailPage({ params }: JobDetailPageProps) {
         return;
       }
       setJob(json.data);
-      const canonicalSeoUrl = buildJobSeoUrl(json.data);
-      if (canonicalSeoUrl && !canonicalSeoUrl.startsWith("/jobs/")) {
-        router.replace(canonicalSeoUrl);
-      } else if (json.data.slug && /^\d+$/.test(id) && json.data.slug !== id) {
+      if (json.data.slug && /^\d+$/.test(id) && json.data.slug !== id) {
         router.replace(`/jobs/${json.data.slug}`);
       }
     } catch {
@@ -216,6 +229,11 @@ export default function JobDetailPage({ params }: JobDetailPageProps) {
     }
   }
 
+  if (notFoundFallback) {
+    const { categorySlug, city } = parseDiscoverySeoSlug(id);
+    return <CustomerExplorePage key={`job-${id}`} initialType="job" initialCategory={categorySlug} initialCity={city} />;
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-20 flex flex-col items-center justify-center min-h-[50vh]">
@@ -280,10 +298,26 @@ export default function JobDetailPage({ params }: JobDetailPageProps) {
                   {job.title}
                 </h1>
                 {job.institution_name && (
-                  <p className="text-sm font-semibold text-primary flex items-center gap-1.5 mt-2">
-                    <Building2 className="size-4 shrink-0" />
-                    <span>{job.institution_name}</span>
-                  </p>
+                  <div className="mt-2">
+                    <Link
+                      href={
+                        job.institution_slug
+                          ? `/institutes/${job.institution_slug}`
+                          : job.business_slug
+                          ? `/business/${job.business_slug}`
+                          : job.institution_id
+                          ? `/institutes/${job.institution_id}`
+                          : job.business_id
+                          ? `/business/${job.business_id}`
+                          : "#"
+                      }
+                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline hover:text-primary/80 transition-colors"
+                      title={`View ${job.institution_name} profile`}
+                    >
+                      <Building2 className="size-4 shrink-0" />
+                      <span>{job.institution_name}</span>
+                    </Link>
+                  </div>
                 )}
               </div>
 

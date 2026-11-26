@@ -36,8 +36,18 @@ import {
   Layers,
   Tag,
   Check,
-  AlertCircle
+  AlertCircle,
+  ChevronDown,
+  ExternalLink,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,21 +80,24 @@ export interface BusinessRecordManagerProps {
   title: string;
   description: string;
   icon?: any;
+  isMasterCatalog?: boolean;
 }
 
-export function BusinessRecordManager({ vertical, title, description, icon: HeaderIcon }: BusinessRecordManagerProps) {
+export function BusinessRecordManager({ vertical, title, description, icon: HeaderIcon, isMasterCatalog = false }: BusinessRecordManagerProps) {
   const { accessToken } = useAuthStore();
 
   const getHeaders = useCallback(() => {
     const headers: Record<string, string> = {};
     if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
-    const activeInst = typeof window !== "undefined" ? (localStorage.getItem("active_institution_id") || "") : "";
-    if (activeInst) {
-      headers["x-institution-id"] = activeInst;
-      headers["x-business-id"] = activeInst;
+    if (!isMasterCatalog) {
+      const activeInst = typeof window !== "undefined" ? (localStorage.getItem("active_institution_id") || "") : "";
+      if (activeInst) {
+        headers["x-institution-id"] = activeInst;
+        headers["x-business-id"] = activeInst;
+      }
     }
     return headers;
-  }, [accessToken]);
+  }, [accessToken, isMasterCatalog]);
 
   // Data States
   const { countryCode, currencyCode, currencySymbol, formatPrice: formatCurrencyPrice } = useBusinessCurrency();
@@ -159,6 +172,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
         page: String(page),
         limit: "20",
       });
+      if (isMasterCatalog) params.set("is_master", "true");
       if (search.trim()) params.set("search", search.trim());
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (categoryFilter !== "all") params.set("category_id", categoryFilter);
@@ -179,7 +193,7 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
     } finally {
       setLoading(false);
     }
-  }, [vertical, page, search, statusFilter, categoryFilter]);
+  }, [vertical, page, search, statusFilter, categoryFilter, getHeaders, isMasterCatalog]);
 
   useEffect(() => {
     fetchFormConfig();
@@ -633,17 +647,35 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
             <table className="w-full text-sm text-left">
               <thead className="bg-muted/50 border-b text-xs uppercase font-semibold text-muted-foreground tracking-wider">
                 <tr>
-                  <th className="p-3.5 pl-4">Item</th>
-                  <th className="p-3.5">Details</th>
+                  <th className="p-3.5 pl-4">Item & Details</th>
+                  <th className="p-3.5">Specifics</th>
                   <th className="p-3.5">Price / Fees</th>
-                  <th className="p-3.5">Status</th>
-                  <th className="p-3.5">Active</th>
-                  <th className="p-3.5 text-right pr-4">Actions</th>
+                  <th className="p-3.5 text-right pr-4 w-[120px]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {records.map((r) => {
                   const details = r.details || {};
+                  const publicUrl = (() => {
+                    const q = encodeURIComponent(r.slug || r.title || "");
+                    switch (vertical) {
+                      case "vehicles":
+                        return `/explore?type=vehicles&q=${q}`;
+                      case "properties":
+                        return `/explore?type=properties&q=${q}`;
+                      case "events":
+                        return `/explore?type=events&q=${q}`;
+                      case "restaurants":
+                        return `/explore?type=dishes&q=${q}`;
+                      case "hotels":
+                        return `/explore?type=rooms&q=${q}`;
+                      case "education":
+                        return `/explore?type=courses&q=${q}`;
+                      default:
+                        return `/explore?q=${q}`;
+                    }
+                  })();
+
                   return (
                     <tr key={r.id} className="hover:bg-muted/20 transition-colors">
                       <td className="p-3.5 pl-4">
@@ -659,9 +691,44 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                               <IconComp className="h-6 w-6" />
                             </div>
                           )}
-                          <div className="min-w-0">
-                            <p className="font-semibold text-foreground truncate max-w-xs">{r.title}</p>
-                            <p className="text-xs text-muted-foreground truncate font-mono">/{r.slug}</p>
+                          <div className="min-w-0 space-y-1">
+                            <a
+                              href={publicUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`font-bold truncate max-w-xs flex items-center gap-1 group hover:underline ${
+                                (r.is_active !== undefined && r.is_active !== null ? Boolean(r.is_active) : (r.status === "published" || r.status === "active"))
+                                  ? "!text-emerald-600 dark:!text-emerald-400 hover:!text-emerald-700"
+                                  : "!text-rose-600 dark:!text-rose-400 hover:!text-rose-700"
+                              }`}
+                            >
+                              <span>{r.title}</span>
+                              <ExternalLink className="size-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                            </a>
+                            <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                              <span className="text-muted-foreground font-mono">/{r.slug}</span>
+                              <Badge
+                                variant={r.status === "published" ? "default" : r.status === "draft" ? "secondary" : "outline"}
+                                className="capitalize text-[9px] py-0 px-1.5 h-4 font-medium"
+                              >
+                                {r.status}
+                              </Badge>
+                              {r.is_active ? (
+                                <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[9px] py-0 px-1.5 h-4 gap-0.5">
+                                  <CheckCircle2 className="size-2.5" /> Active
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-muted-foreground text-[9px] py-0 px-1.5 h-4 gap-0.5">
+                                  <XCircle className="size-2.5" /> Inactive
+                                </Badge>
+                              )}
+                              {r.business_name && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 bg-muted/40 text-muted-foreground font-normal gap-1">
+                                  <Building2 className="size-2.5 text-muted-foreground" />
+                                  <span className="truncate max-w-[160px]">{r.business_name}</span>
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -721,61 +788,77 @@ export function BusinessRecordManager({ vertical, title, description, icon: Head
                         )}
                       </td>
 
-                      <td className="p-3.5">
-                        <Badge
-                          variant={r.status === "published" ? "default" : r.status === "draft" ? "secondary" : "outline"}
-                          className="capitalize text-xs font-medium"
-                        >
-                          {r.status}
-                        </Badge>
-                      </td>
-
-                      <td className="p-3.5">
-                        <Switch
-                          checked={Boolean(r.is_active)}
-                          onCheckedChange={() => handleToggleActive(r)}
-                        />
-                      </td>
-
                       <td className="p-3.5 text-right pr-4">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            title="View Details"
-                            onClick={() => handleOpenView(r)}
-                          >
-                            <Eye className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            title="Edit Record"
-                            onClick={() => handleOpenEdit(r)}
-                          >
-                            <Edit2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            title="Duplicate"
-                            onClick={() => handleDuplicate(r)}
-                          >
-                            <Copy className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 hover:text-destructive"
-                            title="Archive / Delete"
-                            onClick={() => handleDelete(r)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-7 text-xs font-medium gap-1 px-2">
+                              <span>Actions</span>
+                              <ChevronDown className="size-3 opacity-60" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              Actions
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem asChild>
+                              <a
+                                href={publicUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="cursor-pointer flex items-center gap-2"
+                              >
+                                <ExternalLink className="size-3.5 text-blue-500" />
+                                <span>View Public Page</span>
+                              </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleOpenView(r)}
+                              className="cursor-pointer flex items-center gap-2"
+                            >
+                              <Eye className="size-3.5 text-muted-foreground" />
+                              <span>View Details</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleOpenEdit(r)}
+                              className="cursor-pointer flex items-center gap-2"
+                            >
+                              <Edit2 className="size-3.5 text-primary" />
+                              <span>Edit Record</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleDuplicate(r)}
+                              className="cursor-pointer flex items-center gap-2"
+                            >
+                              <Copy className="size-3.5 text-muted-foreground" />
+                              <span>Duplicate</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleToggleActive(r)}
+                              className="cursor-pointer flex items-center gap-2"
+                            >
+                              {r.is_active ? (
+                                <>
+                                  <XCircle className="size-3.5 text-amber-500" />
+                                  <span>Deactivate</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="size-3.5 text-emerald-500" />
+                                  <span>Activate</span>
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(r)}
+                              className="cursor-pointer flex items-center gap-2 text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="size-3.5 text-destructive" />
+                              <span>Delete Permanently</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   );

@@ -99,9 +99,27 @@ export function PublicServiceDetailView({
     }
     setSubmitting(true);
     try {
-      await new Promise((r) => setTimeout(r, 600));
-      toast.success("Booking request sent! The service provider will call to confirm your appointment.");
-      setBookingOpen(false);
+      const res = await fetch("/api/customer/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessId: service.business_id || service.businessId,
+          professionalId: service.professional_id || service.professionalId,
+          serviceId: service.id,
+          serviceName: service.name || service.title || "Service",
+          bookingDate,
+          bookingTime,
+          notes,
+          totalPrice: finalPrice,
+        }),
+      });
+      if (res.ok) {
+        toast.success("Booking request sent! The service provider will call to confirm your appointment.");
+        setBookingOpen(false);
+      } else {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error || "Failed to submit booking. Please try again.");
+      }
     } catch {
       toast.error("Failed to submit booking. Please try again.");
     } finally {
@@ -273,7 +291,7 @@ export function PublicServiceDetailView({
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-xs text-foreground">{r.user_name || "Satisfied Client"}</span>
                       <div className="flex items-center gap-1">
-                        {Array.from({ length: r.rating || 5 }).map((_, i) => (
+                        {Array.from({ length: Math.max(0, Math.min(5, Math.round(Number(r.rating) || 5))) }).map((_, i) => (
                           <Star key={i} className="size-3 text-amber-500 fill-amber-500" />
                         ))}
                       </div>
@@ -375,11 +393,27 @@ export function PublicServiceDetailView({
                 Offered By
               </span>
               <div className="flex items-start gap-3">
-                <div className="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-base shrink-0">
-                  {providerType === "professional" ? <Briefcase className="size-6" /> : <Store className="size-6" />}
-                </div>
+                {providerUrl !== "#" ? (
+                  <Link href={providerUrl} className="block cursor-pointer shrink-0" title={`Visit ${providerName} Profile`}>
+                    <div className="size-12 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 flex items-center justify-center font-bold text-base transition-colors">
+                      {providerType === "professional" ? <Briefcase className="size-6" /> : <Store className="size-6" />}
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-base shrink-0">
+                    {providerType === "professional" ? <Briefcase className="size-6" /> : <Store className="size-6" />}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-sm text-foreground truncate">{providerName}</h4>
+                  {providerUrl !== "#" ? (
+                    <Link href={providerUrl} className="block cursor-pointer group/prov" title={`Visit ${providerName} Profile`}>
+                      <h4 className="font-bold text-sm text-foreground group-hover/prov:text-primary group-hover/prov:underline transition-colors truncate">
+                        {providerName}
+                      </h4>
+                    </Link>
+                  ) : (
+                    <h4 className="font-bold text-sm text-foreground truncate">{providerName}</h4>
+                  )}
                   <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                     <MapPin className="size-3 text-primary shrink-0" />
                     <span className="truncate">{providerLocation}</span>

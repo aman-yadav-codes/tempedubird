@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db/db";
 import { extractIdFromSlug, buildBusinessSeoUrl } from "@/lib/utils/seo-slug";
 import { PublicBusinessProfileClient } from "@/components/profile/public-business-profile-client";
+import { filterListingsByBusinessCategory } from "@/lib/utils/business-vertical-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,17 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
     );
 
     if (bizRes.rows.length === 0) {
+      // Check if it's an institution profile
+      const instCheck = await db.query(
+        `SELECT slug, id FROM institution_profiles WHERE slug = $1 OR id = $2 LIMIT 1`,
+        [idOrSlug, numId || -1]
+      );
+      if (instCheck.rows.length > 0) {
+        return {
+          redirectTo: `/institutes/${instCheck.rows[0].slug || instCheck.rows[0].id}`,
+        };
+      }
+
       // Check if it's a professional profile by mistake
       const profCheck = await db.query(
         `SELECT slug, id FROM professional_profiles WHERE (slug = $1 OR id = $2) AND COALESCE(is_active, TRUE) = TRUE LIMIT 1`,
@@ -75,8 +87,18 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
     const instId = business.institution_profile_id || -1;
     const userId = business.user_id || -1;
 
-    // 2. Concurrently fetch products, services, professionals, reviews, courses, jobs, gallery
-    const [productsSettled, servicesSettled, professionalsSettled, reviewsSettled, coursesSettled, jobsSettled, gallerySettled, packagesSettled] = await Promise.allSettled([
+    // 2. Concurrently fetch products, services, professionals, reviews, courses, jobs, gallery, packages, records
+    const [
+      productsSettled,
+      servicesSettled,
+      professionalsSettled,
+      reviewsSettled,
+      coursesSettled,
+      jobsSettled,
+      gallerySettled,
+      packagesSettled,
+      recordsSettled,
+    ] = await Promise.allSettled([
       // Products: Query store products first, falling back to / unioning master_products
       db.query(
         `SELECT
@@ -195,22 +217,22 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
         [bizId, instId, userId]
       ),
 
-      // Reviews
+      // Reviews: Platform Reviews
       db.query(
         `SELECT
-          r.id,
-          r.title,
-          r.review,
-          r.rating,
-          r.created_at,
-          u.full_name AS user_name
-        FROM institution_reviews r
-        LEFT JOIN users u ON u.id = r.user_id
-        WHERE (r.institution_id = $1 OR r.institution_id = $2)
-          AND COALESCE(r.is_approved, TRUE) = TRUE
-        ORDER BY r.id DESC
+          pr.id,
+          pr.title,
+          pr.comment AS review,
+          pr.rating,
+          pr.created_at,
+          COALESCE(u.full_name, 'Verified Customer') AS user_name
+        FROM platform_reviews pr
+        LEFT JOIN users u ON u.id = pr.author_user_id
+        WHERE (pr.business_id = $1 OR pr.business_id = $2)
+          AND (pr.status = 'approved' OR pr.status = 'active' OR pr.status IS NULL)
+        ORDER BY pr.id DESC
         LIMIT 20`,
-        [instId, bizId]
+        [bizId, instId]
       ),
 
       // Courses: Inherited / Created Institution & Business Courses
@@ -266,14 +288,14 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
           COALESCE(sjp.department, 'Store Operations') AS category_name
         FROM staff_job_postings sjp
         WHERE (
-          (sjp.institution_id IS NOT NULL AND sjp.institution_id = $1)
-          OR (sjp.created_by IS NOT NULL AND sjp.created_by = $2)
-          OR sjp.institution_id IS NULL
+          sjp.business_profile_id = $1
+          OR (sjp.institution_id IS NOT NULL AND sjp.institution_id = $2)
+          OR (sjp.created_by IS NOT NULL AND sjp.created_by = $3)
         )
           AND LOWER(COALESCE(sjp.status, 'active')) = 'active'
         ORDER BY sjp.id DESC
         LIMIT 50`,
-        [instId, userId]
+        [bizId, instId, userId]
       ),
 
       // Gallery Media: Photos & Showcases from institution_media
@@ -318,6 +340,37 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
           AND is_active = TRUE
         ORDER BY id ASC
         LIMIT 50`
+      ),
+
+      // Business Records (Properties, Vehicles, Events, Dishes, Rooms)
+      db.query(
+        `SELECT 
+          br.*,
+          cat.name as category_name,
+          subcat.name as subcategory_name,
+          COALESCE(br.featured_image, (SELECT brm.url FROM business_record_media brm WHERE brm.record_id = br.id LIMIT 1)) as image_url,
+          CASE br.vertical_code
+            WHEN 'vehicles' THEN row_to_json(vd)
+            WHEN 'properties' THEN row_to_json(pd)
+            WHEN 'restaurants' THEN row_to_json(d)
+            WHEN 'hotels' THEN row_to_json(hr)
+            WHEN 'events' THEN row_to_json(ev)
+            ELSE NULL
+          END as details
+        FROM business_records br
+        LEFT JOIN master_records cat ON cat.id = br.category_id
+        LEFT JOIN master_records subcat ON subcat.id = br.subcategory_id
+        LEFT JOIN vehicle_details vd ON vd.record_id = br.id
+        LEFT JOIN property_details pd ON pd.record_id = br.id
+        LEFT JOIN dishes d ON d.record_id = br.id
+        LEFT JOIN hotel_rooms hr ON hr.record_id = br.id
+        LEFT JOIN events ev ON ev.record_id = br.id
+        WHERE (br.business_id = $1 OR (br.institution_id IS NOT NULL AND br.institution_id = $2))
+          AND br.is_deleted = FALSE
+          AND COALESCE(br.is_active, TRUE) = TRUE
+          AND br.status = 'published'
+        ORDER BY br.id DESC`,
+        [bizId, instId]
       ),
     ]);
 
@@ -387,118 +440,65 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       // ignore
     }
 
-    return {
-      business,
+    const recordsRows = recordsSettled.status === "fulfilled" ? recordsSettled.value.rows : [];
+    const properties = recordsRows.filter((r: any) => r.vertical_code === "properties").map((r: any) => ({
+      ...r,
+      ...(r.details || {}),
+      image_url: r.image_url || r.featured_image || null,
+    }));
+    const vehicles = recordsRows.filter((r: any) => r.vertical_code === "vehicles").map((r: any) => ({
+      ...r,
+      ...(r.details || {}),
+      image_url: r.image_url || r.featured_image || null,
+    }));
+    const events = recordsRows.filter((r: any) => r.vertical_code === "events").map((r: any) => ({
+      ...r,
+      ...(r.details || {}),
+      image_url: r.image_url || r.featured_image || null,
+    }));
+    const dishes = recordsRows.filter((r: any) => r.vertical_code === "restaurants").map((r: any) => ({
+      ...r,
+      ...(r.details || {}),
+      image_url: r.image_url || r.featured_image || null,
+    }));
+    const rooms = recordsRows.filter((r: any) => r.vertical_code === "hotels").map((r: any) => ({
+      ...r,
+      ...(r.details || {}),
+      image_url: r.image_url || r.featured_image || null,
+    }));
+
+    const filteredBundle = filterListingsByBusinessCategory(business, {
       products: productsSettled.status === "fulfilled" ? productsSettled.value.rows : [],
       services: resolvedServices,
       professionals: professionalsSettled.status === "fulfilled" ? professionalsSettled.value.rows : [],
-      reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
       courses: coursesSettled.status === "fulfilled" ? coursesSettled.value.rows : [],
       jobs: jobsSettled.status === "fulfilled" ? jobsSettled.value.rows : [],
       packages: packagesSettled.status === "fulfilled" ? packagesSettled.value.rows : [],
-    };
-  } catch (err: any) {
-    console.warn("fetchBusinessFullData fallback:", err?.message || err);
-    const { id: numId } = extractIdFromSlug(idOrSlug);
-    const resolvedId = numId || 160;
+      properties,
+      vehicles,
+      events,
+      dishes,
+      rooms,
+    });
 
     return {
-      business: {
-        id: resolvedId,
-        name: "Maa Sharda Institute PVT LTD",
-        slug: idOrSlug.includes("-") ? idOrSlug : "maa-sharda-institute",
-        about: "Maa sharda institute PVT LTD well known, coaching institute running successfully since last 6 years in Pandeypur varanasi. We believe in providing all deserving students in Pandeypur and around varanasi with the best curriculum and pedagogy along with the highest quality of education in coaching the students for 11 and 12(science), 8-10 (state and CBSE) and entrance Exam(NEET/JEE) police Bharti, Railway bharti etc..",
-        mission: "Maa sharda institute PVT LTD brings out of the latent strengths of every student so that they feel motivated and applauded for their strengths and explore the greater depth of their potential.",
-        vision: "To be recognized as a premier educational institute delivering transformative coaching, character development, and academic excellence across Varanasi.",
-        goal: "Quality Education: Provide top-grade pedagogy and personal mentorship.\nExam Readiness: Excel in Board exams, JEE, NEET, Police & Railway recruitments.\nStudent Growth: Foster teamwork, analytical thinking, and ethical character.",
-        owner_name: "Director & Academic Head",
-        owner_designation: "Founder & Leadership",
-        founder_name: "Er. Arvind Yadav",
-        founder_title: "Founder & Managing Director",
-        phone: "+91 9876543210",
-        email: "contact@maasharda.com",
-        is_verified: true,
-        category_name: "Education & Coaching Institute",
-        subcategory_name: "Coaching Classes",
-        city: "Varanasi",
-        state: "Uttar Pradesh",
-        address: "Pandeypur, Varanasi, Uttar Pradesh",
-        gallery_media: [],
-        gallery_images: [],
-      },
-      products: [],
-      services: [],
-      professionals: [
-        {
-          id: "prof-1",
-          name: "Er. Arvind Yadav",
-          slug: "arvind-yadav",
-          designation: "Founder & Physics Specialist",
-          profession_type: "Lead Faculty",
-          experience_years: "12",
-          city: "Varanasi",
-          state: "Uttar Pradesh",
-          member_type: "professional",
-          sort_order: 1,
-        },
-      ],
-      reviews: [
-        {
-          id: 1,
-          title: "Exceptional Guidance",
-          review: "Excellent faculty and concept-oriented coaching for board and competitive exams.",
-          rating: 5,
-          user_name: "Aman Sharma",
-        },
-      ],
-      courses: [
-        {
-          id: 1,
-          name: "IIT-JEE / NEET Foundation Course",
-          slug: "iit-jee-neet-foundation",
-          description: "Comprehensive coaching covering Physics, Chemistry, Mathematics & Biology with test series.",
-          category_name: "Competitive Exams",
-          duration_value: 1,
-          duration_unit: "Year",
-          fee_amount: 45000,
-          seats_available: 40,
-        },
-        {
-          id: 2,
-          name: "Class 11 & 12 Science (CBSE / State Board)",
-          slug: "class-11-12-science",
-          description: "Full curriculum mastery for board exam excellence with chapter-wise test papers.",
-          category_name: "School Coaching",
-          duration_value: 1,
-          duration_unit: "Year",
-          fee_amount: 30000,
-          seats_available: 60,
-        },
-      ],
-      jobs: [
-        {
-          id: 1,
-          title: "Senior Physics Faculty (JEE / NEET)",
-          slug: "senior-physics-faculty",
-          department: "Academic & Teaching",
-          employment_type: "Full-time",
-          experience_level: "3+ years",
-          work_mode: "On-site",
-          location_display: "Main Campus, Pandeypur",
-        },
-        {
-          id: 2,
-          title: "Academic Counselor & Front Desk Manager",
-          slug: "academic-counselor",
-          department: "Administration",
-          employment_type: "Full-time",
-          experience_level: "1-2 years",
-          work_mode: "On-site",
-          location_display: "Main Campus, Pandeypur",
-        },
-      ],
-      packages: [],
+      business,
+      products: filteredBundle.products,
+      services: filteredBundle.services,
+      professionals: filteredBundle.professionals,
+      reviews: reviewsSettled.status === "fulfilled" ? reviewsSettled.value.rows : [],
+      courses: filteredBundle.courses,
+      jobs: filteredBundle.jobs,
+      packages: filteredBundle.packages || [],
+      properties: filteredBundle.properties,
+      vehicles: filteredBundle.vehicles,
+      events: filteredBundle.events,
+      dishes: filteredBundle.dishes,
+      rooms: filteredBundle.rooms,
     };
+  } catch (err: any) {
+    console.error("fetchBusinessFullData error:", err?.message || err);
+    return null;
   }
 });
 
@@ -556,6 +556,11 @@ export default async function BusinessProfilePage({ params }: Props) {
         courses={data.courses}
         jobs={data.jobs}
         packages={data.packages || []}
+        properties={data.properties || []}
+        vehicles={data.vehicles || []}
+        events={data.events || []}
+        dishes={data.dishes || []}
+        rooms={data.rooms || []}
       />
     </Suspense>
   );

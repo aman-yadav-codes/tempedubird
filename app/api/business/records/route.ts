@@ -50,10 +50,20 @@ export async function GET(req: Request) {
         )
       )`);
     } else {
-      // Platform admin can view all or filter by business
-      if (tenant.businessId) {
-        params.push(tenant.businessId, tenant.institutionId || tenant.businessId);
-        conditions.push(`(br.business_id = $${params.length - 1} OR br.institution_id = $${params.length} OR br.business_id = $${params.length} OR br.institution_id = $${params.length - 1})`);
+      // Platform admin: can view all records across businesses, or filter if a specific businessId query param is passed
+      const explicitBiz = url.searchParams.get("businessId") || url.searchParams.get("business_id");
+      const isMasterCatalog = url.searchParams.get("is_master") === "true" || url.searchParams.get("isMasterCatalog") === "true";
+
+      if (explicitBiz && /^\d+$/.test(explicitBiz) && explicitBiz !== "0") {
+        params.push(Number(explicitBiz));
+        conditions.push(`(br.business_id = $${params.length} OR br.institution_id = $${params.length})`);
+      } else if (!isMasterCatalog && !url.searchParams.get("all")) {
+        // If not in master catalog mode and an explicit business header was sent (and not "all" / "0")
+        const headerBiz = req.headers.get("x-business-id");
+        if (headerBiz && /^\d+$/.test(headerBiz) && headerBiz !== "0" && headerBiz !== "all") {
+          params.push(Number(headerBiz));
+          conditions.push(`(br.business_id = $${params.length} OR br.institution_id = $${params.length})`);
+        }
       }
     }
 
@@ -140,11 +150,14 @@ export async function GET(req: Request) {
     const recordsRes = await db.query(`
       SELECT
         br.*,
+        bp.name as business_name,
+        bp.city as business_city,
         cat.name as category_name,
         subcat.name as subcategory_name,
         (SELECT COUNT(*)::int FROM business_record_media brm WHERE brm.record_id = br.id) as media_count,
         ${detailSelect}
       FROM business_records br
+      LEFT JOIN business_profiles bp ON bp.id = br.business_id
       LEFT JOIN master_records cat ON cat.id = br.category_id
       LEFT JOIN master_records subcat ON subcat.id = br.subcategory_id
       ${detailJoin}

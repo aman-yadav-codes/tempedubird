@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth/auth";
-import { isPlatformFullAccess } from "@/lib/auth/permissions";
+import { isPlatformAdminUser, isPlatformFullAccess } from "@/lib/auth/permissions";
+import { db } from "@/lib/db/db";
 import {
   createSalesOrder,
   deleteSalesOrder,
@@ -14,13 +15,24 @@ export async function GET(req: Request) {
     const user = await requireAdmin(req);
     const { searchParams } = new URL(req.url);
 
-    const isPlatform = isPlatformFullAccess(user) || user.role_codes?.includes("platform_admin");
+    const isPlatform = isPlatformAdminUser(user) || isPlatformFullAccess(user);
     const requestedInstId = searchParams.get("institutionId");
 
     let institutionId: number | null = null;
+    let sellerBusinessIds: number[] = [];
+    let sellerProfessionalIds: number[] = [];
+    let institutionIds: number[] = [];
+
     if (!isPlatform) {
-      const activeInst = user.memberships?.find((m) => m.role_code === "institution_admin")?.institution_id;
-      institutionId = activeInst ? Number(activeInst) : null;
+      const [bpRes, ppRes, instRes] = await Promise.all([
+        db.query(`SELECT id FROM business_profiles WHERE user_id = $1`, [user.id]).catch(() => ({ rows: [] })),
+        db.query(`SELECT id FROM professional_profiles WHERE user_id = $1`, [user.id]).catch(() => ({ rows: [] })),
+        db.query(`SELECT institution_id FROM institution_memberships WHERE user_id = $1 UNION SELECT id FROM institution_profiles WHERE user_id = $1`, [user.id]).catch(() => ({ rows: [] })),
+      ]);
+      sellerBusinessIds = bpRes.rows.map((r: any) => Number(r.id)).filter(Boolean);
+      sellerProfessionalIds = ppRes.rows.map((r: any) => Number(r.id)).filter(Boolean);
+      const instIdsFromUser = (user.memberships || []).map((m: any) => Number(m.institution_id)).filter(Boolean);
+      institutionIds = Array.from(new Set([...instRes.rows.map((r: any) => Number(r.institution_id || r.id)).filter(Boolean), ...instIdsFromUser]));
     } else if (requestedInstId && requestedInstId !== "all") {
       institutionId = Number(requestedInstId);
     }
@@ -36,6 +48,10 @@ export async function GET(req: Request) {
       paymentStatus,
       fulfillmentStatus,
       institutionId,
+      institutionIds: !isPlatform && institutionIds.length > 0 ? institutionIds : undefined,
+      sellerOrCustomerUserId: !isPlatform ? user.id : undefined,
+      sellerBusinessIds: !isPlatform && sellerBusinessIds.length > 0 ? sellerBusinessIds : undefined,
+      sellerProfessionalIds: !isPlatform && sellerProfessionalIds.length > 0 ? sellerProfessionalIds : undefined,
       page,
       limit,
     });

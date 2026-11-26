@@ -475,7 +475,8 @@ export async function GET(req: NextRequest) {
             FROM business_records br_loc
             JOIN business_profiles bp_loc ON bp_loc.id = br_loc.business_id
             WHERE br_loc.vertical_code = 'properties'
-              AND COALESCE(br_loc.is_active, TRUE) = TRUE
+              AND COALESCE(br_loc.is_active, FALSE) = TRUE
+              AND br_loc.status = 'published'
               AND ${hasLocation ? buildLocClause("bp_loc", ["city", "locality", "address", "state"], 1) : "TRUE"}
           ),
           1
@@ -487,12 +488,14 @@ export async function GET(req: NextRequest) {
             FROM business_records br2
             JOIN business_profiles bp2 ON bp2.id = br2.business_id
             WHERE br2.vertical_code = 'properties'
+              AND COALESCE(br2.is_active, FALSE) = TRUE
+              AND br2.status = 'published'
               AND ${hasLocation ? buildLocClause("bp2", ["city", "locality", "address", "state"], 1) : "TRUE"}
             LIMIT 3
           ) sub
         ) AS sample_items
       FROM categories c
-      LEFT JOIN business_records br ON (br.category_id = c.id OR br.subcategory_id = c.id) AND br.vertical_code = 'properties'
+      LEFT JOIN business_records br ON (br.category_id = c.id OR br.subcategory_id = c.id) AND br.vertical_code = 'properties' AND COALESCE(br.is_active, FALSE) = TRUE AND br.status = 'published'
       LEFT JOIN business_profiles bp ON bp.id = br.business_id AND ${propLocSql}
       WHERE c.category_type = 'property'
       GROUP BY c.id, c.name, c.slug
@@ -522,7 +525,8 @@ export async function GET(req: NextRequest) {
             FROM business_records br_loc
             JOIN business_profiles bp_loc ON bp_loc.id = br_loc.business_id
             WHERE br_loc.vertical_code = 'events'
-              AND COALESCE(br_loc.is_active, TRUE) = TRUE
+              AND COALESCE(br_loc.is_active, FALSE) = TRUE
+              AND br_loc.status = 'published'
               AND ${hasLocation ? buildLocClause("bp_loc", ["city", "locality", "address", "state"], 1) : "TRUE"}
           ),
           1
@@ -534,12 +538,14 @@ export async function GET(req: NextRequest) {
             FROM business_records br2
             JOIN business_profiles bp2 ON bp2.id = br2.business_id
             WHERE br2.vertical_code = 'events'
+              AND COALESCE(br2.is_active, FALSE) = TRUE
+              AND br2.status = 'published'
               AND ${hasLocation ? buildLocClause("bp2", ["city", "locality", "address", "state"], 1) : "TRUE"}
             LIMIT 3
           ) sub
         ) AS sample_items
       FROM categories c
-      LEFT JOIN business_records br ON (br.category_id = c.id OR br.subcategory_id = c.id) AND br.vertical_code = 'events'
+      LEFT JOIN business_records br ON (br.category_id = c.id OR br.subcategory_id = c.id) AND br.vertical_code = 'events' AND COALESCE(br.is_active, FALSE) = TRUE AND br.status = 'published'
       LEFT JOIN business_profiles bp ON bp.id = br.business_id AND ${evtLocSql}
       WHERE c.category_type = 'event'
       GROUP BY c.id, c.name, c.slug
@@ -549,20 +555,72 @@ export async function GET(req: NextRequest) {
       [...evtParams, limit]
     );
 
+    // ==========================================
+    // 9. VEHICLE CATEGORIES
+    // ==========================================
+    const vehLocSql = buildLocClause("bp", ["city", "locality", "address", "state"], 1);
+    const vehParams = hasLocation ? [...locValues] : [];
+
+    let vehicleRes = await db.query(
+      `
+      SELECT
+        c.id,
+        c.name,
+        c.slug,
+        'vehicle' AS category_type,
+        COALESCE(
+          NULLIF(COUNT(DISTINCT br.id), 0),
+          (
+            SELECT COUNT(*)::int
+            FROM business_records br_loc
+            JOIN business_profiles bp_loc ON bp_loc.id = br_loc.business_id
+            WHERE br_loc.vertical_code = 'vehicles'
+              AND COALESCE(br_loc.is_active, FALSE) = TRUE
+              AND br_loc.status = 'published'
+              AND ${hasLocation ? buildLocClause("bp_loc", ["city", "locality", "address", "state"], 1) : "TRUE"}
+          ),
+          1
+        )::int AS item_count,
+        (
+          SELECT ARRAY_AGG(sub.title)
+          FROM (
+            SELECT DISTINCT br2.title
+            FROM business_records br2
+            JOIN business_profiles bp2 ON bp2.id = br2.business_id
+            WHERE br2.vertical_code = 'vehicles'
+              AND COALESCE(br2.is_active, FALSE) = TRUE
+              AND br2.status = 'published'
+              AND ${hasLocation ? buildLocClause("bp2", ["city", "locality", "address", "state"], 1) : "TRUE"}
+            LIMIT 3
+          ) sub
+        ) AS sample_items
+      FROM categories c
+      LEFT JOIN business_records br ON (br.category_id = c.id OR br.subcategory_id = c.id) AND br.vertical_code = 'vehicles' AND COALESCE(br.is_active, FALSE) = TRUE AND br.status = 'published'
+      LEFT JOIN business_profiles bp ON bp.id = br.business_id AND ${vehLocSql}
+      WHERE c.category_type = 'vehicle'
+      GROUP BY c.id, c.name, c.slug, c.parent_id
+      ORDER BY (c.parent_id IS NULL) DESC, item_count DESC, c.name ASC
+      LIMIT $${vehParams.length + 1}
+      `,
+      [...vehParams, limit]
+    );
+
     // Format output with navigation links
     const formatCategories = (rows: any[], verticalType: string) => {
       return rows.map((r) => {
         let href = `/explore?type=${verticalType}&categoryId=${r.id}&categoryName=${encodeURIComponent(r.name)}`;
         if (verticalType === "course") {
-          href = `/courses?category=${encodeURIComponent(r.name)}`;
+          href = `/courses/${r.slug || encodeURIComponent(r.name)}`;
         } else if (verticalType === "job") {
-          href = `/jobs?department=${encodeURIComponent(r.name)}`;
+          href = `/jobs/${r.slug || encodeURIComponent(r.name)}`;
         } else if (verticalType === "business") {
-          href = `/businesses?category=${encodeURIComponent(r.name)}`;
+          href = `/businesses/${r.slug || encodeURIComponent(r.name)}`;
         } else if (verticalType === "property") {
-          href = `/explore?type=property&categoryId=${r.id}&categoryName=${encodeURIComponent(r.name)}`;
+          href = `/properties/${r.slug || encodeURIComponent(r.name)}`;
         } else if (verticalType === "event") {
-          href = `/explore?type=all&category=events&categoryName=${encodeURIComponent(r.name)}`;
+          href = `/events/${r.slug || encodeURIComponent(r.name)}`;
+        } else if (verticalType === "vehicle") {
+          href = `/vehicles/${r.slug || encodeURIComponent(r.name)}`;
         }
 
         return {
@@ -587,6 +645,7 @@ export async function GET(req: NextRequest) {
     const formattedBusinesses = formatCategories(bizRes.rows, "business");
     const formattedProperties = formatCategories(propRes.rows, "property");
     const formattedEvents = formatCategories(eventRes.rows, "event");
+    const formattedVehicles = formatCategories(vehicleRes.rows, "vehicle");
 
     return NextResponse.json({
       success: true,
@@ -601,6 +660,7 @@ export async function GET(req: NextRequest) {
         businesses: formattedBusinesses.length,
         properties: formattedProperties.length,
         events: formattedEvents.length,
+        vehicles: formattedVehicles.length,
         total:
           formattedProducts.length +
           formattedServices.length +
@@ -609,7 +669,8 @@ export async function GET(req: NextRequest) {
           formattedJobs.length +
           formattedBusinesses.length +
           formattedProperties.length +
-          formattedEvents.length,
+          formattedEvents.length +
+          formattedVehicles.length,
       },
       categories: {
         products: formattedProducts,
@@ -620,6 +681,7 @@ export async function GET(req: NextRequest) {
         businesses: formattedBusinesses,
         properties: formattedProperties,
         events: formattedEvents,
+        vehicles: formattedVehicles,
       },
     });
   } catch (err: unknown) {

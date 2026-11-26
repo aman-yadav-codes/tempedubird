@@ -1,514 +1,218 @@
-"use client";
-
-import React, { useEffect, useState, useMemo } from "react";
-import Image from "next/image";
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import {
-  ShoppingCart,
-  Plus,
-  Minus,
-  Store,
-  MapPin,
-  ChevronRight,
-  ShieldCheck,
-  Package,
-  ArrowLeft,
-  Share2,
-  CheckCircle2,
-  Sparkles,
-  Phone,
-  Layers,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { toast } from "sonner";
-import { useAuthStore, useCartStore } from "@/store";
-import { isUserStoreOwner } from "@/lib/auth/store-ownership";
-import { buildProductSeoUrl, parseDiscoverySeoSlug } from "@/lib/utils/seo-slug";
+import { db } from "@/lib/db/db";
+import { parseDiscoverySeoSlug, extractIdFromSlug, KNOWN_CATEGORY_SLUG_LABELS } from "@/lib/utils/seo-slug";
 import CustomerExplorePage from "@/app/(public)/explore/page";
-import {
-  isWeightBasedProduct,
-  STANDARD_WEIGHT_OPTIONS,
-  calculateWeightPrice,
-  formatWeightPrice,
-  formatGramsDisplay,
-} from "@/lib/utils/weight-unit";
+import { PublicProductDetailView } from "@/components/public/public-product-detail-view";
+import type { Metadata } from "next";
 
-export default function ProductDetailPage() {
-  const params = useParams();
-  const router = useRouter();
-  const productId = params?.id as string;
+export const dynamic = "force-dynamic";
 
-  if (productId && (productId.includes("-in-") || productId.startsWith("all-") || productId.startsWith("in-"))) {
-    const { categorySlug, city } = parseDiscoverySeoSlug(productId);
-    return <CustomerExplorePage initialType="product" initialCategory={categorySlug} initialCity={city} />;
-  }
+interface Props {
+  params: Promise<{ id: string }> | { id: string };
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}
 
-  const { user } = useAuthStore();
-  const { addItem, getItemQuantity, updateQuantity, setIsOpen } = useCartStore();
+async function fetchProductRecord(idOrSlug: string) {
+  try {
+    const rawSlug = decodeURIComponent(idOrSlug || "").trim().toLowerCase();
+    let withoutLocation = rawSlug;
+    const lastInIndex = rawSlug.lastIndexOf("-in-");
+    if (lastInIndex !== -1) {
+      withoutLocation = rawSlug.substring(0, lastInIndex);
+    }
 
-  const [mounted, setMounted] = useState(false);
-  const [product, setProduct] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [selectedImage, setSelectedImage] = useState<string>("");
+    if (
+      rawSlug.startsWith("in-") ||
+      rawSlug.startsWith("all-") ||
+      rawSlug.startsWith("product-") ||
+      KNOWN_CATEGORY_SLUG_LABELS[rawSlug] ||
+      KNOWN_CATEGORY_SLUG_LABELS[withoutLocation]
+    ) {
+      return null;
+    }
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+    try {
+      const catCheck = await db.query(
+        `SELECT 1 FROM categories WHERE slug = $1 OR slug = $2 LIMIT 1`,
+        [withoutLocation, rawSlug]
+      );
+      if (catCheck.rows.length > 0) {
+        return null;
+      }
+    } catch {}
+    const { id: rawNumId } = extractIdFromSlug(rawSlug);
+    const { id: withoutLocId } = extractIdFromSlug(withoutLocation);
+    const numId = rawNumId || withoutLocId || -1;
 
-  useEffect(() => {
-    if (!productId) return;
-    setLoading(true);
-    fetch(`/api/public/products/${productId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.product) {
-          setProduct(data.product);
-          setSelectedImage(data.product.default_image_url || "");
-          const canonicalSeoUrl = buildProductSeoUrl(data.product);
-          if (canonicalSeoUrl && !canonicalSeoUrl.startsWith("/products/")) {
-            router.replace(canonicalSeoUrl);
-          } else if (data.product.slug && /^\d+$/.test(productId) && data.product.slug !== productId) {
-            router.replace(`/products/${data.product.slug}`);
-          }
-        } else {
-          setProduct(null);
-        }
-      })
-      .catch((err) => {
-        console.error("Error loading product:", err);
-      })
-      .finally(() => setLoading(false));
-  }, [productId]);
+    const slugVariants = Array.from(new Set([rawSlug, withoutLocation])).filter(Boolean);
 
-  const rawUnit = product?.unit || product?.unit_of_measurement || "unit";
-  const weightMeta = useMemo(() => isWeightBasedProduct(rawUnit), [rawUnit]);
+    // 1. Query products table
+    const prodRes = await db.query(
+      `SELECT
+        p.id,
+        p.title,
+        p.title AS name,
+        p.slug,
+        p.description,
+        p.image_url,
+        p.image_url AS default_image_url,
+        p.gallery,
+        COALESCE(p.sale_price, p.price, 0) AS price,
+        COALESCE(p.sale_price, p.price, 0) AS sale_price,
+        COALESCE(p.price, 0) AS regular_price,
+        COALESCE(p.stock_quantity, 100) AS stock_quantity,
+        p.business_profile_id,
+        p.institution_id,
+        bp.id AS business_id,
+        bp.name AS business_name,
+        bp.slug AS business_slug,
+        bp.city AS business_city,
+        bp.locality AS business_locality,
+        bp.state AS business_state,
+        bp.phone AS business_phone,
+        bp.whatsapp AS business_whatsapp,
+        COALESCE(c.name, p.category, 'Products') AS category_name,
+        COALESCE(c.slug, 'products') AS category_slug
+      FROM products p
+      LEFT JOIN categories c ON c.id = p.category_id
+      LEFT JOIN business_profiles bp ON bp.id = p.business_profile_id
+      WHERE COALESCE(p.status, 'active') = 'active'
+        AND (
+          p.slug = ANY($1)
+          OR p.slug ILIKE ANY($1)
+          OR (p.id = $2 AND $2 > 0)
+          OR (length($3) >= 8 AND (p.slug ILIKE '%' || $3 || '%' OR $3 ILIKE '%' || p.slug || '%'))
+        )
+      ORDER BY (CASE WHEN p.slug = $4 THEN 0 WHEN p.slug = $5 THEN 1 ELSE 2 END), p.id DESC
+      LIMIT 1`,
+      [slugVariants, numId, withoutLocation, rawSlug, withoutLocation]
+    );
 
-  const [selectedWeightKey, setSelectedWeightKey] = useState<string>(weightMeta.defaultKey);
-  const [showCustom, setShowCustom] = useState(false);
-  const [customGrams, setCustomGrams] = useState<string>("250");
-
-  const basePrice = Number(product?.price || product?.suggested_price || 0);
-  const baseRegularPrice = product?.regular_price ? Number(product.regular_price) : null;
-
-  const { targetGrams, displayUnit, effectivePrice, effectiveRegularPrice, cartItemId } = useMemo(() => {
-    if (!weightMeta.isWeight) {
-      return {
-        targetGrams: 0,
-        displayUnit: rawUnit,
-        effectivePrice: basePrice,
-        effectiveRegularPrice: baseRegularPrice,
-        cartItemId: String(product?.id || ""),
+    if (prodRes.rows.length > 0) {
+      const pRow = prodRes.rows[0];
+      const seller = {
+        id: pRow.business_profile_id || pRow.business_id || 0,
+        name: pRow.business_name || "Verified Local Store",
+        slug: pRow.business_slug || "",
+        phone: pRow.business_phone || "+91 9876543210",
+        whatsapp: pRow.business_whatsapp,
+        city: pRow.business_city || "Varanasi",
+        locality: pRow.business_locality || "Pandeypur",
+        state: pRow.business_state || "Uttar Pradesh",
       };
+      return { product: pRow, seller, reviews: [] };
     }
 
-    let grams = 1000;
-    let label = "1 kg";
-
-    if (showCustom) {
-      grams = Math.max(10, Number(customGrams) || 100);
-      label = formatGramsDisplay(grams);
-    } else {
-      const opt = STANDARD_WEIGHT_OPTIONS.find((o) => o.key === selectedWeightKey) || STANDARD_WEIGHT_OPTIONS[3];
-      grams = opt.grams;
-      label = opt.label;
-    }
-
-    const price = calculateWeightPrice(basePrice, weightMeta.baseGrams, grams);
-    const regPrice = baseRegularPrice
-      ? calculateWeightPrice(baseRegularPrice, weightMeta.baseGrams, grams)
-      : null;
-
-    const cId = `${product?.id}_${showCustom ? `${grams}g` : selectedWeightKey}`;
-
-    return {
-      targetGrams: grams,
-      displayUnit: label,
-      effectivePrice: price,
-      effectiveRegularPrice: regPrice,
-      cartItemId: cId,
-    };
-  }, [
-    weightMeta,
-    rawUnit,
-    basePrice,
-    baseRegularPrice,
-    selectedWeightKey,
-    showCustom,
-    customGrams,
-    product?.id,
-  ]);
-
-  const effectiveBusiness = useMemo(() => {
-    if (!product) return null;
-    return {
-      id: product.business_profile_id,
-      name: product.business_name || product.brand || "Store",
-      slug: product.business_slug || "",
-      institution_profile_id: product.institution_profile_id,
-    };
-  }, [product]);
-
-  const isOwner = useMemo(() => isUserStoreOwner(user, effectiveBusiness), [user, effectiveBusiness]);
-
-  const currentCartQty = mounted && cartItemId ? getItemQuantity(cartItemId) : 0;
-
-  const handleAddToCart = () => {
-    if (isOwner) {
-      toast.error("You cannot order products from your own storefront.");
-      return;
-    }
-
-    const added = addItem(
-      {
-        id: cartItemId,
-        name: weightMeta.isWeight ? `${product.name} (${displayUnit})` : product.name,
-        price: effectivePrice,
-        regular_price: effectiveRegularPrice,
-        image_url: product.default_image_url,
-        brand: product.brand || effectiveBusiness?.name,
-        unit: displayUnit,
-        business_id: effectiveBusiness?.id,
-        business_name: effectiveBusiness?.name,
-        business_slug: effectiveBusiness?.slug,
-        institution_id: effectiveBusiness?.institution_profile_id,
-        item_type: "product",
-      },
-      1
+    // 2. Query master_products table
+    const mpRes = await db.query(
+      `SELECT
+        mp.id,
+        mp.name,
+        mp.name AS title,
+        mp.slug,
+        mp.description,
+        mp.brand,
+        mp.default_image_url,
+        mp.default_image_url AS image_url,
+        COALESCE(mp.discounted_price, mp.suggested_price, mp.suggested_price_inr, 0) AS price,
+        COALESCE(mp.discounted_price, mp.suggested_price, mp.suggested_price_inr, 0) AS sale_price,
+        COALESCE(mp.regular_price, 0) AS regular_price,
+        100 AS stock_quantity,
+        mp.business_profile_id,
+        bp.id AS business_id,
+        bp.name AS business_name,
+        bp.slug AS business_slug,
+        bp.city AS business_city,
+        bp.locality AS business_locality,
+        bp.state AS business_state,
+        bp.phone AS business_phone,
+        bp.whatsapp AS business_whatsapp,
+        COALESCE(c.name, 'Products') AS category_name,
+        COALESCE(c.slug, 'products') AS category_slug
+      FROM master_products mp
+      LEFT JOIN categories c ON c.id = COALESCE(mp.main_category_id, mp.category_id)
+      LEFT JOIN business_profiles bp ON bp.id = mp.business_profile_id
+      WHERE COALESCE(mp.is_active, TRUE) = TRUE
+        AND (
+          mp.slug = ANY($1)
+          OR mp.slug ILIKE ANY($1)
+          OR (mp.id = $2 AND $2 > 0)
+          OR (length($3) >= 8 AND (mp.slug ILIKE '%' || $3 || '%' OR $3 ILIKE '%' || mp.slug || '%'))
+        )
+      ORDER BY (CASE WHEN mp.slug = $4 THEN 0 WHEN mp.slug = $5 THEN 1 ELSE 2 END), mp.id DESC
+      LIMIT 1`,
+      [slugVariants, numId, withoutLocation, rawSlug, withoutLocation]
     );
 
-    if (added) {
-      toast.success(`${product.name} (${displayUnit}) added to cart!`);
+    if (mpRes.rows.length > 0) {
+      const mpRow = mpRes.rows[0];
+      const seller = {
+        id: mpRow.business_profile_id || mpRow.business_id || 0,
+        name: mpRow.business_name || "Verified Local Store",
+        slug: mpRow.business_slug || "",
+        phone: mpRow.business_phone || "+91 9876543210",
+        whatsapp: mpRow.business_whatsapp,
+        city: mpRow.business_city || "Varanasi",
+        locality: mpRow.business_locality || "Pandeypur",
+        state: mpRow.business_state || "Uttar Pradesh",
+      };
+      return { product: mpRow, seller, reviews: [] };
     }
-  };
 
-  const handleBuyNow = () => {
-    handleAddToCart();
-    setIsOpen(true);
-  };
+    return null;
+  } catch (err) {
+    console.error("Error fetching product record:", err);
+    return null;
+  }
+}
 
-  const storeLink = product?.business_slug
-    ? `/${product.category_slug || "retail-shopping"}/${product.business_slug}?tab=products&highlight=${product.id}`
-    : null;
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const resolved = await params;
+  const rawId = resolved.id;
+  const data = await fetchProductRecord(rawId);
 
-  if (loading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="size-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
-          <p className="text-xs text-muted-foreground">Loading product details...</p>
-        </div>
-      </div>
-    );
+  if (data?.product) {
+    const p = data.product;
+    return {
+      title: `${p.name || p.title} | 143Panda`,
+      description: p.description?.slice(0, 160) || `Buy ${p.title} online at best prices.`,
+    };
   }
 
-  if (!product) {
-    const { categorySlug, city } = parseDiscoverySeoSlug(productId);
-    return <CustomerExplorePage initialType="product" initialCategory={categorySlug} initialCity={city} />;
+  const { city, categorySlug, categoryName } = parseDiscoverySeoSlug(rawId);
+  const locationText = city ? ` in ${city.charAt(0).toUpperCase() + city.slice(1)}` : "";
+  const catText = categoryName || (categorySlug ? categorySlug.replace(/-/g, " ") : "Products & Shopping");
+  return {
+    title: `${catText}${locationText} | 143Panda`,
+    description: `Browse verified local products and inventory${locationText}.`,
+  };
+}
+
+export default async function ProductDetailPage({
+  params,
+  searchParams,
+}: Props) {
+  const resolvedParams = await params;
+  const rawId = resolvedParams.id;
+
+  // 1. Direct product view (renders the 2nd design immediately with zero client redirect)
+  const data = await fetchProductRecord(rawId);
+  if (data?.product) {
+    return <PublicProductDetailView product={data.product} seller={data.seller} reviews={data.reviews} />;
   }
 
-  const allImages = [
-    product.default_image_url,
-    ...(Array.isArray(product.additional_images) ? product.additional_images : []),
-  ].filter(Boolean);
+  // 2. Otherwise category/location listing alias
+  const { categorySlug, categoryName, city } = parseDiscoverySeoSlug(rawId);
+  const sp = searchParams ? await searchParams : {};
+  const query = typeof sp.q === "string" ? sp.q : "";
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-          <Link href="/" className="hover:text-foreground">Home</Link>
-          <ChevronRight className="size-3" />
-          <Link href="/products" className="hover:text-foreground">Products</Link>
-          {product.category_name && (
-            <>
-              <ChevronRight className="size-3" />
-              <span>{product.category_name}</span>
-            </>
-          )}
-          <ChevronRight className="size-3" />
-          <span className="text-foreground font-semibold truncate max-w-[200px]">{product.name}</span>
-        </div>
-
-        {/* Main Product Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column: Image Gallery */}
-          <div className="lg:col-span-6 space-y-3">
-            <div className="relative aspect-square w-full rounded-2xl bg-muted/30 border overflow-hidden shadow-2xs">
-              <Image
-                src={selectedImage || product.default_image_url || "https://placehold.co/600x600?text=Product"}
-                alt={product.name}
-                fill
-                priority
-                sizes="(max-width: 768px) 100vw, 500px"
-                className="object-cover"
-              />
-              <span className="absolute top-3 left-3 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1">
-                <CheckCircle2 className="size-3" /> In Stock
-              </span>
-            </div>
-
-            {/* Thumbnail selector */}
-            {allImages.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {allImages.map((img, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setSelectedImage(img)}
-                    className={`relative size-16 rounded-xl border overflow-hidden shrink-0 cursor-pointer transition-all ${
-                      selectedImage === img ? "ring-2 ring-primary border-primary" : "opacity-70 hover:opacity-100"
-                    }`}
-                  >
-                    <Image src={img} alt={`${product.name} thumbnail ${i + 1}`} fill className="object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Right Column: Product Info & Buy Box */}
-          <div className="lg:col-span-6 space-y-5">
-            <div>
-              {product.brand && (
-                <span className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider block mb-1">
-                  {product.brand}
-                </span>
-              )}
-              <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
-                {product.name}
-              </h1>
-              {product.sku && (
-                <span className="text-[11px] text-muted-foreground font-mono mt-0.5 block">
-                  SKU: {product.sku}
-                </span>
-              )}
-            </div>
-
-            {/* Price section */}
-            <div className="p-4 rounded-2xl bg-muted/30 border space-y-1">
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="text-2xl sm:text-3xl font-black text-foreground">
-                  ₹{formatWeightPrice(effectivePrice)}
-                </span>
-                <span className="text-xs font-semibold text-muted-foreground">
-                  / {displayUnit}
-                </span>
-                {effectiveRegularPrice && effectiveRegularPrice > effectivePrice && (
-                  <span className="text-sm text-muted-foreground line-through">
-                    ₹{formatWeightPrice(effectiveRegularPrice)}
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Inclusive of all applicable local taxes and store packaging.
-              </p>
-            </div>
-
-            {/* Weight selector (if weight-based) */}
-            {weightMeta.isWeight && (
-              <div className="space-y-2.5 p-4 rounded-2xl border bg-card">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-foreground">Select Weight / Quantity:</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowCustom(!showCustom)}
-                    className="text-primary hover:underline text-[11px] font-semibold cursor-pointer"
-                  >
-                    {showCustom ? "Choose standard pack" : "Enter custom grams"}
-                  </button>
-                </div>
-
-                {showCustom ? (
-                  <div className="flex items-center gap-2.5 pt-1">
-                    <input
-                      type="number"
-                      min={10}
-                      max={50000}
-                      step={50}
-                      value={customGrams}
-                      onChange={(e) => setCustomGrams(e.target.value)}
-                      placeholder="e.g. 350"
-                      className="w-32 h-10 px-3 rounded-xl border bg-background text-xs font-bold font-mono shadow-2xs"
-                    />
-                    <span className="text-xs text-muted-foreground font-semibold">grams</span>
-                    <span className="text-xs font-black text-rose-600 ml-auto">
-                      = ₹{formatWeightPrice(effectivePrice)}
-                    </span>
-                  </div>
-                ) : (
-                  <Select
-                    value={selectedWeightKey}
-                    onValueChange={(val) => {
-                      if (val === "custom") {
-                        setShowCustom(true);
-                      } else {
-                        setSelectedWeightKey(val);
-                        setShowCustom(false);
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-full h-11 rounded-xl bg-background border text-xs font-bold">
-                      <SelectValue placeholder="Select weight / pack" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STANDARD_WEIGHT_OPTIONS.map((opt) => {
-                        const optPrice = calculateWeightPrice(basePrice, weightMeta.baseGrams, opt.grams);
-                        return (
-                          <SelectItem key={opt.key} value={opt.key} className="text-xs font-medium cursor-pointer">
-                            <span className="font-bold text-foreground">{opt.label}</span>
-                            <span className="text-muted-foreground ml-2">— ₹{formatWeightPrice(optPrice)}</span>
-                          </SelectItem>
-                        );
-                      })}
-                      <SelectItem value="custom" className="text-xs font-medium text-primary cursor-pointer border-t mt-1 pt-1.5">
-                        Custom weight (enter grams)...
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            )}
-
-            {/* Actions: Add to Cart & Buy Now */}
-            <div className="space-y-3 pt-2">
-              {isOwner ? (
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-semibold">
-                  Store Owner View: Self-ordering from your own front store is disabled.
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  {currentCartQty > 0 ? (
-                    <div className="flex items-center border border-rose-300 dark:border-rose-900 rounded-xl overflow-hidden bg-background h-10 shadow-xs px-2">
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(cartItemId, currentCartQty - 1)}
-                        className="size-8 flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-                      >
-                        <Minus className="size-3.5" />
-                      </button>
-                      <span className="w-10 text-center text-xs font-black text-rose-600">
-                        {currentCartQty}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(cartItemId, currentCartQty + 1)}
-                        className="size-8 flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-                      >
-                        <Plus className="size-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <Button
-                      size="lg"
-                      onClick={handleAddToCart}
-                      className="flex-1 h-11 text-xs font-bold gap-2 bg-[#d9232e] hover:bg-[#d9232e]/90 text-white cursor-pointer shadow-md"
-                    >
-                      <ShoppingCart className="size-4" /> Add to Cart
-                    </Button>
-                  )}
-
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    onClick={handleBuyNow}
-                    className="h-11 px-6 text-xs font-bold cursor-pointer"
-                  >
-                    Buy Now
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* Seller / Storefront Card */}
-            {effectiveBusiness && (
-              <Card className="rounded-2xl border shadow-2xs bg-card">
-                <CardContent className="p-4 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    {storeLink ? (
-                      <Link
-                        href={storeLink}
-                        className="size-11 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 flex items-center justify-center shrink-0 border transition-colors cursor-pointer"
-                        title={`Visit ${effectiveBusiness.name} Storefront`}
-                      >
-                        <Store className="size-5" />
-                      </Link>
-                    ) : (
-                      <div className="size-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border">
-                        <Store className="size-5" />
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
-                        Sold &amp; Fulfilled By
-                      </span>
-                      {storeLink ? (
-                        <Link
-                          href={storeLink}
-                          className="text-sm font-bold text-foreground hover:text-primary hover:underline truncate block transition-colors cursor-pointer"
-                          title={`Visit ${effectiveBusiness.name} Storefront`}
-                        >
-                          {effectiveBusiness.name}
-                        </Link>
-                      ) : (
-                        <p className="text-sm font-bold text-foreground truncate">
-                          {effectiveBusiness.name}
-                        </p>
-                      )}
-                      {product.business_city && (
-                        <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
-                          <MapPin className="size-3 text-muted-foreground shrink-0" />
-                          {product.business_city}, {product.business_state || "India"}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Product Description */}
-            {product.description && (
-              <div className="space-y-2 pt-2 border-t">
-                <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                  Product Description
-                </h3>
-                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
-                  {product.description}
-                </p>
-              </div>
-            )}
-
-            {/* Specifications / Attributes */}
-            {product.attributes && typeof product.attributes === "object" && Object.keys(product.attributes).length > 0 && (
-              <div className="space-y-2.5 pt-2 border-t">
-                <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                  Specifications &amp; Features
-                </h3>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {Object.entries(product.attributes).map(([key, value]) => (
-                    <div key={key} className="p-2.5 rounded-xl border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-medium capitalize">
-                        {key}
-                      </span>
-                      <span className="font-semibold text-foreground">{String(value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    <CustomerExplorePage
+      key={`product-${rawId}`}
+      initialType="product"
+      initialCategory={categorySlug}
+      initialCategoryName={categoryName}
+      initialCity={city}
+      initialQuery={query}
+    />
   );
 }
