@@ -156,14 +156,6 @@ async function resolveActiveBusinessId(req: Request, user?: any, body?: any): Pr
     if (instBiz.rows.length > 0) return instBiz.rows[0].resolved_id;
   }
 
-  const bpFirst = await db.query(`SELECT id FROM business_profiles WHERE COALESCE(is_active, TRUE) = TRUE ORDER BY id ASC LIMIT 1`);
-  if (bpFirst.rows.length > 0) return bpFirst.rows[0].id;
-
-  const pciFirst = await db.query(`SELECT business_id FROM platform_company_info WHERE business_id IS NOT NULL ORDER BY id ASC LIMIT 1`);
-  if (pciFirst.rows.length > 0 && pciFirst.rows[0].business_id) {
-    return pciFirst.rows[0].business_id;
-  }
-
   return null;
 }
 

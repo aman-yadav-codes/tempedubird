@@ -353,8 +353,8 @@ const fetchSeoProfileData = cache(async (categoryParam: string, slugSegments: st
     // 3. Fallback for Business: Maa Sharda Institute PVT LTD
     if (
       targetSlug.includes("maa-sharda") ||
-      targetSlug.includes("institute") ||
       numId === 162 ||
+      numId === 160 ||
       withoutLocation.includes("maa-sharda")
     ) {
       return {

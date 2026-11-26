@@ -698,7 +698,10 @@ export async function ensureFinanceIncomeSchema(db: Queryable) {
           ADD COLUMN IF NOT EXISTS gateway_key_id VARCHAR(255),
           ADD COLUMN IF NOT EXISTS gateway_key_secret TEXT,
           ADD COLUMN IF NOT EXISTS gateway_webhook_secret VARCHAR(255),
-          ADD COLUMN IF NOT EXISTS gateway_environment VARCHAR(30) DEFAULT 'live';
+          ADD COLUMN IF NOT EXISTS gateway_environment VARCHAR(30) DEFAULT 'live',
+          ADD COLUMN IF NOT EXISTS method_name VARCHAR(150),
+          ADD COLUMN IF NOT EXISTS method_key VARCHAR(100),
+          ADD COLUMN IF NOT EXISTS category VARCHAR(100);
         CREATE INDEX IF NOT EXISTS idx_finance_payment_methods_scope
         ON finance_payment_methods(scope_type, institution_id, is_active, id DESC);
         CREATE TABLE IF NOT EXISTS finance_invoices (

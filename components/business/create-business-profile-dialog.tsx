@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import { setStoredActiveInstitutionId } from "@/lib/auth/active-institution";
@@ -160,6 +161,7 @@ export function CreateBusinessProfileDialog({
   const [institutionTypeId, setInstitutionTypeId] = useState<string>("");
   const [categoryId, setCategoryId] = useState<string>("");
   const [subcategoryId, setSubcategoryId] = useState<string>("");
+  const [subcategoryIds, setSubcategoryIds] = useState<string[]>([]);
   const [about, setAbout] = useState("");
   const [establishedYear, setEstablishedYear] = useState<string>("");
 
@@ -246,8 +248,14 @@ export function CreateBusinessProfileDialog({
     if (initialData.category_id || initialData.categoryId) {
       setCategoryId(String(initialData.category_id || initialData.categoryId));
     }
-    if (initialData.subcategory_id || initialData.subcategoryId) {
-      setSubcategoryId(String(initialData.subcategory_id || initialData.subcategoryId));
+    if (initialData.subcategory_ids || initialData.subcategoryIds) {
+      const sids = (initialData.subcategory_ids || initialData.subcategoryIds || []).map(String).filter(Boolean);
+      setSubcategoryIds(sids);
+      if (sids[0]) setSubcategoryId(sids[0]);
+    } else if (initialData.subcategory_id || initialData.subcategoryId) {
+      const sid = String(initialData.subcategory_id || initialData.subcategoryId);
+      setSubcategoryIds([sid]);
+      setSubcategoryId(sid);
     }
     if (initialData.designation || initialData.professional_title || initialData.profession_type) {
       setDesignation(initialData.designation || initialData.professional_title || initialData.profession_type);
@@ -678,7 +686,8 @@ export function CreateBusinessProfileDialog({
         businessType,
         institutionTypeId: institutionTypeId ? Number(institutionTypeId) : undefined,
         categoryId: categoryId ? Number(categoryId) : undefined,
-        subcategoryId: subcategoryId ? Number(subcategoryId) : undefined,
+        subcategoryId: subcategoryIds[0] ? Number(subcategoryIds[0]) : (subcategoryId ? Number(subcategoryId) : undefined),
+        subcategoryIds: subcategoryIds.map(Number).filter((n) => !isNaN(n) && n > 0),
         about: about.trim() || undefined,
         establishedYear: establishedYear ? Number(establishedYear) : undefined,
         logoUrl: logoUrl.trim() || undefined,
@@ -869,6 +878,7 @@ export function CreateBusinessProfileDialog({
                           setBusinessType(val);
                           setCategoryId("");
                           setSubcategoryId("");
+                          setSubcategoryIds([]);
                           setDynamicSubcategories([]);
                         }}
                       >
@@ -896,6 +906,7 @@ export function CreateBusinessProfileDialog({
                           const nextVal = val === "none" ? "" : val;
                           setCategoryId(nextVal);
                           setSubcategoryId("");
+                          setSubcategoryIds([]);
                           setDynamicSubcategories([]);
 
                           if (nextVal && institutionTypes?.length > 0) {
@@ -948,39 +959,47 @@ export function CreateBusinessProfileDialog({
                       </Select>
                     </div>
 
-                    {/* Row 2 Col 2: Subcategory (populated dynamically based on the chosen category) */}
+                    {/* Row 2 Col 2: Subcategories (Multi-select) */}
                     <div>
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                        SUB CATEGORY
-                      </Label>
-                      <Select
-                        value={subcategoryId || undefined}
-                        onValueChange={(val) => setSubcategoryId(val === "none" ? "" : val)}
+                      <div className="flex items-center justify-between mb-1">
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                          SUB CATEGORIES
+                        </Label>
+                        {subcategoryIds.length > 0 && (
+                          <span className="text-[10px] text-sky-600 font-semibold">
+                            {subcategoryIds.length} selected
+                          </span>
+                        )}
+                      </div>
+                      <MultiSelect
+                        options={filteredSubcategories.map((sc) => ({
+                          label: sc.name,
+                          value: String(sc.id),
+                        }))}
+                        value={subcategoryIds}
+                        onValueChange={(vals) => {
+                          setSubcategoryIds(vals);
+                          setSubcategoryId(vals[0] || "");
+                        }}
+                        placeholder={
+                          !categoryId || categoryId === "none"
+                            ? isProfessional
+                              ? "Choose Professional Category first"
+                              : "Choose Main Category first"
+                            : loadingSubcategories
+                            ? "Loading subcategories..."
+                            : filteredSubcategories.length === 0
+                            ? "No subcategories available"
+                            : "Select Sub Categories..."
+                        }
                         disabled={!categoryId || categoryId === "none" || (filteredSubcategories.length === 0 && !loadingSubcategories)}
-                      >
-                        <SelectTrigger className="h-9 text-xs">
-                          <SelectValue
-                            placeholder={
-                              !categoryId || categoryId === "none"
-                                ? isProfessional
-                                  ? "Choose Professional Category first"
-                                  : "Choose Main Category first"
-                                : loadingSubcategories
-                                ? "Loading subcategories..."
-                                : filteredSubcategories.length === 0
-                                ? "No subcategories available"
-                                : "Select Sub Category..."
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-56">
-                          {filteredSubcategories.map((sc) => (
-                            <SelectItem key={sc.id} value={String(sc.id)}>
-                              {sc.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        maxCount={2}
+                        responsive
+                        searchable={filteredSubcategories.length > 5}
+                        deduplicateOptions
+                        className="w-full min-h-9 text-xs bg-background"
+                        popoverClassName="z-[100]"
+                      />
                     </div>
                   </div>
                 </div>

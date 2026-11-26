@@ -169,6 +169,8 @@ export async function GET(req: NextRequest) {
     let properties: any[] = [];
     let vehicles: any[] = [];
     let events: any[] = [];
+    let dishes: any[] = [];
+    let rooms: any[] = [];
 
     // Resolve Category Family & Linked Businesses if categoryId is provided
     let categoryIds: number[] = categoryId ? [categoryId] : [];
@@ -1594,7 +1596,222 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const total = businesses.length + professionals.length + products.length + services.length + courses.length + jobs.length + properties.length + vehicles.length + events.length;
+    // 10. Search Dishes / Restaurant Menus
+    if (type === "all" || type === "dish" || type === "dishes") {
+      try {
+        const dConditions: string[] = [
+          "br.vertical_code = 'restaurants'",
+          "(br.is_deleted IS NULL OR br.is_deleted = FALSE)",
+          "(br.is_active = TRUE OR br.is_active IS NULL)"
+        ];
+        const dParams: any[] = [];
+
+        if (scopedBusinessId) {
+          dParams.push(scopedBusinessId);
+          dConditions.push(`br.business_id = $${dParams.length}`);
+        }
+
+        if (likeQ) {
+          dParams.push(likeQ);
+          dConditions.push(`(
+            br.title ILIKE $${dParams.length}
+            OR COALESCE(br.description, '') ILIKE $${dParams.length}
+            OR COALESCE(bp.name, '') ILIKE $${dParams.length}
+          )`);
+        }
+
+        if (country && country.toUpperCase() !== "ALL") {
+          dParams.push(country.toUpperCase());
+          dConditions.push(`(bp.country_code = $${dParams.length} OR ($${dParams.length} = 'IN' AND bp.country_code IS NULL))`);
+        }
+
+        if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
+          const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
+          const words = catSearch.split(/[^a-z0-9]+/);
+          const isBakery = words.includes("bakery") || words.includes("dessert") || words.includes("desserts") || words.includes("confectionery") || words.includes("cake") || words.includes("pastry");
+          const isBev = words.includes("beverage") || words.includes("beverages") || words.includes("brew") || words.includes("brews") || words.includes("mocktail") || words.includes("mocktails") || words.includes("drink");
+          const isMain = words.includes("main") || words.includes("course") || words.includes("curry") || words.includes("curries") || words.includes("bread") || words.includes("breads") || words.includes("dal") || words.includes("paneer");
+          const isStarter = words.includes("starter") || words.includes("starters") || words.includes("appetizer") || words.includes("appetizers") || words.includes("tikka") || words.includes("snack");
+
+          if (isBakery) {
+            dConditions.push(`(br.title ILIKE '%bakery%' OR br.title ILIKE '%dessert%' OR br.title ILIKE '%cake%' OR br.title ILIKE '%sweet%' OR br.title ILIKE '%kulfi%' OR br.title ILIKE '%falooda%')`);
+          } else if (isBev) {
+            dConditions.push(`(br.title ILIKE '%beverage%' OR br.title ILIKE '%brew%' OR br.title ILIKE '%mocktail%' OR br.title ILIKE '%drink%' OR br.title ILIKE '%coffee%' OR br.title ILIKE '%tea%' OR br.title ILIKE '%shake%')`);
+          } else if (isMain) {
+            dConditions.push(`(br.title ILIKE '%curry%' OR br.title ILIKE '%bread%' OR br.title ILIKE '%dal%' OR br.title ILIKE '%roti%' OR br.title ILIKE '%naan%' OR br.title ILIKE '%makhani%' OR br.title ILIKE '%rice%')`);
+          } else if (isStarter) {
+            dConditions.push(`(br.title ILIKE '%starter%' OR br.title ILIKE '%tikka%' OR br.title ILIKE '%kebab%' OR br.title ILIKE '%angara%' OR br.title ILIKE '%snack%')`);
+          } else if (categoryIds.length > 0) {
+            dParams.push(categoryIds);
+            dConditions.push(`(
+              br.category_id = ANY($${dParams.length}::int[]) 
+              OR br.subcategory_id = ANY($${dParams.length}::int[])
+            )`);
+          }
+        }
+
+        if (uniqueCityTokens.length > 0) {
+          dParams.push(uniqueCityTokens);
+          dConditions.push(`(
+            bp.city ILIKE ANY($${dParams.length}::text[])
+            OR COALESCE(bp.address, '') ILIKE ANY($${dParams.length}::text[])
+          )`);
+        }
+
+        const dQuery = `
+          SELECT
+            br.id,
+            br.title AS name,
+            br.title,
+            br.slug,
+            br.description,
+            COALESCE(d.discounted_price, br.price) AS price,
+            br.currency,
+            br.featured_image AS default_image_url,
+            br.featured_image AS image_url,
+            br.is_active,
+            br.is_featured,
+            br.created_at,
+            bp.id AS business_id,
+            bp.name AS business_name,
+            bp.slug AS business_slug,
+            COALESCE(bp.city, 'Varanasi') AS city,
+            COALESCE(bp.state, 'Uttar Pradesh') AS state,
+            COALESCE(bp.address, '') AS address,
+            COALESCE(bp.phone, '+91 94152 20303') AS phone,
+            bp.whatsapp,
+            bp.email,
+            c.name AS category_name,
+            subc.name AS subcategory_name,
+            d.spice_level,
+            d.prep_time_minutes,
+            d.is_available
+          FROM business_records br
+          LEFT JOIN dishes d ON d.record_id = br.id
+          LEFT JOIN business_profiles bp ON bp.id = br.business_id
+          LEFT JOIN master_records c ON c.id = br.category_id
+          LEFT JOIN master_records subc ON subc.id = br.subcategory_id
+          WHERE ${dConditions.join(" AND ")}
+          ORDER BY br.id DESC
+          LIMIT $${dParams.length + 1} OFFSET $${dParams.length + 2}
+        `;
+        const dRes = await db.query(dQuery, [...dParams, limit, offset]);
+        dishes = dRes.rows.map((r) => ({ ...r, resultType: "dish" }));
+      } catch (dErr) {
+        console.warn("Could not query dishes in discovery:", dErr);
+      }
+    }
+
+    // 11. Search Hotel Rooms & Stays
+    if (type === "all" || type === "room" || type === "rooms") {
+      try {
+        const rConditions: string[] = [
+          "br.vertical_code = 'hotels'",
+          "(br.is_deleted IS NULL OR br.is_deleted = FALSE)",
+          "(br.is_active = TRUE OR br.is_active IS NULL)"
+        ];
+        const rParams: any[] = [];
+
+        if (scopedBusinessId) {
+          rParams.push(scopedBusinessId);
+          rConditions.push(`br.business_id = $${rParams.length}`);
+        }
+
+        if (likeQ) {
+          rParams.push(likeQ);
+          rConditions.push(`(
+            br.title ILIKE $${rParams.length}
+            OR COALESCE(br.description, '') ILIKE $${rParams.length}
+            OR COALESCE(bp.name, '') ILIKE $${rParams.length}
+          )`);
+        }
+
+        if (country && country.toUpperCase() !== "ALL") {
+          rParams.push(country.toUpperCase());
+          rConditions.push(`(bp.country_code = $${rParams.length} OR ($${rParams.length} = 'IN' AND bp.country_code IS NULL))`);
+        }
+
+        if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
+          const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
+          const words = catSearch.split(/[^a-z0-9]+/);
+          const isBudget = words.includes("budget") || words.includes("dormitory") || words.includes("dorm") || words.includes("economy");
+          const isHotel = words.includes("guest") || words.includes("deluxe") || words.includes("hotel") || words.includes("king");
+          const isLuxury = words.includes("luxury") || words.includes("suite") || words.includes("suites") || words.includes("penthouse") || words.includes("presidential");
+          const isResort = words.includes("resort") || words.includes("cottage") || words.includes("cottages") || words.includes("heritage") || words.includes("chalet") || words.includes("chalets");
+          const isBackpacker = words.includes("backpacker") || words.includes("backpackers") || words.includes("bunk") || words.includes("hostel");
+
+          if (isBudget) {
+            rConditions.push(`(br.title ILIKE '%budget%' OR br.title ILIKE '%dormitory%' OR br.title ILIKE '%dorm%' OR br.title ILIKE '%economy%')`);
+          } else if (isLuxury) {
+            rConditions.push(`(br.title ILIKE '%luxury%' OR br.title ILIKE '%suite%' OR br.title ILIKE '%penthouse%' OR br.title ILIKE '%presidential%')`);
+          } else if (isResort) {
+            rConditions.push(`(br.title ILIKE '%resort%' OR br.title ILIKE '%cottage%' OR br.title ILIKE '%heritage%' OR br.title ILIKE '%chalet%')`);
+          } else if (isBackpacker) {
+            rConditions.push(`(br.title ILIKE '%backpacker%' OR br.title ILIKE '%bunk%' OR br.title ILIKE '%hostel%')`);
+          } else if (isHotel) {
+            rConditions.push(`(br.title ILIKE '%deluxe%' OR br.title ILIKE '%king%' OR br.title ILIKE '%room%' OR br.title ILIKE '%hotel%')`);
+          } else if (categoryIds.length > 0) {
+            rParams.push(categoryIds);
+            rConditions.push(`(
+              br.category_id = ANY($${rParams.length}::int[]) 
+              OR br.subcategory_id = ANY($${rParams.length}::int[])
+            )`);
+          }
+        }
+
+        if (uniqueCityTokens.length > 0) {
+          rParams.push(uniqueCityTokens);
+          rConditions.push(`(
+            bp.city ILIKE ANY($${rParams.length}::text[])
+            OR COALESCE(bp.address, '') ILIKE ANY($${rParams.length}::text[])
+          )`);
+        }
+
+        const rQuery = `
+          SELECT
+            br.id,
+            br.title AS name,
+            br.title,
+            br.slug,
+            br.description,
+            COALESCE(hr.price_per_night, br.price) AS price,
+            br.currency,
+            br.featured_image AS default_image_url,
+            br.featured_image AS image_url,
+            br.is_active,
+            br.is_featured,
+            br.created_at,
+            bp.id AS business_id,
+            bp.name AS business_name,
+            bp.slug AS business_slug,
+            COALESCE(bp.city, 'Varanasi') AS city,
+            COALESCE(bp.state, 'Uttar Pradesh') AS state,
+            COALESCE(bp.address, '') AS address,
+            COALESCE(bp.phone, '+91 94152 20303') AS phone,
+            bp.whatsapp,
+            bp.email,
+            c.name AS category_name,
+            subc.name AS subcategory_name,
+            hr.room_number,
+            hr.price_per_night,
+            hr.max_adults
+          FROM business_records br
+          LEFT JOIN hotel_rooms hr ON hr.record_id = br.id
+          LEFT JOIN business_profiles bp ON bp.id = br.business_id
+          LEFT JOIN master_records c ON c.id = br.category_id
+          LEFT JOIN master_records subc ON subc.id = br.subcategory_id
+          WHERE ${rConditions.join(" AND ")}
+          ORDER BY br.id DESC
+          LIMIT $${rParams.length + 1} OFFSET $${rParams.length + 2}
+        `;
+        const rRes = await db.query(rQuery, [...rParams, limit, offset]);
+        rooms = rRes.rows.map((r) => ({ ...r, resultType: "room" }));
+      } catch (rErr) {
+        console.warn("Could not query rooms in discovery:", rErr);
+      }
+    }
+
+    const total = businesses.length + professionals.length + products.length + services.length + courses.length + jobs.length + properties.length + vehicles.length + events.length + dishes.length + rooms.length;
 
     return NextResponse.json({
       success: true,
@@ -1608,6 +1825,8 @@ export async function GET(req: NextRequest) {
         properties,
         vehicles,
         events,
+        dishes,
+        rooms,
         meta: {
           total,
           page,

@@ -28,14 +28,14 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
         bp.*,
         c.name AS category_name,
         sc.name AS subcategory_name,
-        COALESCE(bp.founder_name, ip.founder_name, u.full_name) AS owner_name,
-        COALESCE(bp.founder_title, ip.founder_title, 'Founder & Managing Director') AS owner_designation,
-        COALESCE(bp.founder_image_url, ip.founder_image_url, u.avatar_url) AS owner_image_url,
+        COALESCE(bp.founder_name, ip.founder_name) AS owner_name,
+        COALESCE(bp.founder_title, ip.founder_title) AS owner_designation,
+        COALESCE(bp.founder_image_url, ip.founder_image_url) AS owner_image_url,
         COALESCE(bp.founder_image_url, ip.founder_image_url) AS founder_image_url,
         COALESCE(bp.phone, ip.phone, u.phone) AS owner_phone,
         COALESCE(bp.whatsapp, bp.phone, ip.phone, u.phone) AS owner_whatsapp,
         COALESCE(bp.email, ip.email, u.email) AS owner_email,
-        COALESCE(bp.founder_about, ip.founder_about, bp.about) AS owner_about,
+        COALESCE(bp.founder_about, ip.founder_about) AS owner_about,
         COALESCE(bp.founder_about, ip.founder_about) AS founder_about,
         COALESCE(bp.founder_name, ip.founder_name) AS founder_name,
         COALESCE(bp.founder_title, ip.founder_title) AS founder_title,
@@ -47,7 +47,6 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       LEFT JOIN categories sc ON sc.id = bp.subcategory_id
       LEFT JOIN institution_profiles ip ON (
         ip.id = bp.institution_profile_id
-        OR (bp.institution_profile_id IS NULL AND ip.id = bp.id)
       )
       LEFT JOIN users u ON u.id = bp.user_id
       WHERE (bp.slug = $1 OR bp.id = $2 OR bp.institution_profile_id = $2 OR $1 ILIKE '%' || bp.slug || '%')
@@ -308,7 +307,10 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
           COALESCE(gc.name, m.category, 'Photo Gallery') AS category
         FROM institution_media m
         LEFT JOIN institution_gallery_categories gc ON gc.id = m.category_id
-        WHERE (m.institution_id = $1 OR m.institution_id = $2 OR m.institution_id = 160)
+        WHERE (
+          ($1 > 0 AND m.institution_id = $1)
+          OR ($2 > 0 AND m.institution_id = $2)
+        )
           AND COALESCE(m.is_deleted, FALSE) = FALSE
           AND m.url IS NOT NULL AND m.url <> ''
           AND m.media_type != 'logo'
@@ -419,8 +421,7 @@ export const fetchBusinessFullData = cache(async (idOrSlug: string) => {
       console.warn("fetchBusinessFullData pci fallback warning:", e);
     }
 
-    if (!business.owner_image_url) business.owner_image_url = "/uploads/media/deepak_yadav_founder.jpg";
-    if (!business.founder_image_url) business.founder_image_url = "/uploads/media/deepak_yadav_founder.jpg";
+
 
     let resolvedServices = servicesSettled.status === "fulfilled" ? servicesSettled.value.rows : [];
     try {

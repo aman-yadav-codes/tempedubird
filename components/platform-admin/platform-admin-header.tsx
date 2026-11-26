@@ -45,6 +45,10 @@ import {
   Dumbbell,
   Laptop,
   Scissors,
+  LayoutDashboard,
+  UtensilsCrossed,
+  BedDouble,
+  MoreHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +59,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useUserCountry } from "@/hooks/use-user-country";
@@ -74,6 +81,7 @@ import { getCatalogCountryMeta } from "@/lib/config/country-config";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { parseSearchIntent } from "@/lib/utils/search-intent";
 import { ProductStoresDialog } from "@/components/public/product-stores-dialog";
+import { toRoleRoutePath } from "@/lib/auth/role-routes";
 
 interface SearchResultItem {
   id: number | string;
@@ -137,14 +145,7 @@ const TOP_NAV_ITEMS = [
     icon: ShoppingBag,
     subcategories: [
       { label: "All Products", categorySlug: "all-products" },
-      { label: "Electronics & Gadgets", categorySlug: "electronics-and-gadgets" },
-      { label: "Automobiles & Electric Vehicles", categorySlug: "automobiles-cars-and-electric-vehicles" },
-      { label: "Building Materials & Construction", categorySlug: "building-materials-and-construction-hardware" },
-      { label: "Books & Study Materials", categorySlug: "books-and-study-materials" },
-      { label: "Fashion Accessories & Apparel", categorySlug: "fashion-accessories-and-footwear" },
-      { label: "Bakery & Gourmet Foods", categorySlug: "packaged-foods-and-gourmet-groceries" },
-      { label: "Event Supplies & Decor", categorySlug: "event-decor-and-celebration-supplies" },
-      { label: "Kitchenware & Appliances", categorySlug: "kitchenware-and-appliances" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
   {
@@ -153,14 +154,7 @@ const TOP_NAV_ITEMS = [
     icon: UserCheck,
     subcategories: [
       { label: "All Professionals", categorySlug: "all-professionals" },
-      { label: "Doctors & Healthcare Specialists", categorySlug: "doctors-and-healthcare-specialists" },
-      { label: "Academic Tutors & Educators", categorySlug: "academic-tutors-and-education-specialists" },
-      { label: "Chartered Accountants & Financial", categorySlug: "chartered-accountants-and-financial-advisors" },
-      { label: "Legal & Law Experts", categorySlug: "legal-law-and-compliance-experts" },
-      { label: "Design, Architecture & Creative", categorySlug: "design-architecture-and-creative-experts" },
-      { label: "Business & Strategy Consultants", categorySlug: "business-strategy-and-management-consultants" },
-      { label: "Fitness & Wellness Trainers", categorySlug: "fitness-wellness-and-sports-trainers" },
-      { label: "Beauty & Styling Artists", categorySlug: "beauty-hair-and-styling-artists" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
   {
@@ -168,14 +162,8 @@ const TOP_NAV_ITEMS = [
     type: "job",
     icon: Briefcase,
     subcategories: [
-      { label: "All Job Openings", categorySlug: "all-job-openings" },
-      { label: "Administration & HR", categorySlug: "administration-hr" },
-      { label: "Automotive Engineering & Operations", categorySlug: "job-automotive-engineering-operations" },
-      { label: "Finance & Accounting", categorySlug: "finance-accounting" },
-      { label: "Healthcare & Medical Services", categorySlug: "job-healthcare-medical-services" },
-      { label: "Hospitality & Restaurant Culinary", categorySlug: "job-hospitality-restaurant-culinary" },
-      { label: "Real Estate & Construction", categorySlug: "job-real-estate-construction" },
-      { label: "Retail & Store Operations", categorySlug: "hospitality-retail-store-operations" },
+      { label: "All Jobs", categorySlug: "all-jobs" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
   {
@@ -184,12 +172,7 @@ const TOP_NAV_ITEMS = [
     icon: GraduationCap,
     subcategories: [
       { label: "All Courses", categorySlug: "all-courses" },
-      { label: "Competitive Exams (JEE / NEET)", categorySlug: "competitive-exams-jee-neet" },
-      { label: "App & Software Development", categorySlug: "app-development-training" },
-      { label: "Class 11 & 12 Board Curriculum", categorySlug: "class-11-to-12" },
-      { label: "Class 6 to 10 Foundation", categorySlug: "class-6-to-8" },
-      { label: "Bachelors Degree Programs", categorySlug: "bachelors" },
-      { label: "Skill & Certification Bootcamps", categorySlug: "skill-and-coding-bootcamps" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
   {
@@ -199,9 +182,9 @@ const TOP_NAV_ITEMS = [
     subcategories: [
       { label: "All Properties", categorySlug: "all-properties" },
       { label: "Commercial Properties", categorySlug: "property-commercial-properties" },
-      { label: "Residential Real Estate", categorySlug: "property-residential-real-estate" },
       { label: "Industrial & Warehousing Estates", categorySlug: "property-industrial-warehousing-estates" },
       { label: "Plots & Development Lands", categorySlug: "property-plots-development-lands" },
+      { label: "Residential Real Estate", categorySlug: "property-residential-real-estate" },
     ],
   },
   {
@@ -210,10 +193,11 @@ const TOP_NAV_ITEMS = [
     icon: Car,
     subcategories: [
       { label: "All Vehicles", categorySlug: "all-vehicles" },
-      { label: "Passenger Cars & SUVs", categorySlug: "vehicle-passenger-cars-suvs" },
       { label: "Commercial & Transport Vehicles", categorySlug: "vehicle-commercial-transport-vehicles" },
-      { label: "Two-Wheelers & Motorcycles", categorySlug: "vehicle-two-wheelers-motorcycles" },
       { label: "Luxury & Exotic Automobiles", categorySlug: "vehicle-luxury-exotic-automobiles" },
+      { label: "Passenger Cars & SUVs", categorySlug: "vehicle-passenger-cars-suvs" },
+      { label: "Two-Wheelers & Motorcycles", categorySlug: "vehicle-two-wheelers-motorcycles" },
+      { label: "Commuter & Economy Bikes", categorySlug: "commuter-and-economy-bikes" },
     ],
   },
   {
@@ -222,10 +206,7 @@ const TOP_NAV_ITEMS = [
     icon: Calendar,
     subcategories: [
       { label: "All Events", categorySlug: "all-events" },
-      { label: "Corporate & Industry Events", categorySlug: "event-corporate-industry-events" },
-      { label: "Live Entertainment & Cultural Shows", categorySlug: "event-live-entertainment-cultural-shows" },
-      { label: "Sports & Fitness Tournaments", categorySlug: "event-sports-fitness-tournaments" },
-      { label: "Weddings & Social Galas", categorySlug: "event-weddings-social-galas" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
   {
@@ -234,11 +215,32 @@ const TOP_NAV_ITEMS = [
     icon: Landmark,
     subcategories: [
       { label: "All Financial Services", categorySlug: "all-financial-services" },
-      { label: "Chartered Accountants & Financial", categorySlug: "chartered-accountants-and-financial-advisors" },
-      { label: "Business Loans & Commercial Finance", categorySlug: "business-loans-financing" },
-      { label: "Insurance & Risk Advisory", categorySlug: "insurance-risk-advisory" },
-      { label: "Investment & Wealth Management", categorySlug: "wealth-investment-management" },
-      { label: "Legal, Tax & Corporate Compliance", categorySlug: "legal-law-and-compliance-experts" },
+      ...BUSINESS_MEGA_CATEGORIES,
+    ],
+  },
+  {
+    label: "Dishes",
+    type: "dish",
+    icon: UtensilsCrossed,
+    subcategories: [
+      { label: "All Dishes", categorySlug: "all-dishes" },
+      { label: "Bakery, Desserts & Confectionery", categorySlug: "bakery-desserts-and-confectionery" },
+      { label: "Beverages, Brews & Mocktails", categorySlug: "beverages-brews-and-mocktails" },
+      { label: "Main Course Curries & Breads", categorySlug: "main-course-curries-and-breads" },
+      { label: "Starters & Appetizers", categorySlug: "starters-and-appetizers" },
+    ],
+  },
+  {
+    label: "Rooms",
+    type: "room",
+    icon: BedDouble,
+    subcategories: [
+      { label: "All Rooms", categorySlug: "all-rooms" },
+      { label: "Budget & Dormitory Stays", categorySlug: "budget-and-dormitory-stays" },
+      { label: "Hotel Guest Rooms", categorySlug: "hotel-guest-rooms" },
+      { label: "Luxury Suites & Penthouses", categorySlug: "luxury-suites-and-penthouses" },
+      { label: "Resort Cottages & Heritage Chalets", categorySlug: "resort-cottages-and-heritage-chalets" },
+      { label: "Backpacker Mixed Bunk Dorms", categorySlug: "backpacker-mixed-bunk-dorms" },
     ],
   },
 ];
@@ -403,15 +405,19 @@ export function PlatformAdminHeader() {
   }, []);
 
   const getItemSubcategories = (item: (typeof TOP_NAV_ITEMS)[0]) => {
-    if (item.label === "Financial" || (item as any).isSpecialCategory) {
+    if (
+      (item as any).isSpecialCategory ||
+      item.label === "Property" || item.type === "property" ||
+      item.label === "Vehicle" || item.type === "vehicle" ||
+      item.label === "Dishes" || item.type === "dish" ||
+      item.label === "Rooms" || item.type === "room"
+    ) {
       return item.subcategories;
     }
-    const fromDb = verticalCategories[item.type];
-    if (fromDb && fromDb.length > 0) {
-      const allItem = { label: `All ${item.label === "Vehicle" ? "Vehicles" : item.label}`, categorySlug: `all-${item.type}` };
-      return [allItem, ...fromDb];
-    }
-    return item.subcategories;
+    const allLabel = `All ${item.label === "Shopping" ? "Products" : item.label === "Financial" ? "Financial Services" : item.label}`;
+    const allSlug = `all-${item.type === "product" ? "products" : item.type === "professional" ? "professionals" : item.type === "service" ? "services" : item.type === "event" ? "events" : item.type === "course" ? "courses" : item.type === "job" ? "jobs" : item.type}`;
+    const allItem = { label: allLabel, categorySlug: allSlug };
+    return [allItem, ...BUSINESS_MEGA_CATEGORIES];
   };
 
   const withLocation = (url: string) => {
@@ -583,9 +589,17 @@ export function PlatformAdminHeader() {
           </Link>
         </div>
 
-        {/* Center: Top Navigation Menu (Categories, Shopping, Events, Courses, Property, Vehicle, Financial) */}
-        <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
+        {/* Center: Top Navigation Menu with Responsive "More" Handling */}
+        <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1.5">
           {TOP_NAV_ITEMS.map((item) => {
+            const isAlwaysVisible = ["Business", "Shopping", "Professionals", "Jobs", "Courses", "Property", "Vehicle"].includes(item.label);
+            const isSecondaryVisible = ["Events", "Financial"].includes(item.label);
+
+            // Dishes & Rooms are accessed via "More" dropdown
+            if (!isAlwaysVisible && !isSecondaryVisible) {
+              return null;
+            }
+
             if ((item as any).isSpecialCategory) {
               return (
                 <DropdownMenu key={item.label}>
@@ -661,7 +675,7 @@ export function PlatformAdminHeader() {
               );
             }
 
-            return (
+            const navItemElement = (
               <DropdownMenu key={item.label}>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -705,7 +719,123 @@ export function PlatformAdminHeader() {
                 </DropdownMenuContent>
               </DropdownMenu>
             );
+
+            if (isSecondaryVisible) {
+              return (
+                <div key={item.label} className="hidden 2xl:flex">
+                  {navItemElement}
+                </div>
+              );
+            }
+
+            return navItemElement;
           })}
+
+          {/* Responsive "More" Dropdown: holds Dishes & Rooms on all desktop screens, and Events & Financial on < 2xl screens */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-800 hover:text-sky-600 hover:bg-sky-50/80 transition-colors cursor-pointer outline-none group"
+              >
+                <span>More</span>
+                <ChevronDown className="size-3 text-slate-400 group-hover:text-sky-600 transition-transform group-data-[state=open]:rotate-180" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 p-1.5 space-y-1 z-50 rounded-xl shadow-xl border-sky-100 bg-white">
+              <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                More Categories
+              </div>
+
+              {/* Secondary items visible under More on < 2xl screens */}
+              {TOP_NAV_ITEMS.filter((item) => ["Events", "Financial"].includes(item.label)).map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <div key={item.label} className="2xl:hidden">
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="cursor-pointer text-xs py-2 px-2.5 rounded-lg font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50 flex items-center justify-between gap-2 w-full">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {ItemIcon && <ItemIcon className="size-3.5 text-sky-500 shrink-0" />}
+                          <span className="truncate">{item.label}</span>
+                        </div>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="w-64 max-h-[420px] overflow-y-auto p-1.5 space-y-0.5 z-50 rounded-xl shadow-xl border-sky-100 scrollbar-thin">
+                        <div className="sticky top-0 z-10 px-2.5 py-1.5 mb-1 bg-sky-50/95 backdrop-blur-xs rounded-md flex items-center justify-between border-b border-sky-100 shadow-2xs">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
+                            Explore {item.label}
+                          </span>
+                          <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
+                            <Link
+                              href={getNavHref(item)}
+                              className="text-[10px] text-sky-600 hover:underline font-bold cursor-pointer"
+                            >
+                              View All →
+                            </Link>
+                          </DropdownMenuItem>
+                        </div>
+                        {getItemSubcategories(item).map((sub) => {
+                          const navHref = getNavHref(item, sub);
+                          return (
+                            <DropdownMenuItem key={sub.label} asChild>
+                              <Link
+                                href={navHref}
+                                className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50 block w-full"
+                              >
+                                {sub.label}
+                              </Link>
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </div>
+                );
+              })}
+
+              {/* Overflow items: Dishes & Rooms */}
+              {TOP_NAV_ITEMS.filter((item) => ["Dishes", "Rooms"].includes(item.label)).map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <DropdownMenuSub key={item.label}>
+                    <DropdownMenuSubTrigger className="cursor-pointer text-xs py-2 px-2.5 rounded-lg font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50 flex items-center justify-between gap-2 w-full">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {ItemIcon && <ItemIcon className="size-3.5 text-sky-500 shrink-0" />}
+                        <span className="truncate">{item.label}</span>
+                      </div>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-64 max-h-[420px] overflow-y-auto p-1.5 space-y-0.5 z-50 rounded-xl shadow-xl border-sky-100 scrollbar-thin">
+                      <div className="sticky top-0 z-10 px-2.5 py-1.5 mb-1 bg-sky-50/95 backdrop-blur-xs rounded-md flex items-center justify-between border-b border-sky-100 shadow-2xs">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
+                          Explore {item.label}
+                        </span>
+                        <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
+                          <Link
+                            href={getNavHref(item)}
+                            className="text-[10px] text-sky-600 hover:underline font-bold cursor-pointer"
+                          >
+                            View All →
+                          </Link>
+                        </DropdownMenuItem>
+                      </div>
+                      {getItemSubcategories(item).map((sub) => {
+                        const navHref = getNavHref(item, sub);
+                        return (
+                          <DropdownMenuItem key={sub.label} asChild>
+                            <Link
+                              href={navHref}
+                              className="cursor-pointer text-xs py-1.5 px-2.5 rounded-md font-medium text-slate-700 hover:text-sky-600 hover:bg-sky-50 block w-full"
+                            >
+                              {sub.label}
+                            </Link>
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </nav>
 
         {/* Right: Cart, Country Flag, Location Selector, User Profile */}
@@ -805,6 +935,15 @@ export function PlatformAdminHeader() {
                     {user.full_name || user.email}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href={toRoleRoutePath("/admin", user)}
+                      className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                    >
+                      <LayoutDashboard className="size-4 text-sky-500" />
+                      <span>Dashboard</span>
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link
                       href="/packages"

@@ -283,6 +283,7 @@ const navItems: SidebarItem[] = [
             { title: "Business Categories", url: "/admin/categories?type=business", icon: Building2 },
             { title: "Product Categories", url: "/admin/categories?type=product", icon: Package },
             { title: "Service Categories", url: "/admin/categories?type=service", icon: Briefcase },
+            { title: "Finance Categories", url: "/admin/categories?type=finance", icon: Landmark },
             { title: "Professional Categories", url: "/admin/categories?type=professional", icon: UserCheck },
             { title: "Course Categories", url: "/admin/categories?type=course", icon: BookOpen },
             { title: "Job Categories", url: "/admin/categories?type=job", icon: Briefcase },
