@@ -45,6 +45,7 @@ import {
   Dumbbell,
   Laptop,
   Scissors,
+  LayoutDashboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +75,7 @@ import { getCatalogCountryMeta } from "@/lib/config/country-config";
 import { CartDrawer } from "@/components/checkout/cart-drawer";
 import { parseSearchIntent } from "@/lib/utils/search-intent";
 import { ProductStoresDialog } from "@/components/public/product-stores-dialog";
+import { toRoleRoutePath } from "@/lib/auth/role-routes";
 
 interface SearchResultItem {
   id: number | string;
@@ -137,14 +139,7 @@ const TOP_NAV_ITEMS = [
     icon: ShoppingBag,
     subcategories: [
       { label: "All Products", categorySlug: "all-products" },
-      { label: "Electronics & Gadgets", categorySlug: "electronics-and-gadgets" },
-      { label: "Automobiles & Electric Vehicles", categorySlug: "automobiles-cars-and-electric-vehicles" },
-      { label: "Building Materials & Construction", categorySlug: "building-materials-and-construction-hardware" },
-      { label: "Books & Study Materials", categorySlug: "books-and-study-materials" },
-      { label: "Fashion Accessories & Apparel", categorySlug: "fashion-accessories-and-footwear" },
-      { label: "Bakery & Gourmet Foods", categorySlug: "packaged-foods-and-gourmet-groceries" },
-      { label: "Event Supplies & Decor", categorySlug: "event-decor-and-celebration-supplies" },
-      { label: "Kitchenware & Appliances", categorySlug: "kitchenware-and-appliances" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
   {
@@ -153,14 +148,7 @@ const TOP_NAV_ITEMS = [
     icon: UserCheck,
     subcategories: [
       { label: "All Professionals", categorySlug: "all-professionals" },
-      { label: "Doctors & Healthcare Specialists", categorySlug: "doctors-and-healthcare-specialists" },
-      { label: "Academic Tutors & Educators", categorySlug: "academic-tutors-and-education-specialists" },
-      { label: "Chartered Accountants & Financial", categorySlug: "chartered-accountants-and-financial-advisors" },
-      { label: "Legal & Law Experts", categorySlug: "legal-law-and-compliance-experts" },
-      { label: "Design, Architecture & Creative", categorySlug: "design-architecture-and-creative-experts" },
-      { label: "Business & Strategy Consultants", categorySlug: "business-strategy-and-management-consultants" },
-      { label: "Fitness & Wellness Trainers", categorySlug: "fitness-wellness-and-sports-trainers" },
-      { label: "Beauty & Styling Artists", categorySlug: "beauty-hair-and-styling-artists" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
   {
@@ -168,14 +156,8 @@ const TOP_NAV_ITEMS = [
     type: "job",
     icon: Briefcase,
     subcategories: [
-      { label: "All Job Openings", categorySlug: "all-job-openings" },
-      { label: "Administration & HR", categorySlug: "administration-hr" },
-      { label: "Automotive Engineering & Operations", categorySlug: "job-automotive-engineering-operations" },
-      { label: "Finance & Accounting", categorySlug: "finance-accounting" },
-      { label: "Healthcare & Medical Services", categorySlug: "job-healthcare-medical-services" },
-      { label: "Hospitality & Restaurant Culinary", categorySlug: "job-hospitality-restaurant-culinary" },
-      { label: "Real Estate & Construction", categorySlug: "job-real-estate-construction" },
-      { label: "Retail & Store Operations", categorySlug: "hospitality-retail-store-operations" },
+      { label: "All Jobs", categorySlug: "all-jobs" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
   {
@@ -184,12 +166,7 @@ const TOP_NAV_ITEMS = [
     icon: GraduationCap,
     subcategories: [
       { label: "All Courses", categorySlug: "all-courses" },
-      { label: "Competitive Exams (JEE / NEET)", categorySlug: "competitive-exams-jee-neet" },
-      { label: "App & Software Development", categorySlug: "app-development-training" },
-      { label: "Class 11 & 12 Board Curriculum", categorySlug: "class-11-to-12" },
-      { label: "Class 6 to 10 Foundation", categorySlug: "class-6-to-8" },
-      { label: "Bachelors Degree Programs", categorySlug: "bachelors" },
-      { label: "Skill & Certification Bootcamps", categorySlug: "skill-and-coding-bootcamps" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
   {
@@ -198,10 +175,7 @@ const TOP_NAV_ITEMS = [
     icon: Building,
     subcategories: [
       { label: "All Properties", categorySlug: "all-properties" },
-      { label: "Commercial Properties", categorySlug: "property-commercial-properties" },
-      { label: "Residential Real Estate", categorySlug: "property-residential-real-estate" },
-      { label: "Industrial & Warehousing Estates", categorySlug: "property-industrial-warehousing-estates" },
-      { label: "Plots & Development Lands", categorySlug: "property-plots-development-lands" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
   {
@@ -210,10 +184,7 @@ const TOP_NAV_ITEMS = [
     icon: Car,
     subcategories: [
       { label: "All Vehicles", categorySlug: "all-vehicles" },
-      { label: "Passenger Cars & SUVs", categorySlug: "vehicle-passenger-cars-suvs" },
-      { label: "Commercial & Transport Vehicles", categorySlug: "vehicle-commercial-transport-vehicles" },
-      { label: "Two-Wheelers & Motorcycles", categorySlug: "vehicle-two-wheelers-motorcycles" },
-      { label: "Luxury & Exotic Automobiles", categorySlug: "vehicle-luxury-exotic-automobiles" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
   {
@@ -222,10 +193,7 @@ const TOP_NAV_ITEMS = [
     icon: Calendar,
     subcategories: [
       { label: "All Events", categorySlug: "all-events" },
-      { label: "Corporate & Industry Events", categorySlug: "event-corporate-industry-events" },
-      { label: "Live Entertainment & Cultural Shows", categorySlug: "event-live-entertainment-cultural-shows" },
-      { label: "Sports & Fitness Tournaments", categorySlug: "event-sports-fitness-tournaments" },
-      { label: "Weddings & Social Galas", categorySlug: "event-weddings-social-galas" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
   {
@@ -234,11 +202,7 @@ const TOP_NAV_ITEMS = [
     icon: Landmark,
     subcategories: [
       { label: "All Financial Services", categorySlug: "all-financial-services" },
-      { label: "Chartered Accountants & Financial", categorySlug: "chartered-accountants-and-financial-advisors" },
-      { label: "Business Loans & Commercial Finance", categorySlug: "business-loans-financing" },
-      { label: "Insurance & Risk Advisory", categorySlug: "insurance-risk-advisory" },
-      { label: "Investment & Wealth Management", categorySlug: "wealth-investment-management" },
-      { label: "Legal, Tax & Corporate Compliance", categorySlug: "legal-law-and-compliance-experts" },
+      ...BUSINESS_MEGA_CATEGORIES,
     ],
   },
 ];
@@ -403,15 +367,13 @@ export function PlatformAdminHeader() {
   }, []);
 
   const getItemSubcategories = (item: (typeof TOP_NAV_ITEMS)[0]) => {
-    if (item.label === "Financial" || (item as any).isSpecialCategory) {
+    if ((item as any).isSpecialCategory) {
       return item.subcategories;
     }
-    const fromDb = verticalCategories[item.type];
-    if (fromDb && fromDb.length > 0) {
-      const allItem = { label: `All ${item.label === "Vehicle" ? "Vehicles" : item.label}`, categorySlug: `all-${item.type}` };
-      return [allItem, ...fromDb];
-    }
-    return item.subcategories;
+    const allLabel = `All ${item.label === "Vehicle" ? "Vehicles" : item.label === "Shopping" ? "Products" : item.label === "Financial" ? "Financial Services" : item.label}`;
+    const allSlug = `all-${item.type === "product" ? "products" : item.type === "professional" ? "professionals" : item.type === "service" ? "services" : item.type === "property" ? "properties" : item.type === "vehicle" ? "vehicles" : item.type === "event" ? "events" : item.type === "course" ? "courses" : item.type === "job" ? "jobs" : item.type}`;
+    const allItem = { label: allLabel, categorySlug: allSlug };
+    return [allItem, ...BUSINESS_MEGA_CATEGORIES];
   };
 
   const withLocation = (url: string) => {
@@ -805,6 +767,15 @@ export function PlatformAdminHeader() {
                     {user.full_name || user.email}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href={toRoleRoutePath("/admin", user)}
+                      className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-slate-700 hover:text-sky-600 rounded-lg hover:bg-sky-50"
+                    >
+                      <LayoutDashboard className="size-4 text-sky-500" />
+                      <span>Dashboard</span>
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link
                       href="/packages"

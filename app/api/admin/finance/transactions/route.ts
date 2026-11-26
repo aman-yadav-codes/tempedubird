@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { db } from "@/lib/db/db";
 import { isInstitutionAdminUser, isPlatformAdminUser } from "@/lib/auth/permissions";
+import { ensureFinanceIncomeSchema } from "@/lib/queries/finance";
 
 type CurrentUser = Awaited<ReturnType<typeof getAuthenticatedUser>>;
 
@@ -45,6 +46,8 @@ export async function GET(req: Request) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    await ensureFinanceIncomeSchema(db).catch(() => {});
 
     const { searchParams } = new URL(req.url);
     const requestedInstitutionId = searchParams.get("institutionId") ? Number(searchParams.get("institutionId")) : null;
