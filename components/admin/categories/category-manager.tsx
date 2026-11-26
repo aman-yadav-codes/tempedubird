@@ -56,6 +56,7 @@ import {
   BedDouble,
   CalendarDays,
   Download,
+  Landmark,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
@@ -154,7 +155,7 @@ export function CategoryManagerContent() {
   // Form State for Product / Service / Professional Category (2-step)
   const [formBizCatId, setFormBizCatId] = useState<string>("");
   const [formBizSubcatId, setFormBizSubcatId] = useState<string>("");
-  const [formType, setFormType] = useState<"product" | "service" | "professional" | "course" | "job" | "vehicle" | "property" | "event" | "dish" | "room">("product");
+  const [formType, setFormType] = useState<"product" | "service" | "professional" | "course" | "job" | "vehicle" | "property" | "event" | "dish" | "room" | "finance">("product");
   const [formParentId, setFormParentId] = useState<string>("none");
   const [formName, setFormName] = useState("");
   const [formSlug, setFormSlug] = useState("");
@@ -392,8 +393,8 @@ export function CategoryManagerContent() {
     setBizSubcatDialogOpen(true);
   };
 
-  // 3. OPEN ADD PRODUCT / SERVICE / PROFESSIONAL / COURSE / JOB / VEHICLE / PROPERTY / EVENT / DISH / ROOM CATEGORY MODAL (Mandatory 2-Step)
-  const openAddCatalogCatDialog = (targetType?: "product" | "service" | "professional" | "course" | "job" | "vehicle" | "property" | "event" | "dish" | "room") => {
+  // 3. OPEN ADD PRODUCT / SERVICE / PROFESSIONAL / COURSE / JOB / VEHICLE / PROPERTY / EVENT / DISH / ROOM / FINANCE CATEGORY MODAL (Mandatory 2-Step)
+  const openAddCatalogCatDialog = (targetType?: "product" | "service" | "professional" | "course" | "job" | "vehicle" | "property" | "event" | "dish" | "room" | "finance") => {
     const determinedType =
       targetType ||
       (activeTab === "product"
@@ -402,21 +403,23 @@ export function CategoryManagerContent() {
           ? "service"
           : activeTab === "professional"
             ? "professional"
-            : activeTab === "course"
-              ? "course"
-              : activeTab === "job"
-                ? "job"
-                : activeTab === "vehicle"
-                  ? "vehicle"
-                  : activeTab === "property"
-                    ? "property"
-                    : activeTab === "event"
-                      ? "event"
-                      : activeTab === "dish"
-                        ? "dish"
-                        : activeTab === "room"
-                          ? "room"
-                          : "product");
+            : activeTab === "finance"
+              ? "finance"
+              : activeTab === "course"
+                ? "course"
+                : activeTab === "job"
+                  ? "job"
+                  : activeTab === "vehicle"
+                    ? "vehicle"
+                    : activeTab === "property"
+                      ? "property"
+                      : activeTab === "event"
+                        ? "event"
+                        : activeTab === "dish"
+                          ? "dish"
+                          : activeTab === "room"
+                            ? "room"
+                            : "product");
 
     setFormType(determinedType);
 
@@ -428,6 +431,13 @@ export function CategoryManagerContent() {
       );
       if (eduCat) {
         defaultBizCatId = String(eduCat.id);
+      }
+    } else if (determinedType === "finance") {
+      const finCat = businessRootCategories.find(
+        (b) => b.id === 7838 || b.name.toLowerCase().includes("financial")
+      );
+      if (finCat) {
+        defaultBizCatId = String(finCat.id);
       }
     }
 
@@ -728,20 +738,24 @@ export function CategoryManagerContent() {
                     ? "Product Categories & Subcategories"
                     : activeTab === "service"
                       ? "Service Categories & Subcategories"
-                      : activeTab === "professional"
-                        ? "Professional Categories & Subcategories"
-                        : activeTab === "course"
-                          ? "Course Categories & Subcategories"
-                          : activeTab === "job"
-                            ? "Job Categories & Subcategories"
-                            : "Category System"}
+                      : activeTab === "finance"
+                        ? "Finance Categories & Subcategories"
+                        : activeTab === "professional"
+                          ? "Professional Categories & Subcategories"
+                          : activeTab === "course"
+                            ? "Course Categories & Subcategories"
+                            : activeTab === "job"
+                              ? "Job Categories & Subcategories"
+                              : "Category System"}
               </h1>
               <p className="text-xs text-muted-foreground">
                 {activeTab === "course"
                   ? "Manage course and academic categories mapped to Education & Coaching business sectors."
                   : activeTab === "job"
                     ? "Manage job classifications and employment categories mapped to business sectors."
-                    : "Manage business classifications, product categories, and service categories with hierarchies."}
+                    : activeTab === "finance"
+                      ? "Manage finance, banking, loans, taxation, and wealth advisory categories."
+                      : "Manage business classifications, product categories, and service categories with hierarchies."}
               </p>
             </div>
           </div>
@@ -807,6 +821,14 @@ export function CategoryManagerContent() {
               className="gap-1.5 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white shadow-sm h-9"
             >
               <Plus className="size-3.5" /> Add Service Category
+            </Button>
+          ) : activeTab === "finance" ? (
+            <Button
+              onClick={() => openAddCatalogCatDialog("finance")}
+              size="sm"
+              className="gap-1.5 text-xs font-bold bg-[#d9232e] hover:bg-[#b81d26] text-white shadow-sm h-9"
+            >
+              <Plus className="size-3.5" /> Add Finance Category
             </Button>
           ) : activeTab === "professional" ? (
             <Button
@@ -1079,7 +1101,9 @@ export function CategoryManagerContent() {
                     ? "Product Categories & Subcategories"
                     : activeTab === "service"
                       ? "Service Categories & Subcategories"
-                      : activeTab === "professional"
+                      : activeTab === "finance"
+                        ? "Finance Categories & Subcategories"
+                        : activeTab === "professional"
                         ? "Professional Categories & Subcategories"
                         : activeTab === "course"
                           ? "Course Categories & Subcategories"
@@ -1522,6 +1546,8 @@ export function CategoryManagerContent() {
                 <Package className="size-4 text-blue-600" />
               ) : formType === "service" ? (
                 <Briefcase className="size-4 text-emerald-600" />
+              ) : formType === "finance" ? (
+                <Landmark className="size-4 text-emerald-600" />
               ) : formType === "course" ? (
                 <BookOpen className="size-4 text-amber-600" />
               ) : formType === "job" ? (
