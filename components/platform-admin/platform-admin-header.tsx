@@ -175,7 +175,10 @@ const TOP_NAV_ITEMS = [
     icon: Building,
     subcategories: [
       { label: "All Properties", categorySlug: "all-properties" },
-      ...BUSINESS_MEGA_CATEGORIES,
+      { label: "Commercial Properties", categorySlug: "property-commercial-properties" },
+      { label: "Industrial & Warehousing Estates", categorySlug: "property-industrial-warehousing-estates" },
+      { label: "Plots & Development Lands", categorySlug: "property-plots-development-lands" },
+      { label: "Residential Real Estate", categorySlug: "property-residential-real-estate" },
     ],
   },
   {
@@ -184,7 +187,11 @@ const TOP_NAV_ITEMS = [
     icon: Car,
     subcategories: [
       { label: "All Vehicles", categorySlug: "all-vehicles" },
-      ...BUSINESS_MEGA_CATEGORIES,
+      { label: "Commercial & Transport Vehicles", categorySlug: "vehicle-commercial-transport-vehicles" },
+      { label: "Luxury & Exotic Automobiles", categorySlug: "vehicle-luxury-exotic-automobiles" },
+      { label: "Passenger Cars & SUVs", categorySlug: "vehicle-passenger-cars-suvs" },
+      { label: "Two-Wheelers & Motorcycles", categorySlug: "vehicle-two-wheelers-motorcycles" },
+      { label: "Commuter & Economy Bikes", categorySlug: "commuter-and-economy-bikes" },
     ],
   },
   {
@@ -367,11 +374,11 @@ export function PlatformAdminHeader() {
   }, []);
 
   const getItemSubcategories = (item: (typeof TOP_NAV_ITEMS)[0]) => {
-    if ((item as any).isSpecialCategory) {
+    if ((item as any).isSpecialCategory || item.label === "Property" || item.type === "property" || item.label === "Vehicle" || item.type === "vehicle") {
       return item.subcategories;
     }
-    const allLabel = `All ${item.label === "Vehicle" ? "Vehicles" : item.label === "Shopping" ? "Products" : item.label === "Financial" ? "Financial Services" : item.label}`;
-    const allSlug = `all-${item.type === "product" ? "products" : item.type === "professional" ? "professionals" : item.type === "service" ? "services" : item.type === "property" ? "properties" : item.type === "vehicle" ? "vehicles" : item.type === "event" ? "events" : item.type === "course" ? "courses" : item.type === "job" ? "jobs" : item.type}`;
+    const allLabel = `All ${item.label === "Shopping" ? "Products" : item.label === "Financial" ? "Financial Services" : item.label}`;
+    const allSlug = `all-${item.type === "product" ? "products" : item.type === "professional" ? "professionals" : item.type === "service" ? "services" : item.type === "event" ? "events" : item.type === "course" ? "courses" : item.type === "job" ? "jobs" : item.type}`;
     const allItem = { label: allLabel, categorySlug: allSlug };
     return [allItem, ...BUSINESS_MEGA_CATEGORIES];
   };

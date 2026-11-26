@@ -507,10 +507,13 @@ export const KNOWN_CATEGORY_SLUG_LABELS: Record<string, string> = {
   "vehicle-commercial-transport-vehicles": "Commercial & Transport Vehicles",
   "vehicle-two-wheelers-motorcycles": "Two-Wheelers & Motorcycles",
   "vehicle-luxury-exotic-automobiles": "Luxury & Exotic Automobiles",
+  "vehicle-commuter-and-economy-bikes": "Commuter & Economy Bikes",
   "passenger-cars-suvs": "Passenger Cars & SUVs",
   "commercial-transport-vehicles": "Commercial & Transport Vehicles",
   "two-wheelers-motorcycles": "Two-Wheelers & Motorcycles",
   "luxury-exotic-automobiles": "Luxury & Exotic Automobiles",
+  "commuter-and-economy-bikes": "Commuter & Economy Bikes",
+  "commuter-economy-bikes": "Commuter & Economy Bikes",
   // Events
   "all-events": "Events & Expos",
   "event-corporate-industry-events": "Corporate & Industry Events",
