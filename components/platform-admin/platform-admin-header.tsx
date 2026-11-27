@@ -253,6 +253,7 @@ export function PlatformAdminHeader() {
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authDialogTab, setAuthDialogTab] = useState<"signin" | "signup">("signin");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [expandedMobileCategory, setExpandedMobileCategory] = useState<string | null>(null);
 
   // User Location
   const {
@@ -856,81 +857,85 @@ export function PlatformAdminHeader() {
             )}
           </button>
 
-          {/* Country Flag Selector (Dynamic Country & Currency: ZA 🇿🇦, IN 🇮🇳, US 🇺🇸 etc.) */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-1.5 p-1 sm:px-2.5 sm:py-1 rounded-full hover:bg-sky-100/60 transition-colors cursor-pointer text-xs font-bold text-slate-700 shrink-0 border border-sky-100/80 bg-white shadow-2xs"
-                title={`Country: ${country.name} (${country.currencyCode} ${country.currencySymbol})`}
-              >
-                <span className="text-base leading-none">{country.flag}</span>
-                <span className="text-[11px] font-black text-slate-800 hidden sm:inline">{country.code}</span>
-                <ChevronDown className="size-3 text-slate-400" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 p-1.5 rounded-xl shadow-lg border-sky-100 max-h-80 overflow-y-auto">
-              <DropdownMenuLabel className="text-[10px] uppercase font-bold text-slate-400 px-2 py-1">
-                Select Country &amp; Currency
-              </DropdownMenuLabel>
-              {availableCountries.map((c) => (
-                <DropdownMenuItem
-                  key={c.code}
-                  onClick={() => {
-                    setCountry(c.code);
-                    toast.success(`Country set to ${c.name} ${c.flag}`, {
-                      description: `Currency: ${c.currencyCode} (${c.currencySymbol})`,
-                    });
-                  }}
-                  className={`cursor-pointer text-xs font-medium gap-2.5 py-2 px-2.5 rounded-lg flex items-center justify-between ${country.code === c.code ? "bg-sky-50 text-sky-700 font-bold" : ""
-                    }`}
+          {/* Country Flag Selector (Dynamic Country & Currency: ZA 🇿🇦, IN 🇮🇳, US 🇺🇸 etc.) - Desktop Only */}
+          <div className="hidden md:flex items-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 p-1 sm:px-2.5 sm:py-1 rounded-full hover:bg-sky-100/60 transition-colors cursor-pointer text-xs font-bold text-slate-700 shrink-0 border border-sky-100/80 bg-white shadow-2xs"
+                  title={`Country: ${country.name} (${country.currencyCode} ${country.currencySymbol})`}
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{c.flag}</span>
-                    <span>{c.name}</span>
-                  </div>
-                  <span className="text-[11px] text-slate-500 font-bold font-mono">
-                    {c.currencySymbol} {c.currencyCode}
-                  </span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <span className="text-base leading-none">{country.flag}</span>
+                  <span className="text-[11px] font-black text-slate-800 hidden sm:inline">{country.code}</span>
+                  <ChevronDown className="size-3 text-slate-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 p-1.5 rounded-xl shadow-lg border-sky-100 max-h-80 overflow-y-auto">
+                <DropdownMenuLabel className="text-[10px] uppercase font-bold text-slate-400 px-2 py-1">
+                  Select Country &amp; Currency
+                </DropdownMenuLabel>
+                {availableCountries.map((c) => (
+                  <DropdownMenuItem
+                    key={c.code}
+                    onClick={() => {
+                      setCountry(c.code);
+                      toast.success(`Country set to ${c.name} ${c.flag}`, {
+                        description: `Currency: ${c.currencyCode} (${c.currencySymbol})`,
+                      });
+                    }}
+                    className={`cursor-pointer text-xs font-medium gap-2.5 py-2 px-2.5 rounded-lg flex items-center justify-between ${country.code === c.code ? "bg-sky-50 text-sky-700 font-bold" : ""
+                      }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{c.flag}</span>
+                      <span>{c.name}</span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 font-bold font-mono">
+                      {c.currencySymbol} {c.currencyCode}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-          {/* Location Selector Button (Pin icon) */}
-          <button
-            type="button"
-            onClick={() => setLocationDialogOpen(true)}
-            className="relative size-8.5 rounded-full border border-sky-200/80 bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-700 transition-all cursor-pointer shrink-0 shadow-2xs group flex items-center justify-center"
-            title={location ? `Location: ${location} (Click to change)` : "Select Location"}
-            aria-label="Select Location"
-          >
-            <MapPin className="size-4 text-amber-500 group-hover:scale-110 transition-transform" />
-            {isDetected && (
-              <span
-                className="absolute top-1 right-1 size-2 rounded-full bg-emerald-500 ring-2 ring-white"
-                title="GPS Live Detected"
-              />
-            )}
-          </button>
+          {/* Location Selector Button (Pin icon) - Desktop Only */}
+          <div className="hidden md:flex items-center">
+            <button
+              type="button"
+              onClick={() => setLocationDialogOpen(true)}
+              className="relative size-8.5 rounded-full border border-sky-200/80 bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-700 transition-all cursor-pointer shrink-0 shadow-2xs group flex items-center justify-center"
+              title={location ? `Location: ${location} (Click to change)` : "Select Location"}
+              aria-label="Select Location"
+            >
+              <MapPin className="size-4 text-amber-500 group-hover:scale-110 transition-transform" />
+              {isDetected && (
+                <span
+                  className="absolute top-1 right-1 size-2 rounded-full bg-emerald-500 ring-2 ring-white"
+                  title="GPS Live Detected"
+                />
+              )}
+            </button>
+          </div>
 
-          {/* User Profile Dropdown matching mockup (My Store, Profile, Settings, Sign Out) */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-1 p-1 rounded-full hover:bg-sky-100/60 transition-colors cursor-pointer shrink-0 group outline-none"
-                title={user ? user.full_name || user.email : "My Account"}
-              >
-                <div className="size-8.5 rounded-full bg-sky-500 hover:bg-sky-600 text-white flex items-center justify-center shadow-xs transition-colors">
-                  <User className="size-4.5 text-white" />
-                </div>
-                <ChevronDown className="size-3 text-slate-400 group-hover:text-slate-600 transition-transform" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-xl shadow-xl border-sky-100">
-              {user ? (
-                <>
+          {/* User Profile / Login Button - Desktop Only */}
+          <div className="hidden md:flex items-center">
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 p-1 rounded-full hover:bg-sky-100/60 transition-colors cursor-pointer shrink-0 group outline-none"
+                    title={user.full_name || user.email}
+                  >
+                    <div className="size-8.5 rounded-full bg-sky-500 hover:bg-sky-600 text-white flex items-center justify-center shadow-xs transition-colors">
+                      <User className="size-4.5 text-white" />
+                    </div>
+                    <ChevronDown className="size-3 text-slate-400 group-hover:text-slate-600 transition-transform" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-xl shadow-xl border-sky-100">
                   <DropdownMenuLabel className="px-3 py-1.5 text-xs text-muted-foreground font-semibold truncate">
                     {user.full_name || user.email}
                   </DropdownMenuLabel>
@@ -992,21 +997,33 @@ export function PlatformAdminHeader() {
                     <LogOut className="size-4 text-rose-500" />
                     <span>Sign Out</span>
                   </DropdownMenuItem>
-                </>
-              ) : (
-                <DropdownMenuItem
-                  onClick={() => {
-                    setAuthDialogTab("signin");
-                    setAuthDialogOpen(true);
-                  }}
-                  className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2 text-sky-600 hover:text-sky-700 rounded-lg hover:bg-sky-50"
-                >
-                  <LogIn className="size-4 text-sky-500" />
-                  <span>Sign In</span>
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button
+                type="button"
+                onClick={() => {
+                  setAuthDialogTab("signin");
+                  setAuthDialogOpen(true);
+                }}
+                className="h-8.5 px-3.5 rounded-full bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+              >
+                <LogIn className="size-3.5" />
+                <span>Sign In</span>
+              </Button>
+            )}
+          </div>
+
+          {/* Mobile Search Icon Button */}
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="md:hidden p-2 rounded-full hover:bg-sky-100/60 text-slate-700 hover:text-sky-700 transition-colors cursor-pointer shrink-0"
+            title="Search"
+            aria-label="Search"
+          >
+            <Search className="size-4.5" />
+          </button>
 
           {/* Mobile Menu Hamburger */}
           <button
@@ -1037,33 +1054,200 @@ export function PlatformAdminHeader() {
               </div>
             </div>
           </div>
-          <div className="p-4 space-y-3 max-h-[75vh] overflow-y-auto">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              Categories & Directory
-            </p>
-            <div className="space-y-1">
-              {TOP_NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                return (
+          <div className="p-4 space-y-4 max-h-[78vh] overflow-y-auto">
+            {/* 1. Account / Sign In Section */}
+            {user ? (
+              <div className="p-3 bg-sky-50/80 rounded-xl border border-sky-100 flex items-center justify-between">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="size-9 rounded-full bg-sky-500 text-white flex items-center justify-center shrink-0 font-bold text-sm shadow-xs">
+                    <User className="size-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-900 truncate">{user.full_name || "My Account"}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
                   <Link
-                    key={item.label}
-                    href={getNavHref(item)}
+                    href={toRoleRoutePath("/admin", user)}
                     onClick={() => setMobileNavOpen(false)}
-                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted text-sm font-bold text-foreground transition-colors"
+                    className="text-[11px] font-bold text-sky-700 bg-sky-100 hover:bg-sky-200 px-2.5 py-1 rounded-lg transition-colors"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <div className="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                        <Icon className="size-3.5" />
-                      </div>
-                      <span>{item.label}</span>
-                    </div>
-                    <ChevronRight className="size-4 text-muted-foreground" />
+                    Dashboard
                   </Link>
-                );
-              })}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearAuth();
+                      setMobileNavOpen(false);
+                      toast.success("Signed out successfully");
+                      router.push("/");
+                    }}
+                    className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+                    title="Sign Out"
+                  >
+                    <LogOut className="size-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-sky-50/80 rounded-xl border border-sky-100 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-900">Welcome to 143Panda</p>
+                  <p className="text-[10px] text-slate-500 truncate">Sign in to manage listings &amp; bookings</p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    setMobileNavOpen(false);
+                    setAuthDialogTab("signin");
+                    setAuthDialogOpen(true);
+                  }}
+                  className="h-8 px-3.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shrink-0 flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <LogIn className="size-3.5" />
+                  <span>Sign In</span>
+                </Button>
+              </div>
+            )}
+
+            {/* 2. Location & Country Selectors (Moved into Toggle Bar) */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Location Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  setLocationDialogOpen(true);
+                }}
+                className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center gap-2 text-left cursor-pointer transition-colors shadow-2xs"
+              >
+                <MapPin className="size-4 text-amber-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-slate-400 font-medium leading-none">Location</p>
+                  <p className="text-xs font-bold text-slate-800 truncate mt-0.5">{location || "All Locations"}</p>
+                </div>
+              </button>
+
+              {/* Country & Currency Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-between gap-1.5 text-left cursor-pointer transition-colors shadow-2xs"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base leading-none shrink-0">{country.flag}</span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-slate-400 font-medium leading-none">Country</p>
+                        <p className="text-xs font-bold text-slate-800 truncate mt-0.5">{country.code}</p>
+                      </div>
+                    </div>
+                    <ChevronDown className="size-3 text-slate-400 shrink-0" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52 p-1.5 rounded-xl shadow-lg border-sky-100 max-h-60 overflow-y-auto z-50">
+                  <DropdownMenuLabel className="text-[10px] uppercase font-bold text-slate-400 px-2 py-1">
+                    Select Country &amp; Currency
+                  </DropdownMenuLabel>
+                  {availableCountries.map((c) => (
+                    <DropdownMenuItem
+                      key={c.code}
+                      onClick={() => {
+                        setCountry(c.code);
+                        toast.success(`Country set to ${c.name} ${c.flag}`);
+                      }}
+                      className={`cursor-pointer text-xs font-medium gap-2 py-1.5 px-2 rounded-lg flex items-center justify-between ${
+                        country.code === c.code ? "bg-sky-50 text-sky-700 font-bold" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{c.flag}</span>
+                        <span>{c.name}</span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-mono font-bold">
+                        {c.currencySymbol}
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
-            <div className="pt-3 border-t space-y-2">
+            {/* 3. Categories & Directory */}
+            <div className="pt-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground pb-2">
+                Categories &amp; Directory
+              </p>
+              <div className="space-y-1.5">
+                {TOP_NAV_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  const isExpanded = expandedMobileCategory === item.label;
+                  const subcategories = getItemSubcategories(item);
+
+                  return (
+                    <div key={item.label} className="rounded-xl border border-transparent transition-colors overflow-hidden">
+                      {/* Main Category Header Button / Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExpandedMobileCategory(isExpanded ? null : item.label);
+                        }}
+                        className={`flex items-center justify-between w-full p-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                          isExpanded ? "bg-sky-50 text-sky-700" : "hover:bg-muted text-foreground"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className={`size-7 rounded-lg flex items-center justify-center transition-colors ${
+                            isExpanded ? "bg-sky-600 text-white" : "bg-primary/10 text-primary"
+                          }`}>
+                            <Icon className="size-3.5" />
+                          </div>
+                          <span>{item.label}</span>
+                        </div>
+                        <ChevronRight
+                          className={`size-4 text-muted-foreground transition-transform duration-200 ${
+                            isExpanded ? "rotate-90 text-sky-600" : ""
+                          }`}
+                        />
+                      </button>
+
+                      {/* Subcategories Accordion Content */}
+                      {isExpanded && (
+                        <div className="pl-9 pr-2 py-2 space-y-1 bg-slate-50/80 rounded-b-xl border-t border-sky-100/60 animate-in fade-in slide-in-from-top-1 duration-150">
+                          {/* View All link */}
+                          <Link
+                            href={getNavHref(item)}
+                            onClick={() => setMobileNavOpen(false)}
+                            className="block text-xs font-bold text-sky-600 hover:text-sky-700 py-1.5 px-2 rounded-lg hover:bg-sky-100/50 transition-colors"
+                          >
+                            View All {item.label} →
+                          </Link>
+
+                          {/* Subcategory items */}
+                          {subcategories.map((sub: any) => {
+                            const navHref = getNavHref(item, sub);
+                            return (
+                              <Link
+                                key={sub.label}
+                                href={navHref}
+                                onClick={() => setMobileNavOpen(false)}
+                                className="block text-xs font-medium text-slate-700 hover:text-sky-600 py-1.5 px-2 rounded-lg hover:bg-sky-100/50 transition-colors"
+                              >
+                                {sub.label}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t space-y-2">
               <Link
                 href="/admin/profiles"
                 onClick={() => setMobileNavOpen(false)}

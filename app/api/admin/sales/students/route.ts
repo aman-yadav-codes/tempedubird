@@ -2,8 +2,51 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 
+let schemaReadyPromise: Promise<void> | null = null;
+
+export async function ensureSalesStudentsSchema(): Promise<void> {
+  if (!schemaReadyPromise) {
+    schemaReadyPromise = (async () => {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS sales_students (
+          id SERIAL PRIMARY KEY,
+          institution_id INTEGER,
+          business_profile_id INTEGER,
+          created_by INTEGER,
+          name VARCHAR(255) NOT NULL,
+          roll_number VARCHAR(100),
+          email VARCHAR(255),
+          phone VARCHAR(50),
+          guardian_name VARCHAR(255),
+          guardian_phone VARCHAR(50),
+          course_program VARCHAR(255),
+          batch_section VARCHAR(100),
+          admission_date DATE DEFAULT CURRENT_DATE,
+          fee_amount NUMERIC(12, 2) DEFAULT 0,
+          fee_status VARCHAR(50) DEFAULT 'pending',
+          academic_status VARCHAR(50) DEFAULT 'enrolled',
+          address TEXT,
+          notes TEXT,
+          status VARCHAR(50) DEFAULT 'active',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_sales_students_inst_id ON sales_students(institution_id);
+        CREATE INDEX IF NOT EXISTS idx_sales_students_biz_id ON sales_students(business_profile_id);
+        CREATE INDEX IF NOT EXISTS idx_sales_students_roll ON sales_students(roll_number);
+      `);
+    })().catch((err) => {
+      schemaReadyPromise = null;
+      throw err;
+    });
+  }
+  return schemaReadyPromise;
+}
+
 export async function GET(req: Request) {
   try {
+    await ensureSalesStudentsSchema();
     const user = await getAuthenticatedUser(req);
     const { searchParams } = new URL(req.url);
 
@@ -92,6 +135,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    await ensureSalesStudentsSchema();
     const user = await getAuthenticatedUser(req);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

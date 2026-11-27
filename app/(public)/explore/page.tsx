@@ -81,7 +81,7 @@ import { CompactServiceCard } from "@/components/shared/compact-service-card";
 
 interface DiscoveryItem {
   id: number;
-  resultType: "business" | "professional" | "product" | "service" | "course" | "job" | "property" | "vehicle" | "event" | "dish" | "room";
+  resultType: "business" | "professional" | "product" | "service" | "course" | "job" | "property" | "vehicle" | "event" | "dish" | "room" | "financial";
   name: string;
   title?: string;
   brand?: string | null;
@@ -186,7 +186,8 @@ export const BUSINESS_CATEGORY_VERTICALS: Record<string, Array<{ type: string; l
   ],
   "real-estate-and-construction": [
     { type: "business", label: "Businesses" },
-    { type: "property", label: "Properties" },
+    { type: "property", label: "Property" },
+    { type: "room", label: "Rooms" },
     { type: "product", label: "Products" },
     { type: "professional", label: "Professionals" },
     { type: "course", label: "Courses" },
@@ -195,7 +196,7 @@ export const BUSINESS_CATEGORY_VERTICALS: Record<string, Array<{ type: string; l
   ],
   "automotive-and-transport": [
     { type: "business", label: "Businesses" },
-    { type: "vehicle", label: "Vehicles" },
+    { type: "vehicle", label: "Vehicle" },
     { type: "product", label: "Products" },
     { type: "service", label: "Services" },
     { type: "professional", label: "Professionals" },
@@ -211,6 +212,8 @@ export const BUSINESS_CATEGORY_VERTICALS: Record<string, Array<{ type: string; l
     { type: "job", label: "Jobs" },
   ],
   "hospitality-and-events": [
+    { type: "room", label: "Rooms" },
+    { type: "dish", label: "Dishes" },
     { type: "business", label: "Businesses" },
     { type: "event", label: "Events" },
     { type: "service", label: "Services" },
@@ -238,6 +241,7 @@ export const BUSINESS_CATEGORY_VERTICALS: Record<string, Array<{ type: string; l
   ],
   "professional-and-financial-services": [
     { type: "business", label: "Businesses" },
+    { type: "financial", label: "Finance" },
     { type: "service", label: "Financial Services" },
     { type: "professional", label: "Professionals" },
     { type: "course", label: "Courses" },
@@ -246,6 +250,7 @@ export const BUSINESS_CATEGORY_VERTICALS: Record<string, Array<{ type: string; l
     { type: "job", label: "Jobs" },
   ],
   "food-dining-and-cafes": [
+    { type: "dish", label: "Dishes" },
     { type: "business", label: "Businesses" },
     { type: "product", label: "Products" },
     { type: "service", label: "Services" },
@@ -286,15 +291,16 @@ export const BUSINESS_CATEGORY_VERTICALS: Record<string, Array<{ type: string; l
 export const DEFAULT_ALL_VERTICALS = [
   { type: "business", label: "Businesses" },
   { type: "product", label: "Products" },
-  { type: "job", label: "Jobs" },
+  { type: "service", label: "Services" },
+  { type: "professional", label: "Professionals" },
   { type: "course", label: "Courses" },
-  { type: "property", label: "Properties" },
-  { type: "vehicle", label: "Vehicles" },
+  { type: "job", label: "Jobs" },
+  { type: "property", label: "Property" },
+  { type: "vehicle", label: "Vehicle" },
+  { type: "financial", label: "Finance" },
   { type: "dish", label: "Dishes" },
   { type: "room", label: "Rooms" },
   { type: "event", label: "Events" },
-  { type: "professional", label: "Professionals" },
-  { type: "service", label: "Services" },
 ];
 
 export interface CustomerExplorePageProps {
@@ -319,7 +325,8 @@ function CustomerExplorePageContent({
   const searchParams = useSearchParams();
   const urlQ = searchParams?.get("q") || searchParams?.get("query") || searchParams?.get("search") || initialQuery || "";
   const rawType = (searchParams?.get("type") as any) || initialType || "all";
-  const urlType = ["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event", "dish", "room"].includes(rawType) ? rawType : "all";
+  const normalizedRawType = rawType === "finance" ? "financial" : rawType;
+  const urlType = ["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event", "dish", "room", "financial"].includes(normalizedRawType) ? normalizedRawType : "all";
   const urlCountry = searchParams?.get("country") || "";
   const urlCity = searchParams?.get("city") || searchParams?.get("location") || initialCity || "";
   const rawCatParam = searchParams?.get("category") || searchParams?.get("category_slug") || initialCategory || "";
@@ -338,7 +345,7 @@ function CustomerExplorePageContent({
   const { location: userGlobalLocation, setLocation: setGlobalLocation } = useUserLocation();
 
   const [query, setQuery] = useState(urlQ);
-  const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job" | "property" | "vehicle" | "event" | "dish" | "room">(urlType);
+  const [activeType, setActiveType] = useState<"all" | "business" | "service" | "product" | "professional" | "course" | "job" | "property" | "vehicle" | "event" | "dish" | "room" | "financial">(urlType);
   const [country, setCountry] = useState<string>(urlCountry);
   const [city, setCity] = useState<string>(
     extractCleanCity(urlCity) || extractCleanCity(userGlobalLocation) || ""
@@ -366,6 +373,7 @@ function CustomerExplorePageContent({
   const [verifiedOnly, setVerifiedOnly] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showAllSidebarCategories, setShowAllSidebarCategories] = useState<boolean>(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
 
   // Helper to keep browser URL in sync using ONLY clean structured URLs
   const syncUrlParams = useCallback(
@@ -479,8 +487,9 @@ function CustomerExplorePageContent({
     }
 
     const effectiveType = (urlType && urlType !== "all") ? urlType : (initialType || urlType || "all");
-    if (["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event", "dish", "room"].includes(effectiveType)) {
-      setActiveType(effectiveType as any);
+    const normalizedType = effectiveType === "finance" ? "financial" : effectiveType;
+    if (["all", "business", "service", "product", "professional", "course", "job", "property", "vehicle", "event", "dish", "room", "financial"].includes(normalizedType)) {
+      setActiveType(normalizedType as any);
     }
     if (urlBizCat) {
       setSelectedBusinessCategoryId(urlBizCat);
@@ -649,7 +658,10 @@ function CustomerExplorePageContent({
 
   const allowedVerticals = useMemo(() => {
     if (activeBusinessCategoryKey && BUSINESS_CATEGORY_VERTICALS[activeBusinessCategoryKey]) {
-      return BUSINESS_CATEGORY_VERTICALS[activeBusinessCategoryKey];
+      const specific = BUSINESS_CATEGORY_VERTICALS[activeBusinessCategoryKey];
+      const specificTypes = new Set(specific.map((s) => s.type));
+      const remaining = DEFAULT_ALL_VERTICALS.filter((v) => !specificTypes.has(v.type));
+      return [...specific, ...remaining];
     }
     return DEFAULT_ALL_VERTICALS;
   }, [activeBusinessCategoryKey]);
@@ -1089,6 +1101,8 @@ function CustomerExplorePageContent({
         return filteredDishes.length;
       case "room":
         return filteredRooms.length;
+      case "financial":
+        return filteredServices.length;
       default:
         return (
           filteredBusinesses.length +
@@ -1508,9 +1522,324 @@ function CustomerExplorePageContent({
       case "event": return "Events";
       case "dish": return "Dishes";
       case "room": return "Rooms";
+      case "financial": return "Finance";
       default: return "Explore";
     }
   };
+
+  const renderFiltersContent = (isMobile = false) => (
+    <div className={cn("space-y-6", !isMobile ? "bg-white border border-slate-200 rounded-2xl p-5 shadow-xs sticky top-24" : "p-1")}>
+      <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+        <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+          <SlidersHorizontal className="size-4 text-amber-500" />
+          <span>Filters</span>
+        </h2>
+        <button
+          type="button"
+          onClick={() => {
+            setProductNameSearch("");
+            setActiveType("all");
+            setSelectedBusinessCategoryId(null);
+            setSelectedCategoryId(null);
+            setSelectedCategoryName("");
+            setSelectedCategorySlug("");
+            setSelectedSubcategoryId(null);
+            setSelectedSubcategoryName("");
+            setSelectedSubcategorySlug("");
+            setSelectedBrand("all");
+            setCity("");
+            setRadius("no_radius");
+            setMinRating(0);
+            setVerifiedOnly(false);
+            setSortBy("featured");
+            syncUrlParams({ type: "all", city: "", category: null, subcategory: null, q: "", brand: "all" });
+          }}
+          className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors cursor-pointer"
+        >
+          Clear all
+        </button>
+      </div>
+
+      {/* 1. Listing Type / Vertical Dropdown (On Top) */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+          <span>Listing Type</span>
+          {allowedVerticals.length > 0 && (
+            <span className="text-[10px] text-slate-400 font-normal">
+              {allowedVerticals.length} available
+            </span>
+          )}
+        </label>
+        <div className="relative">
+          <select
+            value={activeType}
+            onChange={(e) => {
+              const newType = e.target.value as any;
+              setActiveType(newType);
+              setSelectedSubcategoryId(null);
+              setSelectedSubcategoryName("");
+              setSelectedSubcategorySlug("");
+              syncUrlParams({ type: newType, subcategory: null });
+            }}
+            className="w-full h-10 rounded-xl bg-slate-50 hover:bg-slate-100/70 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white focus:border-blue-500 font-medium cursor-pointer transition-all appearance-none"
+          >
+            {allowedVerticals.map((v) => (
+              <option key={v.type} value={v.type}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
+        </div>
+      </div>
+
+      {/* 2. Business Category Filter */}
+      <div className="space-y-2 pt-2 border-t border-slate-200">
+        <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+          <span>Business Category</span>
+        </label>
+        <div className="relative">
+          {loadingCategories && businessCategories.length === 0 ? (
+            <div className="w-full h-10 rounded-xl bg-slate-100 border border-slate-200 animate-pulse flex items-center px-3 text-xs text-slate-400 font-medium">
+              Loading categories...
+            </div>
+          ) : (
+            <>
+              <select
+                value={effectiveBusinessCategoryId || ""}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : null;
+                  setSelectedBusinessCategoryId(val);
+                  setSelectedCategoryId(val);
+                  setSelectedSubcategoryId(null);
+                  setSelectedSubcategoryName("");
+                  setSelectedSubcategorySlug("");
+                  if (val) {
+                    const cat = businessCategories.find((c) => c.id === val);
+                    const catName = cat ? cat.name : "";
+                    const catSlug = cat ? (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")) : "";
+                    setSelectedCategoryName(catName);
+                    setSelectedCategorySlug(catSlug);
+                    syncUrlParams({ category: catSlug || catName, subcategory: null });
+                  } else {
+                    setSelectedCategoryName("");
+                    setSelectedCategorySlug("");
+                    syncUrlParams({ category: null, subcategory: null });
+                  }
+                }}
+                className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-medium"
+              >
+                <option value="">
+                  {businessCategories.length > 0 ? `All Business Categories (${businessCategories.length})` : (selectedCategoryName || "All Business Categories")}
+                </option>
+                {businessCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 3. Category / Subcategory Filter for Selected Listing Type */}
+      <div className="space-y-2 pt-2 border-t border-slate-200">
+        <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+          <span>
+            {activeType === "product"
+              ? "Product Category"
+              : activeType === "course"
+                ? "Course Category"
+                : activeType === "job"
+                  ? "Job Category"
+                  : activeType === "property"
+                    ? "Property Category"
+                    : activeType === "vehicle"
+                      ? "Vehicle Category"
+                      : activeType === "event"
+                        ? "Event Category"
+                        : activeType === "professional"
+                          ? "Profession Category"
+                          : activeType === "service"
+                            ? "Service Category"
+                            : "Subcategory"}
+          </span>
+          {typeCategories.length > 0 && (
+            <span className="text-[10px] text-slate-400 font-normal">
+              ({typeCategories.length})
+            </span>
+          )}
+        </label>
+
+        {loadingTypeCategories && typeCategories.length === 0 ? (
+          <div className="w-full h-10 rounded-xl bg-slate-100 border border-slate-200 animate-pulse flex items-center px-3 text-xs text-slate-400 font-medium">
+            Loading categories...
+          </div>
+        ) : typeCategories.length > 0 ? (
+          <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSubcategoryId(null);
+                setSelectedSubcategoryName("");
+                setSelectedSubcategorySlug("");
+                const bc = businessCategories.find((b) => b.id === effectiveBusinessCategoryId);
+                const baseSlug = bc?.slug || "";
+                setSelectedCategoryId(effectiveBusinessCategoryId);
+                setSelectedCategorySlug(baseSlug);
+                setSelectedCategoryName(bc?.name || "");
+                syncUrlParams({ category: baseSlug || null, subcategory: null });
+              }}
+              className={cn(
+                "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
+                !selectedSubcategoryId
+                  ? "bg-amber-100 text-amber-900 font-semibold"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              )}
+            >
+              <span>All {activeType === "product" ? "Product Categories" : activeType === "job" ? "Job Categories" : activeType === "property" ? "Property Categories" : activeType === "vehicle" ? "Vehicle Categories" : activeType === "course" ? "Course Categories" : activeType === "event" ? "Event Categories" : activeType === "professional" ? "Profession Categories" : activeType === "service" ? "Service Categories" : "Subcategories"}</span>
+              <span className="text-[10px] text-slate-400">({typeCategories.length})</span>
+            </button>
+
+            {typeCategories.map((cat) => {
+              const catSlug = cat.slug || slugify(cat.name);
+              const isSelected =
+                selectedSubcategoryId === cat.id ||
+                (selectedCategoryId === cat.id && !selectedSubcategoryId) ||
+                selectedSubcategorySlug === catSlug ||
+                (selectedCategorySlug === catSlug && !selectedSubcategorySlug);
+
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedSubcategoryId(cat.id);
+                    setSelectedSubcategoryName(cat.name);
+                    setSelectedSubcategorySlug(catSlug);
+                    syncUrlParams({ subcategory: catSlug });
+                  }}
+                  className={cn(
+                    "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
+                    isSelected
+                      ? "bg-amber-100 text-amber-900 font-semibold"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  )}
+                >
+                  <span className="truncate">{cat.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-xs text-slate-400 italic py-1">
+            No categories found for this listing type
+          </div>
+        )}
+      </div>
+
+      {/* Brand Filter (if products available) */}
+      {activeType === "product" && availableBrands.length > 0 && (
+        <div className="space-y-2 pt-2 border-t border-slate-200">
+          <label className="text-xs font-semibold text-slate-700">Brand</label>
+          <select
+            value={selectedBrand}
+            onChange={(e) => {
+              setSelectedBrand(e.target.value);
+              syncUrlParams({ brand: e.target.value });
+            }}
+            className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
+          >
+            <option value="all">All Brands ({availableBrands.length})</option>
+            {availableBrands.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Rating Star Checklist */}
+      <div className="space-y-2 pt-2 border-t border-slate-200">
+        <label className="text-xs font-semibold text-slate-700 block">Rating</label>
+        <div className="space-y-1.5">
+          {[
+            { r: 5, label: "5 Star & Above" },
+            { r: 4, label: "4 Star & Above" },
+            { r: 3, label: "3 Star & Above" },
+          ].map((item) => {
+            const isSelected = minRating === item.r;
+            return (
+              <button
+                key={item.r}
+                type="button"
+                onClick={() => setMinRating(isSelected ? 0 : item.r)}
+                className={cn(
+                  "w-full text-left text-xs px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer group",
+                  isSelected
+                    ? "bg-blue-50 text-blue-700 font-semibold border border-blue-200/60"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                )}
+              >
+                <div className={cn(
+                  "size-3.5 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                  isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300 group-hover:border-slate-400 bg-white"
+                )}>
+                  {isSelected && <div className="size-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Star className="size-3.5 fill-amber-400 text-amber-400 shrink-0" />
+                  <span className="text-xs font-medium text-slate-700">{item.label}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Add Listing CTA Button */}
+      <div className="pt-2">
+        <Link
+          href="/packages"
+          className="w-full h-10 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+        >
+          <Plus className="size-3.5" />
+          <span>Add Listing</span>
+        </Link>
+      </div>
+
+      {/* Verified Only Toggle */}
+      <div className="pt-2 border-t border-slate-200">
+        <label className="flex items-center justify-between cursor-pointer text-xs text-slate-700 font-medium">
+          <span className="flex items-center gap-2">
+            <ShieldCheck className="size-4 text-emerald-600" />
+            Verified Listings Only
+          </span>
+          <input
+            type="checkbox"
+            checked={verifiedOnly}
+            onChange={(e) => setVerifiedOnly(e.target.checked)}
+            className="rounded border-slate-300 text-amber-500 focus:ring-amber-500 size-4 cursor-pointer"
+          />
+        </label>
+      </div>
+
+      {isMobile && (
+        <div className="pt-3 border-t border-slate-200 sticky bottom-0 bg-white pb-1">
+          <Button
+            type="button"
+            onClick={() => setMobileFiltersOpen(false)}
+            className="w-full h-11 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white font-bold text-xs shadow-md cursor-pointer"
+          >
+            Show {totalFilteredCount} Results
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50/50 text-slate-900 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
@@ -2076,11 +2405,11 @@ function CustomerExplorePageContent({
               )}
 
               {/* Section: Services */}
-              {(activeType === "all" || activeType === "service") && filteredServices.length > 0 && (
+              {(activeType === "all" || activeType === "service" || activeType === "financial") && filteredServices.length > 0 && (
                 <div className="space-y-4">
                   <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                     <Sparkles className="size-5 text-emerald-600" />
-                    Featured Services & Master Services ({filteredServices.length})
+                    {activeType === "financial" ? `Financial Services (${filteredServices.length})` : `Featured Services & Master Services (${filteredServices.length})`}
                   </h2>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
@@ -3035,309 +3364,39 @@ function CustomerExplorePageContent({
           )}
         </div>
 
-        {/* Right Column: Filters Sidebar */}
-        <aside className="lg:col-span-4 xl:col-span-3">
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs sticky top-24 space-y-6">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <SlidersHorizontal className="size-4 text-amber-500" />
-                Filters
-              </h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setProductNameSearch("");
-                  setActiveType("all");
-                  setSelectedBusinessCategoryId(null);
-                  setSelectedCategoryId(null);
-                  setSelectedCategoryName("");
-                  setSelectedCategorySlug("");
-                  setSelectedSubcategoryId(null);
-                  setSelectedSubcategoryName("");
-                  setSelectedSubcategorySlug("");
-                  setSelectedBrand("all");
-                  setCity("");
-                  setRadius("no_radius");
-                  setMinRating(0);
-                  setVerifiedOnly(false);
-                  setSortBy("featured");
-                  syncUrlParams({ type: "all", city: "", category: null, subcategory: null, q: "", brand: "all" });
-                }}
-                className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors cursor-pointer"
-              >
-                Clear all
-              </button>
-            </div>
-
-            {/* 1. Listing Type / Vertical Dropdown (On Top) */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                <span>Listing Type</span>
-                {allowedVerticals.length > 0 && (
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    {allowedVerticals.length} available
-                  </span>
-                )}
-              </label>
-              <div className="relative">
-                <select
-                  value={activeType}
-                  onChange={(e) => {
-                    const newType = e.target.value as any;
-                    setActiveType(newType);
-                    setSelectedSubcategoryId(null);
-                    setSelectedSubcategoryName("");
-                    setSelectedSubcategorySlug("");
-                    syncUrlParams({ type: newType, subcategory: null });
-                  }}
-                  className="w-full h-10 rounded-xl bg-slate-50 hover:bg-slate-100/70 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white focus:border-blue-500 font-medium cursor-pointer transition-all appearance-none"
-                >
-                  {allowedVerticals.map((v) => (
-                    <option key={v.type} value={v.type}>
-                      {v.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-
-            {/* 2. Business Category Filter */}
-            <div className="space-y-2 pt-2 border-t border-slate-200">
-              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                <span>Business Category</span>
-              </label>
-              <div className="relative">
-                {loadingCategories && businessCategories.length === 0 ? (
-                  <div className="w-full h-10 rounded-xl bg-slate-100 border border-slate-200 animate-pulse flex items-center px-3 text-xs text-slate-400 font-medium">
-                    Loading categories...
-                  </div>
-                ) : (
-                  <>
-                    <select
-                      value={effectiveBusinessCategoryId || ""}
-                      onChange={(e) => {
-                        const val = e.target.value ? Number(e.target.value) : null;
-                        setSelectedBusinessCategoryId(val);
-                        setSelectedCategoryId(val);
-                        setSelectedSubcategoryId(null);
-                        setSelectedSubcategoryName("");
-                        setSelectedSubcategorySlug("");
-                        if (val) {
-                          const cat = businessCategories.find((c) => c.id === val);
-                          const catName = cat ? cat.name : "";
-                          const catSlug = cat ? (cat.slug || cat.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")) : "";
-                          setSelectedCategoryName(catName);
-                          setSelectedCategorySlug(catSlug);
-                          syncUrlParams({ category: catSlug || catName, subcategory: null });
-                        } else {
-                          setSelectedCategoryName("");
-                          setSelectedCategorySlug("");
-                          syncUrlParams({ category: null, subcategory: null });
-                        }
-                      }}
-                      className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-medium"
-                    >
-                      <option value="">
-                        {businessCategories.length > 0 ? `All Business Categories (${businessCategories.length})` : (selectedCategoryName || "All Business Categories")}
-                      </option>
-                      {businessCategories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400 pointer-events-none" />
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* 3. Category / Subcategory Filter for Selected Listing Type */}
-            <div className="space-y-2 pt-2 border-t border-slate-200">
-              <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                <span>
-                  {activeType === "product"
-                    ? "Product Category"
-                    : activeType === "course"
-                      ? "Course Category"
-                      : activeType === "job"
-                        ? "Job Category"
-                        : activeType === "property"
-                          ? "Property Category"
-                          : activeType === "vehicle"
-                            ? "Vehicle Category"
-                            : activeType === "event"
-                              ? "Event Category"
-                              : activeType === "professional"
-                                ? "Profession Category"
-                                : activeType === "service"
-                                  ? "Service Category"
-                                  : "Subcategory"}
-                </span>
-                {typeCategories.length > 0 && (
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    ({typeCategories.length})
-                  </span>
-                )}
-              </label>
-
-              {loadingTypeCategories && typeCategories.length === 0 ? (
-                <div className="w-full h-10 rounded-xl bg-slate-100 border border-slate-200 animate-pulse flex items-center px-3 text-xs text-slate-400 font-medium">
-                  Loading categories...
-                </div>
-              ) : typeCategories.length > 0 ? (
-                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedSubcategoryId(null);
-                      setSelectedSubcategoryName("");
-                      setSelectedSubcategorySlug("");
-                      const bc = businessCategories.find((b) => b.id === effectiveBusinessCategoryId);
-                      const baseSlug = bc?.slug || "";
-                      setSelectedCategoryId(effectiveBusinessCategoryId);
-                      setSelectedCategorySlug(baseSlug);
-                      setSelectedCategoryName(bc?.name || "");
-                      syncUrlParams({ category: baseSlug || null, subcategory: null });
-                    }}
-                    className={cn(
-                      "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
-                      !selectedSubcategoryId
-                        ? "bg-amber-100 text-amber-900 font-semibold"
-                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    )}
-                  >
-                    <span>All {activeType === "product" ? "Product Categories" : activeType === "job" ? "Job Categories" : activeType === "property" ? "Property Categories" : activeType === "vehicle" ? "Vehicle Categories" : activeType === "course" ? "Course Categories" : activeType === "event" ? "Event Categories" : activeType === "professional" ? "Profession Categories" : activeType === "service" ? "Service Categories" : "Subcategories"}</span>
-                    <span className="text-[10px] text-slate-400">({typeCategories.length})</span>
-                  </button>
-
-                  {typeCategories.map((cat) => {
-                    const catSlug = cat.slug || slugify(cat.name);
-                    const isSelected =
-                      selectedSubcategoryId === cat.id ||
-                      (selectedCategoryId === cat.id && !selectedSubcategoryId) ||
-                      selectedSubcategorySlug === catSlug ||
-                      (selectedCategorySlug === catSlug && !selectedSubcategorySlug);
-
-                    return (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedSubcategoryId(cat.id);
-                          setSelectedSubcategoryName(cat.name);
-                          setSelectedSubcategorySlug(catSlug);
-                          syncUrlParams({ subcategory: catSlug });
-                        }}
-                        className={cn(
-                          "w-full text-left text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center justify-between cursor-pointer",
-                          isSelected
-                            ? "bg-amber-100 text-amber-900 font-semibold"
-                            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                        )}
-                      >
-                        <span className="truncate">{cat.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-xs text-slate-400 italic py-1">
-                  No categories found for this listing type
-                </div>
-              )}
-            </div>
-
-            {/* Brand Filter (if products available) */}
-            {activeType === "product" && availableBrands.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-slate-200">
-                <label className="text-xs font-semibold text-slate-700">Brand</label>
-                <select
-                  value={selectedBrand}
-                  onChange={(e) => {
-                    setSelectedBrand(e.target.value);
-                    syncUrlParams({ brand: e.target.value });
-                  }}
-                  className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 focus:outline-none focus:bg-white cursor-pointer"
-                >
-                  <option value="all">All Brands ({availableBrands.length})</option>
-                  {availableBrands.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Rating Star Checklist */}
-            <div className="space-y-2 pt-2 border-t border-slate-200">
-              <label className="text-xs font-semibold text-slate-700 block">Rating</label>
-              <div className="space-y-1.5">
-                {[
-                  { r: 5, label: "5 Star & Above" },
-                  { r: 4, label: "4 Star & Above" },
-                  { r: 3, label: "3 Star & Above" },
-                ].map((item) => {
-                  const isSelected = minRating === item.r;
-                  return (
-                    <button
-                      key={item.r}
-                      type="button"
-                      onClick={() => setMinRating(isSelected ? 0 : item.r)}
-                      className={cn(
-                        "w-full text-left text-xs px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer group",
-                        isSelected
-                          ? "bg-blue-50 text-blue-700 font-semibold border border-blue-200/60"
-                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                      )}
-                    >
-                      <div className={cn(
-                        "size-3.5 rounded-full border flex items-center justify-center shrink-0 transition-colors",
-                        isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300 group-hover:border-slate-400 bg-white"
-                      )}>
-                        {isSelected && <div className="size-1.5 rounded-full bg-white" />}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Star className="size-3.5 fill-amber-400 text-amber-400 shrink-0" />
-                        <span className="text-xs font-medium text-slate-700">{item.label}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Add Listing CTA Button */}
-            <div className="pt-2">
-              <Link
-                href="/packages"
-                className="w-full h-10 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              >
-                <Plus className="size-3.5" />
-                <span>Add Listing</span>
-              </Link>
-            </div>
-
-            {/* Verified Only Toggle */}
-            <div className="pt-2 border-t border-slate-200">
-              <label className="flex items-center justify-between cursor-pointer text-xs text-slate-700 font-medium">
-                <span className="flex items-center gap-2">
-                  <ShieldCheck className="size-4 text-emerald-600" />
-                  Verified Listings Only
-                </span>
-                <input
-                  type="checkbox"
-                  checked={verifiedOnly}
-                  onChange={(e) => setVerifiedOnly(e.target.checked)}
-                  className="rounded border-slate-300 text-amber-500 focus:ring-amber-500 size-4 cursor-pointer"
-                />
-              </label>
-            </div>
-          </div>
+        {/* Right Column: Filters Sidebar (Desktop Only) */}
+        <aside className="hidden lg:block lg:col-span-4 xl:col-span-3">
+          {renderFiltersContent(false)}
         </aside>
       </div>
+
+      {/* Mobile Sticky Floating Filter Button */}
+      <div className="fixed bottom-6 right-6 z-40 lg:hidden">
+        <button
+          type="button"
+          onClick={() => setMobileFiltersOpen(true)}
+          className="h-12 px-5 rounded-full bg-[#0070f3] hover:bg-blue-600 text-white font-bold text-xs shadow-2xl flex items-center gap-2 active:scale-95 transition-all cursor-pointer border-2 border-white/40 ring-4 ring-blue-500/20"
+          title="Open Filters"
+          aria-label="Open Filters"
+        >
+          <SlidersHorizontal className="size-4" />
+          <span>Filters</span>
+          {(selectedSubcategoryId || (activeType && activeType !== "all") || effectiveBusinessCategoryId || minRating > 0 || verifiedOnly) && (
+            <span className="size-2 rounded-full bg-amber-300 ring-2 ring-blue-600 animate-pulse" />
+          )}
+        </button>
+      </div>
+
+      {/* Mobile Filters Modal Dialog */}
+      <Dialog open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+        <DialogContent className="w-[94vw] max-w-md max-h-[85vh] overflow-y-auto rounded-2xl p-5 border shadow-2xl">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Filter Listings</DialogTitle>
+            <DialogDescription>Filter listings by category, subcategory, rating, and verification</DialogDescription>
+          </DialogHeader>
+          {renderFiltersContent(true)}
+        </DialogContent>
+      </Dialog>
 
       {/* Enquiry Modal */}
       <Dialog open={Boolean(enquiryModalItem)} onOpenChange={(open) => !open && setEnquiryModalItem(null)}>
