@@ -40,6 +40,10 @@ import {
   ChevronDown,
   Trophy,
   Plus,
+  Building,
+  Car,
+  UtensilsCrossed,
+  Landmark,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -216,6 +220,23 @@ export function UnifiedMarketplaceHome() {
   const [courses, setCourses] = useState<CourseData[]>([]);
   const [jobs, setJobs] = useState<JobData[]>([]);
   const [businesses, setBusinesses] = useState<BusinessData[]>([]);
+  const [properties, setProperties] = useState<any[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
+  const [dishes, setDishes] = useState<any[]>([]);
+
+  const financialCount = useMemo(() => {
+    return services.filter(
+      (s: any) =>
+        s.category_type === "finance" ||
+        s.category_name?.toLowerCase().includes("finance") ||
+        s.name?.toLowerCase().includes("finance") ||
+        s.name?.toLowerCase().includes("loan") ||
+        s.name?.toLowerCase().includes("tax") ||
+        s.name?.toLowerCase().includes("wealth") ||
+        s.name?.toLowerCase().includes("audit")
+    ).length;
+  }, [services]);
 
   // Search & Autocomplete State (Identical to PlatformAdminHeader)
   const [searchQuery, setSearchQuery] = useState("");
@@ -330,6 +351,10 @@ export function UnifiedMarketplaceHome() {
             setCourses(json.data.courses || []);
             setJobs(json.data.jobs || []);
             setBusinesses(json.data.businesses || []);
+            setProperties(json.data.properties || []);
+            setVehicles(json.data.vehicles || []);
+            setEvents(json.data.events || []);
+            setDishes(json.data.dishes || []);
           }
         }
       } catch (err) {
@@ -494,88 +519,6 @@ export function UnifiedMarketplaceHome() {
                     </Button>
                   </div>
                 </form>
-
-                {/* Quick Category Navigation Pills (Arranged in 2 clean horizontal rows matching mockup) */}
-                <div className="space-y-2 pt-1">
-                  {/* Row 1 */}
-                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs">
-                    <Link
-                      href="/businesses"
-                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-amber-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                    >
-                      <span className="text-amber-500">💼</span>
-                      <span>Businesses</span>
-                    </Link>
-                    <Link
-                      href="/professionals"
-                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-sky-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                    >
-                      <span className="text-sky-500">👥</span>
-                      <span>Professionals</span>
-                    </Link>
-                    <Link
-                      href="/courses"
-                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-emerald-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                    >
-                      <span className="text-emerald-500">🎓</span>
-                      <span>Courses</span>
-                    </Link>
-                    <Link
-                      href="/jobs"
-                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-purple-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                    >
-                      <span className="text-purple-500">💼</span>
-                      <span>Jobs</span>
-                    </Link>
-                    <Link
-                      href="/businesses"
-                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-cyan-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                    >
-                      <span className="text-cyan-600">🏢</span>
-                      <span>Property</span>
-                    </Link>
-                    <Link
-                      href="/explore?type=all&category=events"
-                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-rose-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                    >
-                      <span className="text-rose-500">📅</span>
-                      <span>Events</span>
-                    </Link>
-                  </div>
-
-                  {/* Row 2 */}
-                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-xs">
-                    <Link
-                      href="/products"
-                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-blue-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                    >
-                      <span className="text-blue-600">📦</span>
-                      <span>Products</span>
-                    </Link>
-                    <Link
-                      href="/services"
-                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-emerald-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                    >
-                      <span className="text-emerald-600">🏠</span>
-                      <span>Services</span>
-                    </Link>
-                    <Link
-                      href="/explore?categoryName=Entertainment&type=all"
-                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-red-400 text-slate-800 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                    >
-                      <span className="text-red-500">▶️</span>
-                      <span>Entertainment</span>
-                    </Link>
-                    <Link
-                      href="/businesses"
-                      className="px-3.5 py-1.5 rounded-full bg-white/95 hover:bg-white active:scale-95 border border-white/80 hover:border-slate-400 text-slate-700 font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5 text-xs"
-                    >
-                      <span>&amp; More...</span>
-                    </Link>
-                  </div>
-                </div>
-
-
 
                 {/* ================= AUTOCOMPLETE SEARCH SUGGESTIONS DROPDOWN ================= */}
                 {isDropdownOpen && searchQuery.trim().length > 0 && (
@@ -924,6 +867,75 @@ export function UnifiedMarketplaceHome() {
                   const Icon = stat.icon;
                   const locParam = userLocation && userLocation !== "All Locations" ? `&city=${encodeURIComponent(userLocation)}` : "";
                   const targetUrl = `/explore?type=${stat.type}${locParam}`;
+
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => router.push(targetUrl)}
+                      className="p-3 rounded-2xl border border-white/80 bg-white/85 hover:bg-white hover:border-sky-300 hover:scale-[1.03] active:scale-[0.98] backdrop-blur-md flex items-center gap-2.5 shadow-[0_4px_16px_rgba(0,0,0,0.06)] transition-all cursor-pointer text-left group"
+                      title={`Explore ${stat.label}${userLocation && userLocation !== "All Locations" ? ` in ${userLocation}` : ""}`}
+                    >
+                      <div className="size-8 rounded-xl bg-sky-500/10 text-sky-600 group-hover:bg-sky-500 group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
+                        <Icon className="size-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-black text-slate-900 group-hover:text-sky-600 transition-colors">{stat.value}</div>
+                        <div className="text-[10px] text-slate-600 group-hover:text-slate-900 truncate font-medium">{stat.label}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Row 2: Property, Event, Dishes, Vehicle, Financials */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 pt-2.5 sm:pt-3 w-full relative z-20">
+                {[
+                  {
+                    label: "Property & Real Estate",
+                    value: properties.length > 0 ? `${properties.length}+` : "26+",
+                    sub: "Commercial & Residential",
+                    icon: Building,
+                    type: "property",
+                    targetUrl: "/explore?type=property",
+                  },
+                  {
+                    label: "Events & Expos",
+                    value: events.length > 0 ? `${events.length}+` : "50+",
+                    sub: "Festivals & Conferences",
+                    icon: Calendar,
+                    type: "event",
+                    targetUrl: "/explore?type=event",
+                  },
+                  {
+                    label: "Dishes & Dining",
+                    value: dishes.length > 0 ? `${dishes.length}+` : "20+",
+                    sub: "Food Menus & Cuisines",
+                    icon: UtensilsCrossed,
+                    type: "dish",
+                    targetUrl: "/explore?type=dish",
+                  },
+                  {
+                    label: "Vehicles & Mobility",
+                    value: vehicles.length > 0 ? `${vehicles.length}+` : "29+",
+                    sub: "Cars, Bikes & Transport",
+                    icon: Car,
+                    type: "vehicle",
+                    targetUrl: "/explore?type=vehicle",
+                  },
+                  {
+                    label: "Financial Services",
+                    value: financialCount > 0 ? `${financialCount}+` : "25+",
+                    sub: "Loans, Tax & Wealth",
+                    icon: Landmark,
+                    type: "financial",
+                    targetUrl: "/explore?type=service&category=all-financial-services",
+                  },
+                ].map((stat, i) => {
+                  const Icon = stat.icon;
+                  const locParam = userLocation && userLocation !== "All Locations" ? `&city=${encodeURIComponent(userLocation)}` : "";
+                  const separator = stat.targetUrl.includes("?") ? "&" : "?";
+                  const targetUrl = `${stat.targetUrl}${locParam ? `${separator}city=${encodeURIComponent(userLocation)}` : ""}`;
 
                   return (
                     <button

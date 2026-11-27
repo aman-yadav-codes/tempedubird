@@ -11,14 +11,21 @@ export async function ensureInstitutionCoursesSchema(db: Queryable): Promise<voi
         CREATE TABLE IF NOT EXISTS institution_courses (
           id SERIAL PRIMARY KEY,
           institution_id INTEGER NOT NULL REFERENCES institution_profiles(id) ON DELETE CASCADE,
+          business_profile_id INTEGER,
+          master_course_id INTEGER,
           course_name VARCHAR(255) NOT NULL,
+          slug VARCHAR(255),
+          code VARCHAR(100),
           stream VARCHAR(150),
+          category_id INTEGER,
           board_or_university VARCHAR(255),
           duration VARCHAR(100),
           price VARCHAR(100),
           fee_amount NUMERIC(12, 2),
           eligibility TEXT,
           description TEXT,
+          thumbnail_url TEXT,
+          icon_url TEXT,
           seats_available INTEGER,
           sort_order INTEGER DEFAULT 0,
           is_active BOOLEAN DEFAULT TRUE,
@@ -26,10 +33,20 @@ export async function ensureInstitutionCoursesSchema(db: Queryable): Promise<voi
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
 
+        ALTER TABLE institution_courses ADD COLUMN IF NOT EXISTS code VARCHAR(100);
+        ALTER TABLE institution_courses ADD COLUMN IF NOT EXISTS slug VARCHAR(255);
+        ALTER TABLE institution_courses ADD COLUMN IF NOT EXISTS master_course_id INTEGER;
+        ALTER TABLE institution_courses ADD COLUMN IF NOT EXISTS business_profile_id INTEGER;
+        ALTER TABLE institution_courses ADD COLUMN IF NOT EXISTS category_id INTEGER;
+        ALTER TABLE institution_courses ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
+        ALTER TABLE institution_courses ADD COLUMN IF NOT EXISTS icon_url TEXT;
+
         CREATE INDEX IF NOT EXISTS idx_institution_courses_inst_id
           ON institution_courses(institution_id);
         CREATE INDEX IF NOT EXISTS idx_institution_courses_stream
           ON institution_courses(stream);
+        CREATE INDEX IF NOT EXISTS idx_institution_courses_code
+          ON institution_courses(code);
       `);
     })();
   }

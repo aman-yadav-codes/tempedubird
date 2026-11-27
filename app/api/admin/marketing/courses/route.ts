@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db/db";
 import { getAuthenticatedUser } from "@/lib/auth/auth";
 import { getUserCatalogScope } from "@/lib/auth/institution-scope";
+import { ensureInstitutionCoursesSchema } from "@/lib/queries/institution-courses";
 
 function slugify(text: string) {
   return text
@@ -17,6 +18,7 @@ function slugify(text: string) {
 
 export async function GET(req: Request) {
   try {
+    await ensureInstitutionCoursesSchema(db);
     const user = await getAuthenticatedUser(req);
     if (!user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

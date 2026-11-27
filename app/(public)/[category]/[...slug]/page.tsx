@@ -1396,7 +1396,7 @@ export default async function SeoCategoryProfilePage({ params }: Props) {
   }
 
   if (data.type === "explore") {
-    const rawCat = (data as any).category || "";
+    const rawCat = ((data as any).category || "").toLowerCase();
     const catType = (data as any).categoryType || (
       rawCat === "events" || rawCat === "event" ? "event" :
       rawCat === "vehicles" || rawCat === "vehicle" ? "vehicle" :
@@ -1405,14 +1405,32 @@ export default async function SeoCategoryProfilePage({ params }: Props) {
       rawCat === "services" || rawCat === "service" ? "service" :
       rawCat === "jobs" || rawCat === "job" ? "job" :
       rawCat === "courses" || rawCat === "course" ? "course" :
+      rawCat === "dishes" || rawCat === "dish" ? "dish" :
+      rawCat === "rooms" || rawCat === "room" ? "room" :
+      rawCat === "financial" || rawCat === "financials" || rawCat === "finance" ? "financial" :
       rawCat === "professionals" || rawCat === "professional" ? "professional" : "business"
     );
+    const isTopLevelVertical = [
+      "events", "event",
+      "vehicles", "vehicle",
+      "properties", "property",
+      "products", "product",
+      "services", "service",
+      "jobs", "job",
+      "courses", "course",
+      "dishes", "dish",
+      "rooms", "room",
+      "financial", "financials", "finance",
+      "professionals", "professional",
+      "businesses", "business",
+    ].includes(rawCat);
+
     return (
       <CustomerExplorePage
         key={`explore-${rawCat}-${(data as any).city || ""}`}
         initialType={catType}
-        initialCategory={rawCat}
-        initialCategoryName={(data as any).categoryName}
+        initialCategory={isTopLevelVertical ? "" : (data as any).category}
+        initialCategoryName={isTopLevelVertical ? "" : (data as any).categoryName}
         initialCity={(data as any).city}
       />
     );

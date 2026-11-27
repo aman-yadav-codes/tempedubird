@@ -640,9 +640,36 @@ export async function GET(req: NextRequest) {
     }
 
     // 4. Search Services
-    if (type === "all" || type === "service") {
+    if (type === "all" || type === "service" || type === "financial" || type === "finance") {
       const sConditions: string[] = ["COALESCE(ms.is_active, true) = true"];
       const sParams: any[] = [];
+
+      if ((type === "financial" || type === "finance") && categoryIds.length === 0) {
+        sConditions.push(`(
+          ms.category_id IN (
+            SELECT c.id FROM categories c 
+            LEFT JOIN business_categories bc ON bc.id = c.business_category_id
+            WHERE bc.slug = 'professional-and-financial-services' 
+               OR c.slug ILIKE '%financ%' 
+               OR c.name ILIKE '%financ%'
+               OR c.slug ILIKE '%tax%'
+               OR c.slug ILIKE '%account%'
+               OR c.slug ILIKE '%bank%'
+               OR c.slug ILIKE '%loan%'
+               OR c.slug ILIKE '%invest%'
+               OR c.slug ILIKE '%insurance%'
+               OR c.slug ILIKE '%audit%'
+          )
+          OR ms.name ILIKE '%financ%'
+          OR ms.name ILIKE '%tax%'
+          OR ms.name ILIKE '%account%'
+          OR ms.name ILIKE '%loan%'
+          OR ms.name ILIKE '%audit%'
+          OR ms.name ILIKE '%insurance%'
+          OR ms.name ILIKE '%invest%'
+          OR ms.description ILIKE '%finance%'
+        )`);
+      }
 
       // Business mode scope: only show services added by / assigned to this business
       if (scopedBusinessId) {
