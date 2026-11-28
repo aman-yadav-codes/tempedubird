@@ -1918,57 +1918,6 @@ function CustomerExplorePageContent({
         </div>
       )}
 
-      {/* Rating Star Checklist */}
-      <div className="space-y-2 pt-2 border-t border-slate-200">
-        <label className="text-xs font-semibold text-slate-700 block">Rating</label>
-        <div className="space-y-1.5">
-          {[
-            { r: 5, label: "5 Star & Above" },
-            { r: 4, label: "4 Star & Above" },
-            { r: 3, label: "3 Star & Above" },
-          ].map((item) => {
-            const isSelected = minRating === item.r;
-            return (
-              <button
-                key={item.r}
-                type="button"
-                onClick={() => setMinRating(isSelected ? 0 : item.r)}
-                className={cn(
-                  "w-full text-left text-xs px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer group",
-                  isSelected
-                    ? "bg-blue-50 text-blue-700 font-semibold border border-blue-200/60"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                )}
-              >
-                <div className={cn(
-                  "size-3.5 rounded-full border flex items-center justify-center shrink-0 transition-colors",
-                  isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300 group-hover:border-slate-400 bg-white"
-                )}>
-                  {isSelected && <div className="size-1.5 rounded-full bg-white" />}
-                </div>
-                <div className="flex items-center gap-1">
-                  <Star className="size-3.5 fill-amber-400 text-amber-400 shrink-0" />
-                  <span className="text-xs font-medium text-slate-700">{item.label}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Add Listing CTA Button (Desktop Sidebar Only) */}
-      {!isMobile && (
-        <div className="pt-2">
-          <Link
-            href="/packages"
-            className="w-full h-10 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-          >
-            <Plus className="size-3.5" />
-            <span>Add Listing</span>
-          </Link>
-        </div>
-      )}
-
       {/* Verified Only Toggle */}
       <div className="pt-2 border-t border-slate-200">
         <label className="flex items-center justify-between cursor-pointer text-xs text-slate-700 font-medium">
