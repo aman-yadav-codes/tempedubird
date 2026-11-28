@@ -720,7 +720,8 @@ function CustomerExplorePageContent({
       .then((r) => r.json())
       .then((d) => {
         if (d?.data && Array.isArray(d.data)) {
-          setBusinessCategories(d.data);
+          const clean = d.data.filter((c: any) => c.name && c.name.toLowerCase() !== "admin" && c.slug !== "admin");
+          setBusinessCategories(clean);
         }
       })
       .catch(() => { });
@@ -2058,117 +2059,111 @@ function CustomerExplorePageContent({
         </div>
       </div>
 
-      {/* 2. Search Bar & Filter Controls Row (Moved search bar here and removed Admin button) */}
-      <div className="space-y-3">
-        {/* Search Bar */}
-        <div className="bg-white rounded-2xl shadow-xs border border-slate-200/90 p-2 flex flex-col sm:flex-row items-center gap-2">
-          {/* Keyword Search Input */}
-          <div className="relative flex-1 w-full">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder={`Search ${activeType === "professional" ? "professionals, services or skills..." : activeType === "product" ? "products, brands or stores..." : activeType === "job" ? "jobs, roles or companies..." : activeType === "course" ? "courses, subjects or institutes..." : "all listings, products, services..."}`}
-              value={productNameSearch}
-              onChange={(e) => setProductNameSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  syncUrlParams({ q: productNameSearch });
-                  performSearch();
-                }
-              }}
-              className="w-full h-11 pl-10 pr-4 bg-transparent text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none font-medium"
-            />
-          </div>
-
-          {/* Location Selector */}
-          <div className="flex items-center gap-2 h-11 px-3 bg-slate-50 border border-slate-200/80 rounded-xl w-full sm:w-auto shrink-0">
-            <MapPin className="size-4 text-blue-600 shrink-0" />
-            <select
-              value={city}
-              onChange={(e) => {
-                const val = e.target.value;
-                setCity(val);
-                syncUrlParams({ city: val });
-              }}
-              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-5"
-            >
-              <option value="">All Locations</option>
-              {availableLocations.map((loc) => (
-                <option key={loc.id} value={loc.name}>
-                  {loc.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-4" />
-          </div>
-
-          {/* Blue Search Button */}
-          <button
-            type="button"
-            onClick={() => {
-              syncUrlParams({ q: productNameSearch });
-              performSearch();
+      {/* 2. Unified 1-Row Search & Filter Controls Bar */}
+      <div className="bg-white rounded-2xl shadow-xs border border-slate-200/90 p-2 flex flex-col md:flex-row md:flex-wrap lg:flex-nowrap items-center gap-2">
+        {/* 1. First: Keyword Search Box */}
+        <div className="relative flex-1 w-full min-w-[200px]">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder={`Search ${activeType === "professional" ? "professionals, services or skills..." : activeType === "product" ? "products, brands or stores..." : activeType === "job" ? "jobs, roles or companies..." : activeType === "course" ? "courses, subjects or institutes..." : "all listings, products, services..."}`}
+            value={productNameSearch}
+            onChange={(e) => setProductNameSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                syncUrlParams({ q: productNameSearch });
+                performSearch();
+              }
             }}
-            className="h-11 px-6 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs shrink-0 w-full sm:w-auto cursor-pointer"
+            className="w-full h-10 pl-10 pr-3 bg-transparent text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none font-medium"
+          />
+        </div>
+
+        {/* 2. Location Selector */}
+        <div className="flex items-center gap-1.5 h-10 px-2.5 bg-slate-50 border border-slate-200/80 rounded-xl shrink-0 w-full sm:w-auto">
+          <MapPin className="size-3.5 text-blue-600 shrink-0" />
+          <select
+            value={city}
+            onChange={(e) => {
+              const val = e.target.value;
+              setCity(val);
+              syncUrlParams({ city: val });
+            }}
+            className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-4"
           >
-            <Search className="size-4" />
-            <span>Search</span>
-          </button>
+            <option value="">All Locations</option>
+            {availableLocations.map((loc) => (
+              <option key={loc.id} value={loc.name}>
+                {loc.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-3.5" />
         </div>
 
-        {/* Filter Pills Row */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Radius Pill */}
-          <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
-            <span className="text-slate-400 font-normal">Radius</span>
-            <select
-              value={radius}
-              onChange={(e) => setRadius(e.target.value)}
-              className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
-            >
-              <option value="no_radius">No radius</option>
-              <option value="5">5 km</option>
-              <option value="10">10 km</option>
-              <option value="25">25 km</option>
-              <option value="50">50 km</option>
-            </select>
-            <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
-          </div>
-
-          {/* Rating Pill */}
-          <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
-            <span className="text-slate-400 font-normal">Rating</span>
-            <select
-              value={minRating}
-              onChange={(e) => setMinRating(Number(e.target.value))}
-              className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
-            >
-              <option value="0">All</option>
-              <option value="4.5">4.5+ ★</option>
-              <option value="4.0">4.0+ ★</option>
-              <option value="3.5">3.5+ ★</option>
-            </select>
-            <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
-          </div>
-
-          {/* Sort Pill */}
-          <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
-            >
-              <option value="featured">Sort: Name / Featured</option>
-              <option value="name_asc">Name (A-Z)</option>
-              <option value="name_desc">Name (Z-A)</option>
-              <option value="rating_desc">Highest Rated</option>
-              <option value="newest">Newest</option>
-              <option value="price_asc">Price: Low to High</option>
-              <option value="price_desc">Price: High to Low</option>
-            </select>
-            <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
-          </div>
+        {/* 3. Radius Filter */}
+        <div className="flex items-center gap-1 h-10 px-2.5 bg-slate-50 border border-slate-200/80 rounded-xl shrink-0 text-xs w-full sm:w-auto">
+          <span className="text-slate-400 font-normal text-xs">Radius</span>
+          <select
+            value={radius}
+            onChange={(e) => setRadius(e.target.value)}
+            className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
+          >
+            <option value="no_radius">No radius</option>
+            <option value="5">5 km</option>
+            <option value="10">10 km</option>
+            <option value="25">25 km</option>
+            <option value="50">50 km</option>
+          </select>
+          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
         </div>
+
+        {/* 4. Rating Filter */}
+        <div className="flex items-center gap-1 h-10 px-2.5 bg-slate-50 border border-slate-200/80 rounded-xl shrink-0 text-xs w-full sm:w-auto">
+          <span className="text-slate-400 font-normal text-xs">Rating</span>
+          <select
+            value={minRating}
+            onChange={(e) => setMinRating(Number(e.target.value))}
+            className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
+          >
+            <option value="0">All</option>
+            <option value="4.5">4.5+ ★</option>
+            <option value="4.0">4.0+ ★</option>
+            <option value="3.5">3.5+ ★</option>
+          </select>
+          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
+        </div>
+
+        {/* 5. Sort Filter */}
+        <div className="flex items-center gap-1 h-10 px-2.5 bg-slate-50 border border-slate-200/80 rounded-xl shrink-0 text-xs w-full sm:w-auto">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
+          >
+            <option value="featured">Sort: Name / Featured</option>
+            <option value="name_asc">Name (A-Z)</option>
+            <option value="name_desc">Name (Z-A)</option>
+            <option value="rating_desc">Highest Rated</option>
+            <option value="newest">Newest</option>
+            <option value="price_asc">Price: Low to High</option>
+            <option value="price_desc">Price: High to Low</option>
+          </select>
+          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
+        </div>
+
+        {/* 6. Blue Search Button */}
+        <button
+          type="button"
+          onClick={() => {
+            syncUrlParams({ q: productNameSearch });
+            performSearch();
+          }}
+          className="h-10 px-5 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 w-full sm:w-auto cursor-pointer"
+        >
+          <Search className="size-3.5" />
+          <span>Search</span>
+        </button>
       </div>
 
       {/* 3. Results Header Row with Count (Grid/List toggle removed as requested) */}

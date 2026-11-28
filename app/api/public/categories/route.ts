@@ -66,6 +66,8 @@ export async function GET(req: NextRequest) {
         conditions.push(`category_type IN ('academic', 'course', 'courses')`);
       } else if (type === "job" || type === "jobs") {
         conditions.push(`category_type IN ('job', 'jobs')`);
+      } else if (type === "financial" || type === "finance" || type === "financials") {
+        conditions.push(`category_type IN ('finance', 'financial')`);
       } else {
         params.push(type);
         conditions.push(`category_type = $${params.length}`);

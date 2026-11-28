@@ -21,8 +21,8 @@ export function CartFloatingButton() {
 
   return (
     <>
-      {/* Mobile: Sleek Docked Bottom Checkout Bar */}
-      <div className="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] shadow-[0_-4px_25px_rgba(0,0,0,0.12)] flex items-center justify-between sm:hidden animate-in slide-in-from-bottom duration-300">
+      {/* Mobile & Small Tablets: Sleek Docked Bottom Checkout Bar */}
+      <div className="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] shadow-[0_-4px_25px_rgba(0,0,0,0.12)] flex items-center justify-between md:hidden animate-in slide-in-from-bottom duration-300">
         <button
           type="button"
           onClick={toggleCart}
@@ -54,8 +54,8 @@ export function CartFloatingButton() {
         </button>
       </div>
 
-      {/* Desktop / Tablet: Floating Action Button */}
-      <div className="hidden sm:block fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+      {/* Desktop / Large Screens: Floating Action Button */}
+      <div className="hidden md:block fixed bottom-8 right-8 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
         <button
           type="button"
           onClick={toggleCart}

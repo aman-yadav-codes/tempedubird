@@ -789,26 +789,30 @@ export function PublicProfessionalProfileClient({
         {/* ================= TABS & CONTENT SECTIONS ================= */}
         <div className="mt-8 pb-24 sm:pb-8">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <div className="relative w-full overflow-hidden">
-              <TabsList className="w-full flex items-center justify-start gap-1.5 overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap bg-muted/50 border border-border/70 p-1.5 rounded-2xl h-auto shadow-2xs">
-                <TabsTrigger value="overview" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
-                  Overview &amp; Bio
-                </TabsTrigger>
-                <TabsTrigger value="services" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
-                  <Briefcase className="size-4 shrink-0" />
-                  <span>Services ({services.length})</span>
-                </TabsTrigger>
-                {products.length > 0 && (
-                  <TabsTrigger value="products" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
-                    <Package className="size-4 shrink-0" />
-                    <span>Products ({products.length})</span>
-                  </TabsTrigger>
-                )}
-                <TabsTrigger value="reviews" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
-                  <Star className="size-4 shrink-0" />
-                  <span>Reviews ({reviewCount})</span>
-                </TabsTrigger>
-              </TabsList>
+            <div className="relative w-full my-1">
+              <div className="relative w-full overflow-hidden">
+                <div className="overflow-x-auto no-scrollbar scroll-smooth touch-pan-x py-1 px-0.5">
+                  <TabsList className="inline-flex flex-nowrap items-center justify-start gap-1.5 sm:gap-2 bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 p-1.5 rounded-2xl h-auto shadow-2xs w-max min-w-full">
+                    <TabsTrigger value="overview" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 whitespace-nowrap data-[state=active]:bg-[#0070f3] data-[state=active]:text-white data-[state=active]:shadow-xs transition-all">
+                      Overview &amp; Bio
+                    </TabsTrigger>
+                    <TabsTrigger value="services" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 whitespace-nowrap data-[state=active]:bg-[#0070f3] data-[state=active]:text-white data-[state=active]:shadow-xs transition-all">
+                      <Briefcase className="size-4 shrink-0" />
+                      <span>Services ({services.length})</span>
+                    </TabsTrigger>
+                    {products.length > 0 && (
+                      <TabsTrigger value="products" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 whitespace-nowrap data-[state=active]:bg-[#0070f3] data-[state=active]:text-white data-[state=active]:shadow-xs transition-all">
+                        <Package className="size-4 shrink-0" />
+                        <span>Products ({products.length})</span>
+                      </TabsTrigger>
+                    )}
+                    <TabsTrigger value="reviews" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 whitespace-nowrap data-[state=active]:bg-[#0070f3] data-[state=active]:text-white data-[state=active]:shadow-xs transition-all">
+                      <Star className="size-4 shrink-0" />
+                      <span>Reviews ({reviewCount})</span>
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+              </div>
             </div>
 
             {/* ================= OVERVIEW TAB ================= */}
