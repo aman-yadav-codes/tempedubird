@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, Suspense } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { Input } from "@/components/ui/input";
@@ -184,9 +184,61 @@ export const BUSINESS_CATEGORY_VERTICALS: Record<string, Array<{ type: string; l
     { type: "professional", label: "Professionals" },
     { type: "job", label: "Jobs" },
   ],
-  "real-estate-and-construction": [
-    { type: "business", label: "Businesses" },
+  "real-estate": [
     { type: "property", label: "Property" },
+    { type: "business", label: "Businesses" },
+    { type: "room", label: "Rooms" },
+    { type: "service", label: "Services" },
+    { type: "professional", label: "Professionals" },
+    { type: "job", label: "Jobs" },
+  ],
+  "construction": [
+    { type: "business", label: "Businesses" },
+    { type: "service", label: "Services" },
+    { type: "product", label: "Products" },
+    { type: "professional", label: "Professionals" },
+    { type: "job", label: "Jobs" },
+  ],
+  "automotive": [
+    { type: "vehicle", label: "Vehicle" },
+    { type: "business", label: "Businesses" },
+    { type: "product", label: "Products" },
+    { type: "service", label: "Services" },
+    { type: "professional", label: "Professionals" },
+    { type: "event", label: "Events" },
+    { type: "job", label: "Jobs" },
+  ],
+  "transport": [
+    { type: "business", label: "Businesses" },
+    { type: "vehicle", label: "Vehicle" },
+    { type: "service", label: "Services" },
+    { type: "job", label: "Jobs" },
+  ],
+  "hospitality": [
+    { type: "room", label: "Rooms" },
+    { type: "business", label: "Businesses" },
+    { type: "service", label: "Services" },
+    { type: "professional", label: "Professionals" },
+    { type: "job", label: "Jobs" },
+  ],
+  "events": [
+    { type: "event", label: "Events" },
+    { type: "business", label: "Businesses" },
+    { type: "service", label: "Services" },
+    { type: "product", label: "Products" },
+    { type: "professional", label: "Professionals" },
+    { type: "job", label: "Jobs" },
+  ],
+  "financial-services": [
+    { type: "business", label: "Businesses" },
+    { type: "financial", label: "Finance" },
+    { type: "service", label: "Services" },
+    { type: "professional", label: "Professionals" },
+    { type: "job", label: "Jobs" },
+  ],
+  "real-estate-and-construction": [
+    { type: "property", label: "Property" },
+    { type: "business", label: "Businesses" },
     { type: "room", label: "Rooms" },
     { type: "product", label: "Products" },
     { type: "professional", label: "Professionals" },
@@ -195,8 +247,8 @@ export const BUSINESS_CATEGORY_VERTICALS: Record<string, Array<{ type: string; l
     { type: "job", label: "Jobs" },
   ],
   "automotive-and-transport": [
-    { type: "business", label: "Businesses" },
     { type: "vehicle", label: "Vehicle" },
+    { type: "business", label: "Businesses" },
     { type: "product", label: "Products" },
     { type: "service", label: "Services" },
     { type: "professional", label: "Professionals" },
@@ -242,7 +294,7 @@ export const BUSINESS_CATEGORY_VERTICALS: Record<string, Array<{ type: string; l
   "professional-and-financial-services": [
     { type: "business", label: "Businesses" },
     { type: "financial", label: "Finance" },
-    { type: "service", label: "Financial Services" },
+    { type: "service", label: "Services" },
     { type: "professional", label: "Professionals" },
     { type: "course", label: "Courses" },
     { type: "product", label: "Products" },
@@ -302,6 +354,16 @@ export const DEFAULT_ALL_VERTICALS = [
   { type: "room", label: "Rooms" },
   { type: "event", label: "Events" },
 ];
+
+export const VERTICAL_DEFAULT_BUSINESS_CATEGORY: Record<string, string> = {
+  vehicle: "automotive",
+  property: "real-estate",
+  dish: "food-dining-and-cafes",
+  room: "hospitality",
+  event: "events",
+  financial: "financial-services",
+  course: "education-and-coaching",
+};
 
 export interface CustomerExplorePageProps {
   initialType?: string;
@@ -418,19 +480,45 @@ function CustomerExplorePageContent({
       const typeParam = urlType && urlType !== "all" ? `&type=${urlType}` : "";
       fetch(`/api/public/categories?slug=${encodeURIComponent(urlCategoryParam)}${typeParam}`)
         .then((r) => r.json())
-        .then((json) => {
-          const cat = Array.isArray(json?.data) ? json.data[0] : json?.data;
+        .then(async (json) => {
+          let cat = Array.isArray(json?.data) ? json.data[0] : json?.data;
+          if (!cat && typeParam) {
+            try {
+              const fallbackRes = await fetch(`/api/public/categories?slug=${encodeURIComponent(urlCategoryParam)}`);
+              const fallbackJson = await fallbackRes.json();
+              cat = Array.isArray(fallbackJson?.data) ? fallbackJson.data[0] : fallbackJson?.data;
+            } catch {}
+          }
           if (cat) {
+            const bizCatId = cat.business_category_id
+              ? Number(cat.business_category_id)
+              : cat.category_type === "business" && !cat.parent_id
+                ? Number(cat.id)
+                : null;
+
             if (cat.parent_id) {
               setSelectedCategoryId(Number(cat.parent_id));
               setSelectedSubcategoryId(Number(cat.id));
               setSelectedSubcategoryName(cat.name || "");
               setSelectedSubcategorySlug(cat.slug || urlCategoryParam);
               if (cat.parent_name) setSelectedCategoryName(cat.parent_name);
-            } else {
+              if (bizCatId) setSelectedBusinessCategoryId(bizCatId);
+            } else if (cat.category_type === "business") {
               setSelectedCategoryId(Number(cat.id));
               setSelectedCategoryName(cat.name || formatCategorySlug(urlCategoryParam) || urlCategoryParam);
               setSelectedCategorySlug(cat.slug || urlCategoryParam);
+              setSelectedBusinessCategoryId(Number(cat.id));
+            } else {
+              // Vertical-specific category (like dish, vehicle, property, course, etc.)
+              if (bizCatId) {
+                setSelectedBusinessCategoryId(bizCatId);
+                setSelectedCategoryId(bizCatId);
+              } else {
+                setSelectedCategoryId(Number(cat.id));
+              }
+              setSelectedSubcategoryId(Number(cat.id));
+              setSelectedSubcategoryName(cat.name || "");
+              setSelectedSubcategorySlug(cat.slug || urlCategoryParam);
             }
           } else {
             const formatted = formatCategorySlug(urlCategoryParam) || urlCategoryParam;
@@ -448,19 +536,39 @@ function CustomerExplorePageContent({
         .then((r) => r.json())
         .then((json) => {
           const cat = json?.data;
+          const bizCatId = cat?.business_category_id
+            ? Number(cat.business_category_id)
+            : cat?.category_type === "business" && !cat.parent_id
+              ? Number(cat.id)
+              : null;
+
           if (cat && cat.parent_id) {
             setSelectedCategoryId(Number(cat.parent_id));
             setSelectedSubcategoryId(Number(cat.id));
             setSelectedSubcategoryName(cat.name || "");
             setSelectedSubcategorySlug(cat.slug || "");
             if (cat.parent_name) setSelectedCategoryName(cat.parent_name);
+            if (bizCatId) setSelectedBusinessCategoryId(bizCatId);
           } else if (cat) {
-            setSelectedCategoryId(Number(cat.id));
-            setSelectedCategoryName(cat.name || urlCategoryName);
-            setSelectedCategorySlug(cat.slug || "");
-            setSelectedSubcategoryId(null);
-            setSelectedSubcategoryName("");
-            setSelectedSubcategorySlug("");
+            if (cat.category_type === "business") {
+              setSelectedCategoryId(Number(cat.id));
+              setSelectedCategoryName(cat.name || urlCategoryName);
+              setSelectedCategorySlug(cat.slug || "");
+              setSelectedSubcategoryId(null);
+              setSelectedSubcategoryName("");
+              setSelectedSubcategorySlug("");
+              setSelectedBusinessCategoryId(Number(cat.id));
+            } else {
+              if (bizCatId) {
+                setSelectedBusinessCategoryId(bizCatId);
+                setSelectedCategoryId(bizCatId);
+              } else {
+                setSelectedCategoryId(Number(cat.id));
+              }
+              setSelectedSubcategoryId(Number(cat.id));
+              setSelectedSubcategoryName(cat.name || urlCategoryName);
+              setSelectedSubcategorySlug(cat.slug || "");
+            }
           } else {
             setSelectedCategoryId(urlCategory);
             if (urlCategoryName) setSelectedCategoryName(urlCategoryName);
@@ -590,7 +698,8 @@ function CustomerExplorePageContent({
         const typeParam = activeType === "all" ? "" : `type=${activeType}&`;
         const bizParam = activeBusinessId ? `businessId=${activeBusinessId}&` : "";
         const bizCatParam = selectedBusinessCategoryId ? `businessCategoryId=${selectedBusinessCategoryId}&` : "";
-        const res = await fetch(`/api/public/categories?${typeParam}${bizParam}${bizCatParam}onlyRoot=true&limit=300`);
+        const rootParam = selectedBusinessCategoryId ? "" : "onlyRoot=true&";
+        const res = await fetch(`/api/public/categories?${typeParam}${bizParam}${bizCatParam}${rootParam}limit=300`);
         const json = await res.json();
         if (!ignore && json?.data) {
           setCategories(json.data);
@@ -617,13 +726,37 @@ function CustomerExplorePageContent({
       .catch(() => { });
   }, []);
 
+  // Reference to track activeType changes for vertical switching
+  const prevActiveTypeRef = useRef<string>(activeType);
+
+  // Auto-select natural business category for vertical when listing type changes or categories load
+  useEffect(() => {
+    if (businessCategories.length === 0) return;
+
+    const typeChanged = prevActiveTypeRef.current !== activeType;
+    prevActiveTypeRef.current = activeType;
+
+    if (activeType && VERTICAL_DEFAULT_BUSINESS_CATEGORY[activeType]) {
+      const defSlug = VERTICAL_DEFAULT_BUSINESS_CATEGORY[activeType];
+      const matchedBc = businessCategories.find((b) => b.slug === defSlug || b.slug?.includes(defSlug));
+      if (matchedBc) {
+        if (!selectedBusinessCategoryId || typeChanged) {
+          setSelectedBusinessCategoryId(matchedBc.id);
+          setSelectedCategoryId(matchedBc.id);
+          setSelectedCategoryName(matchedBc.name);
+          setSelectedCategorySlug(matchedBc.slug || defSlug);
+        }
+      }
+    }
+  }, [businessCategories, activeType, selectedBusinessCategoryId]);
+
   const displayCategories = useMemo(() => {
     return businessCategories.length > 0 ? businessCategories : categories;
   }, [businessCategories, categories]);
 
   const filteredCategories = useMemo(() => {
     if (!selectedBusinessCategoryId) return displayCategories;
-    return displayCategories.filter((c) => c.business_category_id === selectedBusinessCategoryId || c.id === selectedBusinessCategoryId);
+    return displayCategories.filter((c: any) => c.business_category_id === selectedBusinessCategoryId || c.id === selectedBusinessCategoryId);
   }, [displayCategories, selectedBusinessCategoryId]);
 
   // Active business category slug for vertical context
@@ -653,8 +786,11 @@ function CustomerExplorePageContent({
         return key;
       }
     }
+    if (activeType && VERTICAL_DEFAULT_BUSINESS_CATEGORY[activeType]) {
+      return VERTICAL_DEFAULT_BUSINESS_CATEGORY[activeType];
+    }
     return "";
-  }, [selectedBusinessCategoryId, selectedCategoryId, businessCategories, categories, selectedCategorySlug, urlCategoryParam, selectedCategoryName]);
+  }, [selectedBusinessCategoryId, selectedCategoryId, businessCategories, categories, selectedCategorySlug, urlCategoryParam, selectedCategoryName, activeType]);
 
   const allowedVerticals = useMemo(() => {
     if (activeBusinessCategoryKey && BUSINESS_CATEGORY_VERTICALS[activeBusinessCategoryKey]) {
@@ -691,11 +827,16 @@ function CustomerExplorePageContent({
       }
     }
     if (activeBusinessCategoryKey) {
-      const found = businessCategories.find((bc) => bc.slug === activeBusinessCategoryKey);
+      const found = businessCategories.find((bc) => bc.slug === activeBusinessCategoryKey || bc.slug?.includes(activeBusinessCategoryKey));
+      if (found) return found.id;
+    }
+    if (activeType && VERTICAL_DEFAULT_BUSINESS_CATEGORY[activeType]) {
+      const defKey = VERTICAL_DEFAULT_BUSINESS_CATEGORY[activeType];
+      const found = businessCategories.find((bc) => bc.slug === defKey || bc.slug?.includes(defKey));
       if (found) return found.id;
     }
     return null;
-  }, [selectedBusinessCategoryId, selectedCategoryId, businessCategories, categories, activeBusinessCategoryKey]);
+  }, [selectedBusinessCategoryId, selectedCategoryId, businessCategories, categories, activeBusinessCategoryKey, activeType]);
 
   const [typeCategories, setTypeCategories] = useState<Array<{ id: number; name: string; slug?: string; parent_id?: number | null }>>([]);
   const [loadingTypeCategories, setLoadingTypeCategories] = useState(false);
@@ -1148,12 +1289,13 @@ function CustomerExplorePageContent({
   const [selectedBookingService, setSelectedBookingService] = useState<BookingServiceItem | null>(null);
 
   // Cart store actions
-  const { addItem, updateQuantity, getItemQuantity } = useCartStore();
+  const { addItem, updateQuantity, getItemQuantity, getTotalCount } = useCartStore();
   const [cartMounted, setCartMounted] = useState(false);
   useEffect(() => {
     setCartMounted(true);
   }, []);
   const safeCartQty = (id: string | number) => (cartMounted ? getItemQuantity(id) : 0);
+  const mobileCartCount = cartMounted ? getTotalCount() : 0;
 
   // Enquiry form
   const [enquiryForm, setEnquiryForm] = useState({
@@ -1579,6 +1721,19 @@ function CustomerExplorePageContent({
               setSelectedSubcategoryId(null);
               setSelectedSubcategoryName("");
               setSelectedSubcategorySlug("");
+
+              if (newType && VERTICAL_DEFAULT_BUSINESS_CATEGORY[newType]) {
+                const defSlug = VERTICAL_DEFAULT_BUSINESS_CATEGORY[newType];
+                const matchedBc = businessCategories.find((b) => b.slug === defSlug || b.slug?.includes(defSlug));
+                if (matchedBc) {
+                  setSelectedBusinessCategoryId(matchedBc.id);
+                  setSelectedCategoryId(matchedBc.id);
+                  setSelectedCategoryName(matchedBc.name);
+                  setSelectedCategorySlug(matchedBc.slug || defSlug);
+                  syncUrlParams({ type: newType, category: matchedBc.slug || defSlug, subcategory: null });
+                  return;
+                }
+              }
               syncUrlParams({ type: newType, subcategory: null });
             }}
             className="w-full h-10 rounded-xl bg-slate-50 hover:bg-slate-100/70 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white focus:border-blue-500 font-medium cursor-pointer transition-all appearance-none"
@@ -1630,7 +1785,7 @@ function CustomerExplorePageContent({
                 className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs px-3 pr-8 focus:outline-none focus:bg-white cursor-pointer appearance-none font-medium"
               >
                 <option value="">
-                  {businessCategories.length > 0 ? `All Business Categories (${businessCategories.length})` : (selectedCategoryName || "All Business Categories")}
+                  {businessCategories.length > 0 ? `All Business Categories (${businessCategories.length})` : "All Business Categories"}
                 </option>
                 {businessCategories.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -1800,16 +1955,18 @@ function CustomerExplorePageContent({
         </div>
       </div>
 
-      {/* Add Listing CTA Button */}
-      <div className="pt-2">
-        <Link
-          href="/packages"
-          className="w-full h-10 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-        >
-          <Plus className="size-3.5" />
-          <span>Add Listing</span>
-        </Link>
-      </div>
+      {/* Add Listing CTA Button (Desktop Sidebar Only) */}
+      {!isMobile && (
+        <div className="pt-2">
+          <Link
+            href="/packages"
+            className="w-full h-10 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+          >
+            <Plus className="size-3.5" />
+            <span>Add Listing</span>
+          </Link>
+        </div>
+      )}
 
       {/* Verified Only Toggle */}
       <div className="pt-2 border-t border-slate-200">
@@ -1855,7 +2012,7 @@ function CustomerExplorePageContent({
           />
         </div>
 
-        <div className="relative z-10 max-w-2xl space-y-2">
+        <div className="relative z-10 max-w-4xl lg:max-w-5xl space-y-2">
           {/* Breadcrumbs */}
           <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap">
             <Link href="/" className="hover:text-blue-600 transition-colors">Home</Link>
@@ -1891,7 +2048,7 @@ function CustomerExplorePageContent({
             )}
           </nav>
 
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+          <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 tracking-tight leading-tight sm:whitespace-nowrap truncate">
             {selectedSubcategoryName || selectedCategoryName || getVerticalLabel(activeType)}
             {effectiveFullLocation ? ` in ${effectiveFullLocation}` : ""}
           </h1>
@@ -1899,9 +2056,12 @@ function CustomerExplorePageContent({
             Find trusted {activeType === "professional" ? "professionals and experts" : activeType === "product" ? "products and stores" : activeType === "job" ? "jobs and opportunities" : activeType === "course" ? "courses and coaching" : "businesses and services"}{effectiveFullLocation ? ` in ${effectiveFullLocation}` : ""}.
           </p>
         </div>
+      </div>
 
-        {/* Floating Search Bar */}
-        <div className="relative z-10 mt-6 bg-white rounded-2xl shadow-md border border-slate-200/90 p-2 flex flex-col sm:flex-row items-center gap-2">
+      {/* 2. Search Bar & Filter Controls Row (Moved search bar here and removed Admin button) */}
+      <div className="space-y-3">
+        {/* Search Bar */}
+        <div className="bg-white rounded-2xl shadow-xs border border-slate-200/90 p-2 flex flex-col sm:flex-row items-center gap-2">
           {/* Keyword Search Input */}
           <div className="relative flex-1 w-full">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
@@ -1955,80 +2115,63 @@ function CustomerExplorePageContent({
             <span>Search</span>
           </button>
         </div>
-      </div>
 
-      {/* 2. Filter Pills Row */}
-      <div className="flex flex-wrap items-center gap-2.5">
-        {/* All Categories Blue Pill */}
-        <button
-          type="button"
-          onClick={() => {
-            setSelectedCategoryId(null);
-            setSelectedCategoryName("");
-            setSelectedCategorySlug("");
-            setSelectedSubcategoryId(null);
-            syncUrlParams({ category: null, subcategory: null });
-          }}
-          className="h-9 px-4 rounded-xl bg-[#0070f3] hover:bg-blue-600 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
-        >
-          <LayoutGrid className="size-3.5" />
-          <span>{selectedCategoryName || "All Categories"}</span>
-          <ChevronDown className="size-3 text-white/80" />
-        </button>
+        {/* Filter Pills Row */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Radius Pill */}
+          <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
+            <span className="text-slate-400 font-normal">Radius</span>
+            <select
+              value={radius}
+              onChange={(e) => setRadius(e.target.value)}
+              className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
+            >
+              <option value="no_radius">No radius</option>
+              <option value="5">5 km</option>
+              <option value="10">10 km</option>
+              <option value="25">25 km</option>
+              <option value="50">50 km</option>
+            </select>
+            <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
+          </div>
 
-        {/* Radius Pill */}
-        <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
-          <span className="text-slate-400 font-normal">Radius</span>
-          <select
-            value={radius}
-            onChange={(e) => setRadius(e.target.value)}
-            className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
-          >
-            <option value="no_radius">No radius</option>
-            <option value="5">5 km</option>
-            <option value="10">10 km</option>
-            <option value="25">25 km</option>
-            <option value="50">50 km</option>
-          </select>
-          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
-        </div>
+          {/* Rating Pill */}
+          <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
+            <span className="text-slate-400 font-normal">Rating</span>
+            <select
+              value={minRating}
+              onChange={(e) => setMinRating(Number(e.target.value))}
+              className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
+            >
+              <option value="0">All</option>
+              <option value="4.5">4.5+ ★</option>
+              <option value="4.0">4.0+ ★</option>
+              <option value="3.5">3.5+ ★</option>
+            </select>
+            <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
+          </div>
 
-        {/* Rating Pill */}
-        <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
-          <span className="text-slate-400 font-normal">Rating</span>
-          <select
-            value={minRating}
-            onChange={(e) => setMinRating(Number(e.target.value))}
-            className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
-          >
-            <option value="0">All</option>
-            <option value="4.5">4.5+ ★</option>
-            <option value="4.0">4.0+ ★</option>
-            <option value="3.5">3.5+ ★</option>
-          </select>
-          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
-        </div>
-
-        {/* Sort Pill */}
-        <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
-          >
-            <option value="featured">Sort: Name / Featured</option>
-            <option value="name_asc">Name (A-Z)</option>
-            <option value="name_desc">Name (Z-A)</option>
-            <option value="rating_desc">Highest Rated</option>
-            <option value="newest">Newest</option>
-            <option value="price_asc">Price: Low to High</option>
-            <option value="price_desc">Price: High to Low</option>
-          </select>
-          <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
+          {/* Sort Pill */}
+          <div className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer appearance-none pr-3 text-xs"
+            >
+              <option value="featured">Sort: Name / Featured</option>
+              <option value="name_asc">Name (A-Z)</option>
+              <option value="name_desc">Name (Z-A)</option>
+              <option value="rating_desc">Highest Rated</option>
+              <option value="newest">Newest</option>
+              <option value="price_asc">Price: Low to High</option>
+              <option value="price_desc">Price: High to Low</option>
+            </select>
+            <ChevronDown className="size-3 text-slate-400 pointer-events-none -ml-2" />
+          </div>
         </div>
       </div>
 
-      {/* 3. Results Header Row with Count & View Mode Toggle */}
+      {/* 3. Results Header Row with Count (Grid/List toggle removed as requested) */}
       <div className="flex items-center justify-between pt-1">
         {loading ? (
           <div className="h-5 w-44 bg-slate-200 animate-pulse rounded-md" />
@@ -2037,36 +2180,6 @@ function CustomerExplorePageContent({
             <span className="text-blue-600 font-extrabold text-base sm:text-lg">{totalFilteredCount}</span> matching {activeType === "business" ? "businesses" : activeType === "service" ? "services" : activeType === "product" ? "products" : activeType === "course" ? "courses" : activeType === "job" ? "jobs" : "listings"}
           </div>
         )}
-
-        {/* Grid / List Switcher */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-          <button
-            type="button"
-            onClick={() => setViewMode("grid")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-              viewMode === "grid"
-                ? "bg-[#0070f3] text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            )}
-          >
-            <LayoutGrid className="size-3.5" />
-            <span>Grid</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("list")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-              viewMode === "list"
-                ? "bg-[#0070f3] text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            )}
-          >
-            <List className="size-3.5" />
-            <span>List</span>
-          </button>
-        </div>
       </div>
 
       {/* 5. Two-Column Layout: Grid on Left, Filters Sidebar on Right */}
@@ -3371,7 +3484,10 @@ function CustomerExplorePageContent({
       </div>
 
       {/* Mobile Sticky Floating Filter Button */}
-      <div className="fixed bottom-6 right-6 z-40 lg:hidden">
+      <div className={cn(
+        "fixed right-4 z-40 lg:hidden transition-all duration-300",
+        mobileCartCount > 0 ? "bottom-20" : "bottom-6"
+      )}>
         <button
           type="button"
           onClick={() => setMobileFiltersOpen(true)}

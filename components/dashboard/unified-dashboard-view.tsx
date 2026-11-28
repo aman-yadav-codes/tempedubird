@@ -45,6 +45,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddBusinessProfileButton } from "@/components/business/add-business-profile-button";
+import { AdminActiveTaskWidget } from "@/components/admin-active-task-widget";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 
 export type ContextOption = {
@@ -528,6 +529,17 @@ export function UnifiedDashboardView({
           </div>
         </div>
       )}
+
+      {/* Mobile Active Task Display */}
+      <div className="block md:hidden">
+        <div className="p-3.5 rounded-2xl bg-card border border-border/80 shadow-2xs flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Clock className="size-4 text-primary shrink-0" />
+            <span className="text-xs font-bold text-foreground">Active Task</span>
+          </div>
+          <AdminActiveTaskWidget />
+        </div>
+      </div>
 
       {/* WELCOME & MULTI-CONTEXT HERO BANNER */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-rose-950 to-slate-900 p-6 sm:p-8 text-white shadow-xl border border-rose-900/30">

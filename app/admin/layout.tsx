@@ -4,11 +4,13 @@ import "./admin-globals.css";
 
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { useUIStore, useAuthStore } from "@/store";
+import { useUIStore, useAuthStore, useCartStore } from "@/store";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AdminGuard } from "@/components/admin-guard";
-import { AdminThemeToggle } from "../../components/admin-theme-toggle";
+import { Search, ShoppingCart } from "lucide-react";
+import { CartDrawer } from "@/components/checkout/cart-drawer";
+import { AdminSearchDialog } from "@/components/admin-search-dialog";
 import { AdminUserProfileMenu } from "@/components/admin-user-profile-menu";
 import { AdminNotificationCenter } from "@/components/admin-notification-center";
 import { AdminAcademicSessionSelector } from "@/components/admin-academic-session-selector";
@@ -47,6 +49,15 @@ export default function AdminLayout({
     user?.role_codes?.includes('professional')
   );
   const { sidebarOpen, setSidebarOpen } = useUIStore();
+  const { getTotalCount, toggleCart } = useCartStore();
+  const [mounted, setMounted] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const cartCount = mounted ? getTotalCount() : 0;
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") {
       return "light";
@@ -95,35 +106,46 @@ export default function AdminLayout({
                   <AdminAcademicSessionSelector />
                 </>
               )}
-              {!isCustomer && (
-                <>
-                  <div className="w-px h-5 bg-border/60 hidden sm:block" />
-                  <AdminActiveTaskWidget />
-                </>
-              )}
               <AddBusinessProfileButton />
-              <AdminStorefrontHeaderButton />
 
-              <div className="ml-auto flex items-center gap-2 shrink-0">
-                {!isCustomer && (
-                  <button
-                    type="button"
-                    onClick={() => window.location.reload()}
-                    title="Reload Session Data"
-                    className="hidden sm:inline-flex p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer"
-                  >
-                    <span className="sr-only">Reload</span>
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  </button>
-                )}
+              <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {/* Search Option */}
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(true)}
+                  title="Quick Search (Ctrl+K)"
+                  aria-label="Quick Search"
+                  className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer"
+                >
+                  <Search className="size-4" />
+                </button>
+
+                {/* Cart Option */}
+                <button
+                  type="button"
+                  onClick={toggleCart}
+                  title="Shopping Cart"
+                  aria-label="Shopping Cart"
+                  className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer"
+                >
+                  <ShoppingCart className="size-4" />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-bold size-4 rounded-full flex items-center justify-center animate-in zoom-in-50">
+                      {cartCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Notification Option */}
                 <AdminNotificationCenter />
-                <AdminThemeToggle theme={theme} onThemeChange={setTheme} />
+
+                {/* User Profile Menu */}
                 <AdminUserProfileMenu />
               </div>
             </header>
             <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</main>
+            <AdminSearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+            <CartDrawer />
           </div>
         </SidebarProvider>
       </div>

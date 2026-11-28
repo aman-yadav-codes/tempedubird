@@ -105,7 +105,24 @@ export async function GET(req: Request) {
 
     query += ` ORDER BY ic.is_active DESC, ic.id DESC`;
 
-    const res = await db.query(query, params);
+    let res;
+    try {
+      res = await db.query(query, params);
+    } catch (err: any) {
+      if (err?.message?.includes("code does not exist") || err?.code === "42703") {
+        try {
+          await db.query(`ALTER TABLE institution_courses ADD COLUMN IF NOT EXISTS code VARCHAR(100)`);
+          res = await db.query(query, params);
+        } catch {
+          const fallbackQuery = query
+            .replace(/ic\.code,/g, "NULL::varchar as code,")
+            .replace(/OR COALESCE\(ic\.code, ''\) ILIKE \$\d+/g, "");
+          res = await db.query(fallbackQuery, params);
+        }
+      } else {
+        throw err;
+      }
+    }
     const courses = res.rows;
 
     // Calculate stats

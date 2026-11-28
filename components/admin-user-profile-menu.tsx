@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Loader2, ChevronDown, Package, Store, User as UserIcon, Settings } from "lucide-react";
+import { LogOut, Loader2, ChevronDown, Package, Store, User as UserIcon, Settings, Heart } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuthStore } from "@/store";
@@ -212,6 +212,16 @@ export function AdminUserProfileMenu() {
             >
               <UserIcon className="size-4 text-sky-500" />
               <span>Profile</span>
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem asChild>
+            <Link
+              href={isCustomer ? "/customer/favorites" : "/admin/my-profile?tab=favorites"}
+              className="cursor-pointer text-xs font-semibold py-2 px-3 flex items-center gap-2.5 text-foreground hover:text-rose-600 rounded-lg hover:bg-muted"
+            >
+              <Heart className="size-4 text-rose-500 fill-rose-500" />
+              <span>Saved Favorites</span>
             </Link>
           </DropdownMenuItem>
 

@@ -85,22 +85,27 @@ export async function GET(req: NextRequest) {
       const namePattern1 = `%${cleanSlug.replace(/-/g, " ")}%`;
       const namePattern2 = `%${cleanSlug.replace(/-/g, " ").replace(/\band\b/g, "&")}%`;
       const namePattern3 = `%${cleanSlug.replace(/-/g, " ").replace(/\band\b/g, "%")}%`;
+      const tokens = cleanSlug.split("-").filter((t) => t && t !== "and" && t !== "dish" && t !== "vehicle" && t !== "property");
+      const wildcardPattern = tokens.length > 0 ? `%${tokens.join("%")}%` : `%${cleanSlug}%`;
       params.push(cleanSlug);
       params.push(`%${cleanSlug}%`);
       params.push(namePattern1);
       params.push(namePattern2);
       params.push(namePattern3);
+      params.push(wildcardPattern);
       conditions.push(`(
-        slug = $${params.length - 4}
-        OR slug LIKE $${params.length - 3}
+        slug = $${params.length - 5}
+        OR slug LIKE $${params.length - 4}
+        OR name ILIKE $${params.length - 3}
         OR name ILIKE $${params.length - 2}
         OR name ILIKE $${params.length - 1}
+        OR slug ILIKE $${params.length}
         OR name ILIKE $${params.length}
       )`);
     } else if (parentId !== null && !isNaN(parentId)) {
       params.push(parentId);
       conditions.push(`parent_id = $${params.length}`);
-    } else if (onlyRoot) {
+    } else if (onlyRoot && !bizCatId) {
       conditions.push("parent_id IS NULL");
     }
 
@@ -129,7 +134,28 @@ export async function GET(req: NextRequest) {
       LIMIT $${params.length + 1}
     `;
 
-    const res = await db.query(query, [...params, limit]);
+    let res;
+    try {
+      res = await db.query(query, [...params, limit]);
+    } catch (dbErr: any) {
+      if (dbErr?.message && dbErr.message.includes("is_seo_active")) {
+        // Auto-migrate column on production/staging DB
+        await db.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_seo_active BOOLEAN DEFAULT TRUE`).catch(() => {});
+        // Fallback query without is_seo_active
+        const fallbackConditions = conditions.filter((c) => !c.includes("is_seo_active"));
+        const fallbackQuery = `
+          SELECT id, name, slug, parent_id, category_type, business_category_id, business_subcategory_id, icon_url
+          FROM categories
+          WHERE ${fallbackConditions.join(" AND ")}
+          ${orderClause}
+          LIMIT $${params.length + 1}
+        `;
+        res = await db.query(fallbackQuery, [...params, limit]);
+      } else {
+        throw dbErr;
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: res.rows,

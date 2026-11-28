@@ -6,8 +6,19 @@ import { useAuthStore } from "@/store";
 import { useActiveInstitution } from "@/hooks/use-active-institution";
 import { Button } from "@/components/ui/button";
 import { Store, ExternalLink } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function AdminStorefrontHeaderButton() {
+interface AdminStorefrontHeaderButtonProps {
+  className?: string;
+  showDivider?: boolean;
+  variant?: "header" | "sidebar";
+}
+
+export function AdminStorefrontHeaderButton({
+  className,
+  showDivider = true,
+  variant = "header",
+}: AdminStorefrontHeaderButtonProps = {}) {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const { activeInstitution } = useActiveInstitution();
@@ -101,9 +112,38 @@ export function AdminStorefrontHeaderButton() {
     }
   };
 
+  if (variant === "sidebar") {
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        asChild
+        className={cn(
+          "w-full justify-between h-9 px-3 text-xs font-semibold border-primary/40 bg-primary/5 text-primary hover:bg-primary/15 hover:text-primary transition-colors cursor-pointer rounded-xl shadow-2xs",
+          className
+        )}
+        title="Open Live Public Store Front"
+      >
+        <a
+          href={effectiveHref || "#"}
+          onClick={handleClick}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-between w-full"
+        >
+          <span className="flex items-center gap-2">
+            <Store className="size-4 text-primary shrink-0" />
+            <span className="font-semibold">Store Front</span>
+          </span>
+          <ExternalLink className="size-3.5 opacity-70 shrink-0" />
+        </a>
+      </Button>
+    );
+  }
+
   return (
-    <>
-      <div className="w-px h-5 bg-border/60" />
+    <div className={cn("hidden md:flex items-center", className)}>
+      {showDivider && <div className="w-px h-5 bg-border/60 mr-3" />}
       <Button
         size="sm"
         variant="outline"
@@ -122,6 +162,6 @@ export function AdminStorefrontHeaderButton() {
           <ExternalLink className="size-3 opacity-60" />
         </a>
       </Button>
-    </>
+    </div>
   );
 }

@@ -213,7 +213,7 @@ export default function PublicProductsPage() {
       </section>
 
       {/* MAIN TWO-COLUMN LAYOUT */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 pb-24 sm:pb-8">
         <div className="flex flex-col lg:flex-row gap-8 items-start">
           {/* ================= LEFT MAIN CONTENT: 3 LISTINGS PER ROW ================= */}
           <div className="flex-1 min-w-0 w-full space-y-5">

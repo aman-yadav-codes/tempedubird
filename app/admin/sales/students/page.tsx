@@ -99,7 +99,7 @@ const BATCH_SECTIONS = [
 ];
 
 export default function SalesStudentsPage() {
-  const { user } = useAuthStore();
+  const { user, accessToken } = useAuthStore();
   const [students, setStudents] = useState<StudentAdmissionRecord[]>([]);
   const [stats, setStats] = useState({ total: 0, enrolled: 0, fee_paid: 0, fee_pending: 0 });
   const [loading, setLoading] = useState(true);
@@ -138,8 +138,19 @@ export default function SalesStudentsPage() {
       if (courseFilter !== "all") params.set("course_program", courseFilter);
       if (feeStatusFilter !== "all") params.set("fee_status", feeStatusFilter);
 
-      const res = await fetch(`/api/admin/sales/students?${params.toString()}`);
-      if (!res.ok) throw new Error("Failed to load student admissions");
+      const headers: Record<string, string> = {};
+      if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`;
+      }
+
+      const res = await fetch(`/api/admin/sales/students?${params.toString()}`, { headers });
+      if (!res.ok) {
+        if (res.status === 401) {
+          // Token still hydrating or guest
+          return;
+        }
+        throw new Error("Failed to load student admissions");
+      }
       const data = await res.json();
       setStudents(data.students || []);
       setStats(data.stats || { total: 0, enrolled: 0, fee_paid: 0, fee_pending: 0 });
@@ -148,7 +159,7 @@ export default function SalesStudentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, courseFilter, feeStatusFilter]);
+  }, [search, courseFilter, feeStatusFilter, accessToken]);
 
   useEffect(() => {
     fetchStudents();
@@ -210,9 +221,12 @@ export default function SalesStudentsPage() {
       const url = editingStudent ? `/api/admin/sales/students/${editingStudent.id}` : `/api/admin/sales/students`;
       const method = editingStudent ? "PUT" : "POST";
 
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(formData),
       });
 
@@ -233,7 +247,9 @@ export default function SalesStudentsPage() {
 
   const handleDelete = async (id: number) => {
     try {
-      const res = await fetch(`/api/admin/sales/students/${id}`, { method: "DELETE" });
+      const headers: Record<string, string> = {};
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+      const res = await fetch(`/api/admin/sales/students/${id}`, { method: "DELETE", headers });
       if (!res.ok) throw new Error("Failed to delete student admission");
       toast.success("Student admission removed");
       setDeleteConfirmId(null);

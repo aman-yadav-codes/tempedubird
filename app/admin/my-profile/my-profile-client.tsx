@@ -22,7 +22,9 @@ import { SubtaskModalDialog } from "@/components/subtask-modal-dialog";
 import { toast } from "sonner";
 import { MyRolesProfilesView } from "@/components/profile/my-roles-profiles-view";
 import { AddBusinessProfileButton } from "@/components/business/add-business-profile-button";
+import { CustomerFavoritesView } from "@/components/customer/customer-favorites-view";
 import {
+  Heart,
   UserCheck,
   UserCog,
   KeyRound,
@@ -1716,10 +1718,10 @@ export function MyProfileClient() {
   const profileGender = dbUserProfile?.gender || extendedUser?.gender || "";
   const profileDob = dbUserProfile?.date_of_birth
     ? new Date(dbUserProfile.date_of_birth).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    })
     : (extendedUser?.dob || "");
   const profileBloodGroup = dbUserProfile?.blood_group || extendedUser?.blood_group || "";
   const profileMaritalStatus = dbUserProfile?.marital_status || extendedUser?.marital_status || "";
@@ -2859,6 +2861,9 @@ export function MyProfileClient() {
           <TabsTrigger value="account" className="text-xs font-semibold gap-1.5 py-2">
             <UserCog className="size-3.5" /> Account & Security
           </TabsTrigger>
+          <TabsTrigger value="favorites" className="text-xs font-semibold gap-1.5 py-2">
+            <Heart className="size-3.5 text-rose-500 fill-rose-500" /> Saved Favorites
+          </TabsTrigger>
           {!isCustomer && (
             <TabsTrigger value="tasks" className="text-xs font-semibold gap-1.5 py-2">
               <ListTodo className="size-3.5" /> Tasks & Deliverables
@@ -2873,6 +2878,11 @@ export function MyProfileClient() {
         {/* ================= TAB: ROLES & PROFILES ================= */}
         <TabsContent value="roles-profiles" className="space-y-6">
           <MyRolesProfilesView />
+        </TabsContent>
+
+        {/* ================= TAB: SAVED FAVORITES ================= */}
+        <TabsContent value="favorites" className="space-y-6">
+          <CustomerFavoritesView />
         </TabsContent>
 
         {/* ================= TAB 0: MY ACCOUNT ================= */}
@@ -3707,8 +3717,8 @@ export function MyProfileClient() {
                     key={tab.id}
                     onClick={() => setTaskStatusTab(tab.id)}
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${isSelected
-                        ? "bg-background text-foreground shadow-sm border border-border"
-                        : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                      ? "bg-background text-foreground shadow-sm border border-border"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                       }`}
                   >
                     <span>{tab.label}</span>
@@ -4076,8 +4086,8 @@ export function MyProfileClient() {
                                   <Badge
                                     variant="outline"
                                     className={`gap-1.5 py-1 px-2.5 text-[11px] font-medium ${isOverdue
-                                        ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/40"
-                                        : "bg-background text-foreground border"
+                                      ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/40"
+                                      : "bg-background text-foreground border"
                                       }`}
                                   >
                                     <Clock className={`w-3.5 h-3.5 shrink-0 ${isOverdue ? "text-rose-600" : "text-amber-600"}`} />
@@ -4811,8 +4821,8 @@ export function MyProfileClient() {
                       <Badge
                         variant="secondary"
                         className={`text-xs font-bold ${q.status === "RESOLVED" || q.status === "CLOSED" ? "bg-emerald-500/10 text-emerald-600" :
-                            q.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
-                              "bg-amber-500/10 text-amber-600"
+                          q.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-600" :
+                            "bg-amber-500/10 text-amber-600"
                           }`}
                       >
                         {q.status || "OPEN"}
@@ -4873,8 +4883,8 @@ export function MyProfileClient() {
 
                       <Badge
                         className={`text-[10px] font-bold uppercase ${c.status === "RESOLVED" ? "bg-emerald-600 text-white" :
-                            c.status === "INVESTIGATING" ? "bg-blue-600 text-white" :
-                              "bg-amber-500 text-white"
+                          c.status === "INVESTIGATING" ? "bg-blue-600 text-white" :
+                            "bg-amber-500 text-white"
                           }`}
                       >
                         {c.status || "PENDING"}

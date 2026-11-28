@@ -98,6 +98,8 @@ import {
     Heart,
 } from "lucide-react";
 import { CreateBusinessProfileDialog } from "@/components/business/create-business-profile-dialog";
+import { AdminStorefrontHeaderButton } from "@/components/business/admin-storefront-header-button";
+import { AdminActiveTaskWidget } from "@/components/admin-active-task-widget";
 import { toast } from "sonner";
 import { readJsonResponse } from "@/lib/api/read-json-response";
 import { AccountSwitcherDialog } from "@/components/auth/account-switcher-dialog";
@@ -1824,6 +1826,16 @@ export function AppSidebar() {
                             )}
                         </SidebarMenuItem>
                     </SidebarMenu>
+
+                    {/* Store Front Button in Toggle Bar */}
+                    <div className="pt-2">
+                        <AdminStorefrontHeaderButton variant="sidebar" />
+                    </div>
+
+                    {/* Active Task on Mobile in Toggle Bar */}
+                    <div className="block md:hidden pt-2">
+                        <AdminActiveTaskWidget />
+                    </div>
                 </SidebarHeader>
 
                 <SidebarContent>

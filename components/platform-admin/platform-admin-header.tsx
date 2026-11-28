@@ -49,6 +49,9 @@ import {
   UtensilsCrossed,
   BedDouble,
   MoreHorizontal,
+  Truck,
+  HardHat,
+  Bed,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -117,16 +120,19 @@ interface SearchResultsState {
 }
 
 const BUSINESS_MEGA_CATEGORIES = [
-  { label: "Automotive & Transport", categorySlug: "automotive-and-transport", icon: Car, bgClass: "bg-sky-100", iconClass: "text-sky-600" },
+  { label: "Automotive", categorySlug: "automotive", icon: Car, bgClass: "bg-sky-100", iconClass: "text-sky-600" },
+  { label: "Transport", categorySlug: "transport", icon: Truck, bgClass: "bg-cyan-100", iconClass: "text-cyan-600" },
+  { label: "Real Estate", categorySlug: "real-estate", icon: Building, bgClass: "bg-orange-100", iconClass: "text-orange-600" },
+  { label: "Construction", categorySlug: "construction", icon: HardHat, bgClass: "bg-amber-100", iconClass: "text-amber-600" },
+  { label: "Hospitality", categorySlug: "hospitality", icon: Bed, bgClass: "bg-fuchsia-100", iconClass: "text-fuchsia-600" },
+  { label: "Events", categorySlug: "events", icon: Sparkles, bgClass: "bg-purple-100", iconClass: "text-purple-600" },
+  { label: "Financial Services", categorySlug: "financial-services", icon: Landmark, bgClass: "bg-emerald-100", iconClass: "text-emerald-600" },
   { label: "Education & Coaching", categorySlug: "education-and-coaching", icon: GraduationCap, bgClass: "bg-amber-100", iconClass: "text-amber-600" },
   { label: "Fitness & Sports", categorySlug: "fitness-and-sports", icon: Dumbbell, bgClass: "bg-indigo-100", iconClass: "text-indigo-600" },
   { label: "Food, Dining & Cafes", categorySlug: "food-dining-and-cafes", icon: Utensils, bgClass: "bg-red-100", iconClass: "text-red-600" },
   { label: "Healthcare & Medical", categorySlug: "healthcare-and-medical", icon: Shield, bgClass: "bg-rose-100", iconClass: "text-rose-600" },
   { label: "Home Services & Maintenance", categorySlug: "home-services-and-maintenance", icon: Wrench, bgClass: "bg-teal-100", iconClass: "text-teal-600" },
-  { label: "Hospitality & Events", categorySlug: "hospitality-and-events", icon: Sparkles, bgClass: "bg-purple-100", iconClass: "text-purple-600" },
   { label: "IT & Digital Agencies", categorySlug: "it-and-digital-agencies", icon: Laptop, bgClass: "bg-violet-100", iconClass: "text-violet-600" },
-  { label: "Professional & Financial Services", categorySlug: "professional-and-financial-services", icon: Landmark, bgClass: "bg-emerald-100", iconClass: "text-emerald-600" },
-  { label: "Real Estate & Construction", categorySlug: "real-estate-and-construction", icon: Building, bgClass: "bg-orange-100", iconClass: "text-orange-600" },
   { label: "Retail & Shopping", categorySlug: "retail-and-shopping", icon: ShoppingBag, bgClass: "bg-blue-100", iconClass: "text-blue-600" },
   { label: "Salons & Personal Care", categorySlug: "salons-and-personal-care", icon: Scissors, bgClass: "bg-pink-100", iconClass: "text-pink-600" },
 ];
@@ -224,10 +230,10 @@ const TOP_NAV_ITEMS = [
     icon: UtensilsCrossed,
     subcategories: [
       { label: "All Dishes", categorySlug: "all-dishes" },
-      { label: "Bakery, Desserts & Confectionery", categorySlug: "bakery-desserts-and-confectionery" },
-      { label: "Beverages, Brews & Mocktails", categorySlug: "beverages-brews-and-mocktails" },
-      { label: "Main Course Curries & Breads", categorySlug: "main-course-curries-and-breads" },
-      { label: "Starters & Appetizers", categorySlug: "starters-and-appetizers" },
+      { label: "Bakery, Desserts & Confectionery", categorySlug: "dish-bakery-desserts-confectionery" },
+      { label: "Beverages, Brews & Mocktails", categorySlug: "dish-beverages-brews-mocktails" },
+      { label: "Main Course Curries & Breads", categorySlug: "dish-main-course-curries-breads" },
+      { label: "Starters & Appetizers", categorySlug: "dish-starters-appetizers" },
     ],
   },
   {

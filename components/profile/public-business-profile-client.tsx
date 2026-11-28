@@ -1211,83 +1211,85 @@ export function PublicBusinessProfileClient({
         )}
 
         {/* ================= TABS & CONTENT SECTIONS ================= */}
-        <div className={isHomePage ? "mt-0" : "mt-8"}>
+        <div className={cn(isHomePage ? "mt-0" : "mt-8", "pb-24 sm:pb-8")}>
           <Tabs value={isHomePage ? "overview" : activeTab} onValueChange={setActiveTab} className="w-full">
             {!isHomePage && (
-              <TabsList className="bg-card border p-1 rounded-xl h-auto gap-1 flex-wrap">
-              <TabsTrigger value="overview" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                <Building2 className="size-3.5" />
-                <span>Overview</span>
-              </TabsTrigger>
-              {properties.length > 0 && (
-                <TabsTrigger value="properties" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                  <Home className="size-3.5" />
-                  <span>Properties ({properties.length})</span>
-                </TabsTrigger>
-              )}
-              {vehicles.length > 0 && (
-                <TabsTrigger value="vehicles" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                  <Car className="size-3.5" />
-                  <span>Vehicles ({vehicles.length})</span>
-                </TabsTrigger>
-              )}
-              {events.length > 0 && (
-                <TabsTrigger value="events" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                  <CalendarDays className="size-3.5" />
-                  <span>Events ({events.length})</span>
-                </TabsTrigger>
-              )}
-              {dishes.length > 0 && (
-                <TabsTrigger value="dishes" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                  <Utensils className="size-3.5" />
-                  <span>Dishes & Menu ({dishes.length})</span>
-                </TabsTrigger>
-              )}
-              {rooms.length > 0 && (
-                <TabsTrigger value="rooms" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                  <Bed className="size-3.5" />
-                  <span>Rooms & Stays ({rooms.length})</span>
-                </TabsTrigger>
-              )}
-              {products.length > 0 && (
-                <TabsTrigger value="products" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                  <Package className="size-3.5" />
-                  <span>Products ({products.length})</span>
-                </TabsTrigger>
-              )}
-              {services.length > 0 && (
-                <TabsTrigger value="services" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                  <Wrench className="size-3.5" />
-                  <span>Services ({services.length})</span>
-                </TabsTrigger>
-              )}
-              {courses.length > 0 && (
-                <TabsTrigger value="courses" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                  <GraduationCap className="size-3.5" />
-                  <span>Courses ({courses.length})</span>
-                </TabsTrigger>
-              )}
-              {jobs.length > 0 && (
-                <TabsTrigger value="jobs" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                  <Briefcase className="size-3.5" />
-                  <span>Jobs ({jobs.length})</span>
-                </TabsTrigger>
-              )}
-              <TabsTrigger value="team" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                <Users className="size-3.5" />
-                <span>Team ({professionals.length})</span>
-              </TabsTrigger>
-              <TabsTrigger value="about" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                <Info className="size-3.5" />
-                <span>About</span>
-              </TabsTrigger>
-              {galleryImages.length > 0 && (
-                <TabsTrigger value="gallery" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                  <Camera className="size-3.5" />
-                  <span>Photo Gallery ({galleryImages.length})</span>
-                </TabsTrigger>
-              )}
-            </TabsList>
+              <div className="relative w-full overflow-hidden">
+                <TabsList className="w-full flex items-center justify-start gap-1.5 overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap bg-muted/50 border border-border/70 p-1.5 rounded-2xl h-auto shadow-2xs">
+                  <TabsTrigger value="overview" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                    <Building2 className="size-4 shrink-0" />
+                    <span>Overview</span>
+                  </TabsTrigger>
+                  {properties.length > 0 && (
+                    <TabsTrigger value="properties" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                      <Home className="size-4 shrink-0" />
+                      <span>Properties ({properties.length})</span>
+                    </TabsTrigger>
+                  )}
+                  {vehicles.length > 0 && (
+                    <TabsTrigger value="vehicles" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                      <Car className="size-4 shrink-0" />
+                      <span>Vehicles ({vehicles.length})</span>
+                    </TabsTrigger>
+                  )}
+                  {events.length > 0 && (
+                    <TabsTrigger value="events" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                      <CalendarDays className="size-4 shrink-0" />
+                      <span>Events ({events.length})</span>
+                    </TabsTrigger>
+                  )}
+                  {dishes.length > 0 && (
+                    <TabsTrigger value="dishes" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                      <Utensils className="size-4 shrink-0" />
+                      <span>Dishes &amp; Menu ({dishes.length})</span>
+                    </TabsTrigger>
+                  )}
+                  {rooms.length > 0 && (
+                    <TabsTrigger value="rooms" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                      <Bed className="size-4 shrink-0" />
+                      <span>Rooms &amp; Stays ({rooms.length})</span>
+                    </TabsTrigger>
+                  )}
+                  {products.length > 0 && (
+                    <TabsTrigger value="products" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                      <Package className="size-4 shrink-0" />
+                      <span>Products ({products.length})</span>
+                    </TabsTrigger>
+                  )}
+                  {services.length > 0 && (
+                    <TabsTrigger value="services" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                      <Wrench className="size-4 shrink-0" />
+                      <span>Services ({services.length})</span>
+                    </TabsTrigger>
+                  )}
+                  {courses.length > 0 && (
+                    <TabsTrigger value="courses" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                      <GraduationCap className="size-4 shrink-0" />
+                      <span>Courses ({courses.length})</span>
+                    </TabsTrigger>
+                  )}
+                  {jobs.length > 0 && (
+                    <TabsTrigger value="jobs" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                      <Briefcase className="size-4 shrink-0" />
+                      <span>Jobs ({jobs.length})</span>
+                    </TabsTrigger>
+                  )}
+                  <TabsTrigger value="team" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                    <Users className="size-4 shrink-0" />
+                    <span>Team ({professionals.length})</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="about" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                    <Info className="size-4 shrink-0" />
+                    <span>About</span>
+                  </TabsTrigger>
+                  {galleryImages.length > 0 && (
+                    <TabsTrigger value="gallery" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                      <Camera className="size-4 shrink-0" />
+                      <span>Photo Gallery ({galleryImages.length})</span>
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+              </div>
             )}
 
             {/* ================= OVERVIEW TAB ================= */}

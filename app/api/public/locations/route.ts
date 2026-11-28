@@ -54,7 +54,40 @@ export async function GET(req: NextRequest) {
         name ASC
     `;
 
-    const res = await db.query(query, params);
+    let res;
+    try {
+      res = await db.query(query, params);
+    } catch (dbErr: any) {
+      if (dbErr?.message && dbErr.message.includes("is_seo_active")) {
+        // Auto-migrate column on production/staging DB
+        await db.query(`ALTER TABLE locations ADD COLUMN IF NOT EXISTS is_seo_active BOOLEAN DEFAULT TRUE`).catch(() => {});
+        // Fallback query without is_seo_active
+        const fallbackConditions = conditions.filter((c) => !c.includes("is_seo_active"));
+        const fallbackQuery = `
+          SELECT 
+            id, 
+            name, 
+            slug, 
+            type, 
+            parent_id,
+            latitude,
+            longitude
+          FROM locations
+          WHERE ${fallbackConditions.join(" AND ")}
+          ORDER BY 
+            CASE 
+              WHEN type = 'country' THEN 1
+              WHEN type = 'state' THEN 2
+              WHEN type = 'city' THEN 3
+              ELSE 4
+            END,
+            name ASC
+        `;
+        res = await db.query(fallbackQuery, params);
+      } else {
+        throw dbErr;
+      }
+    }
 
     return NextResponse.json({
       success: true,

@@ -60,6 +60,13 @@ export const CATALOG_VERTICALS = [
 // Business Category to Verticals mapping
 export const BUSINESS_CATEGORY_VERTICAL_MAP: Record<string, string[]> = {
   "education-and-coaching": ["course", "product", "service", "job"],
+  "real-estate": ["property", "service", "product"],
+  "construction": ["service", "product", "job"],
+  "hospitality": ["room", "dish", "service"],
+  "events": ["event", "service", "product"],
+  "automotive": ["vehicle", "service", "product"],
+  "transport": ["vehicle", "service"],
+  "financial-services": ["service", "job"],
   "real-estate-and-construction": ["property", "service", "product"],
   "hospitality-and-events": ["room", "event", "dish", "service"],
   "automotive-and-transport": ["vehicle", "service", "product"],

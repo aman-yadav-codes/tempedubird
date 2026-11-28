@@ -649,7 +649,7 @@ export async function GET(req: NextRequest) {
           ms.category_id IN (
             SELECT c.id FROM categories c 
             LEFT JOIN business_categories bc ON bc.id = c.business_category_id
-            WHERE bc.slug = 'professional-and-financial-services' 
+            WHERE bc.slug IN ('financial-services', 'professional-and-financial-services') 
                OR c.slug ILIKE '%financ%' 
                OR c.name ILIKE '%financ%'
                OR c.slug ILIKE '%tax%'
@@ -1301,7 +1301,7 @@ export async function GET(req: NextRequest) {
         if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
           const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
           const words = catSearch.split(/[^a-z0-9]+/);
-          const isMainRealEstate = catSearch.includes("real-estate-and-construction") || catSearch.includes("real estate & construction");
+          const isMainRealEstate = catSearch.includes("real-estate-and-construction") || catSearch.includes("real estate & construction") || catSearch.includes("real-estate") || catSearch.includes("real estate");
           const isComm = !isMainRealEstate && (words.includes("commercial") || words.includes("showroom") || words.includes("office"));
           const isRes = !isMainRealEstate && (words.includes("residential") || words.includes("apartment") || words.includes("apartments") || words.includes("flat") || words.includes("flats") || words.includes("villa") || words.includes("villas"));
           const isPlot = !isMainRealEstate && (words.includes("plot") || words.includes("plots") || words.includes("land") || words.includes("lands"));
@@ -1419,7 +1419,7 @@ export async function GET(req: NextRequest) {
         if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
           const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
           const words = catSearch.split(/[^a-z0-9]+/);
-          const isMainAuto = catSearch.includes("automotive-and-transport") || catSearch.includes("automotive & transport");
+          const isMainAuto = catSearch.includes("automotive-and-transport") || catSearch.includes("automotive & transport") || catSearch.includes("automotive") || catSearch.includes("transport");
           const isPass = !isMainAuto && (words.includes("passenger") || words.includes("car") || words.includes("cars") || words.includes("suv") || words.includes("sedan"));
           const isComm = !isMainAuto && (words.includes("commercial") || words.includes("truck") || words.includes("trucks") || words.includes("bus") || words.includes("buses") || words.includes("van") || words.includes("pickup"));
           const isBike = !isMainAuto && (words.includes("bike") || words.includes("bikes") || words.includes("motorcycle") || words.includes("motorcycles") || words.includes("scooter") || words.includes("scooters") || words.includes("two-wheeler"));
@@ -1537,7 +1537,7 @@ export async function GET(req: NextRequest) {
         if (categoryParam || resolvedCategoryName || categoryIds.length > 0) {
           const catSearch = `${categoryParam} ${resolvedCategoryName}`.toLowerCase();
           const words = catSearch.split(/[^a-z0-9]+/);
-          const isMainHosp = catSearch.includes("hospitality-and-events") || catSearch.includes("hospitality & events");
+          const isMainHosp = catSearch.includes("hospitality-and-events") || catSearch.includes("hospitality & events") || catSearch.includes("hospitality") || catSearch.includes("events");
           const isCorp = !isMainHosp && (words.includes("corporate") || words.includes("business") || words.includes("industry"));
           const isWed = !isMainHosp && (words.includes("wedding") || words.includes("social") || words.includes("gala") || words.includes("celebration"));
           const isEnt = !isMainHosp && (words.includes("entertainment") || words.includes("cultural") || words.includes("music") || words.includes("concert") || words.includes("show"));

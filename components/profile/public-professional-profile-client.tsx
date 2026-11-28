@@ -787,27 +787,29 @@ export function PublicProfessionalProfileClient({
         )}
 
         {/* ================= TABS & CONTENT SECTIONS ================= */}
-        <div className="mt-8">
+        <div className="mt-8 pb-24 sm:pb-8">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="bg-card border p-1 rounded-xl h-auto gap-1">
-              <TabsTrigger value="overview" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer">
-                Overview &amp; Bio
-              </TabsTrigger>
-              <TabsTrigger value="services" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                <Briefcase className="size-3.5" />
-                <span>Services ({services.length})</span>
-              </TabsTrigger>
-              {products.length > 0 && (
-                <TabsTrigger value="products" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                  <Package className="size-3.5" />
-                  <span>Products ({products.length})</span>
+            <div className="relative w-full overflow-hidden">
+              <TabsList className="w-full flex items-center justify-start gap-1.5 overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap bg-muted/50 border border-border/70 p-1.5 rounded-2xl h-auto shadow-2xs">
+                <TabsTrigger value="overview" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                  Overview &amp; Bio
                 </TabsTrigger>
-              )}
-              <TabsTrigger value="reviews" className="rounded-lg text-xs font-semibold py-2 px-4 cursor-pointer gap-1.5">
-                <Star className="size-3.5" />
-                <span>Reviews ({reviewCount})</span>
-              </TabsTrigger>
-            </TabsList>
+                <TabsTrigger value="services" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                  <Briefcase className="size-4 shrink-0" />
+                  <span>Services ({services.length})</span>
+                </TabsTrigger>
+                {products.length > 0 && (
+                  <TabsTrigger value="products" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                    <Package className="size-4 shrink-0" />
+                    <span>Products ({products.length})</span>
+                  </TabsTrigger>
+                )}
+                <TabsTrigger value="reviews" className="shrink-0 rounded-xl text-xs font-bold py-2.5 px-4 cursor-pointer gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs transition-all">
+                  <Star className="size-4 shrink-0" />
+                  <span>Reviews ({reviewCount})</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             {/* ================= OVERVIEW TAB ================= */}
             <TabsContent value="overview" className="mt-6 space-y-6">
