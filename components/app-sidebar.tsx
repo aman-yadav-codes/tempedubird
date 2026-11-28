@@ -198,6 +198,8 @@ const navItems: SidebarItem[] = [
         icon: UserCheck,
         children: [
             { title: "My Account", url: "/admin/account", permissionPath: "/admin/account", icon: UserCog },
+            { title: "Account & Security", url: "/admin/my-profile?tab=account", permissionPath: "/admin/my-profile", icon: Lock },
+            { title: "Saved Favorites", url: "/admin/my-profile?tab=favorites", permissionPath: "/admin/my-profile", icon: Heart },
             { title: "Attendance", url: "/admin/my-profile?tab=attendance", permissionPath: "/admin/my-profile", icon: CalendarDays },
             { title: "Salary Slip", url: "/admin/my-profile?tab=salary-slip", permissionPath: "/admin/my-profile", icon: Receipt },
             { title: "My Tasks", url: "/admin/my-profile?tab=tasks", permissionPath: "/admin/my-profile", icon: ClipboardList },

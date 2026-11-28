@@ -2858,22 +2858,6 @@ export function MyProfileClient() {
               )}
             </TabsTrigger>
           )}
-          <TabsTrigger value="account" className="text-xs font-semibold gap-1.5 py-2">
-            <UserCog className="size-3.5" /> Account & Security
-          </TabsTrigger>
-          <TabsTrigger value="favorites" className="text-xs font-semibold gap-1.5 py-2">
-            <Heart className="size-3.5 text-rose-500 fill-rose-500" /> Saved Favorites
-          </TabsTrigger>
-          {!isCustomer && (
-            <TabsTrigger value="tasks" className="text-xs font-semibold gap-1.5 py-2">
-              <ListTodo className="size-3.5" /> Tasks & Deliverables
-            </TabsTrigger>
-          )}
-          {!isCustomer && (
-            <TabsTrigger value="performance" className="text-xs font-semibold gap-1.5 py-2">
-              <TrendingUp className="size-3.5" /> Performance & KPIs
-            </TabsTrigger>
-          )}
         </TabsList>
         {/* ================= TAB: ROLES & PROFILES ================= */}
         <TabsContent value="roles-profiles" className="space-y-6">
